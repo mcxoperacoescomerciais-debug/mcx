@@ -40,7 +40,9 @@ with st.form("novo_item_avaria", clear_on_submit=True):
     tipo = st.text_input("Motivo", placeholder="Ex.: Vencimento próximo, Avariado...")
     validade = st.date_input("Data de validade (se souber)", value=None, format="DD/MM/YYYY")
     quantidade = st.number_input("Quantidade", min_value=0, step=1, value=0)
-    foto = st.file_uploader("Foto (opcional)", type=["jpg", "jpeg", "png"])
+    fotos = st.file_uploader(
+        "Fotos (opcional)", type=["jpg", "jpeg", "png"], accept_multiple_files=True
+    )
     observacao = st.text_area("Observação (opcional)")
 
     submitted = st.form_submit_button("✅ Registrar", type="primary", use_container_width=True)
@@ -49,14 +51,16 @@ with st.form("novo_item_avaria", clear_on_submit=True):
         if not loja or not promotor or not produto:
             st.error("Preencha loja, promotor e produto.")
         else:
-            foto_path = None
-            if foto is not None:
+            foto_paths = []
+            if fotos:
                 avarias_dir = settings.media_dir / "avarias"
                 avarias_dir.mkdir(parents=True, exist_ok=True)
-                ext = Path(foto.name).suffix or ".jpg"
-                foto_path = str(avarias_dir / f"{uuid.uuid4().hex}{ext}")
-                with open(foto_path, "wb") as f:
-                    f.write(foto.getbuffer())
+                for foto in fotos:
+                    ext = Path(foto.name).suffix or ".jpg"
+                    foto_path = str(avarias_dir / f"{uuid.uuid4().hex}{ext}")
+                    with open(foto_path, "wb") as f:
+                        f.write(foto.getbuffer())
+                    foto_paths.append(foto_path)
 
             with get_session() as session:
                 session.add(
@@ -69,7 +73,7 @@ with st.form("novo_item_avaria", clear_on_submit=True):
                         tipo=tipo or None,
                         validade=validade,
                         observacao=observacao or None,
-                        foto_path=foto_path,
+                        foto_paths=foto_paths,
                     )
                 )
             st.success("Item registrado.")
@@ -92,8 +96,8 @@ else:
             )
             if item.observacao:
                 st.caption(item.observacao)
-            if item.foto_path:
-                st.image(item.foto_path, width=200)
+            if item.foto_paths:
+                st.image(item.foto_paths, width=200)
 
             if item.validade:
                 label = f"Validade: {item.validade.strftime('%d/%m/%Y')}"

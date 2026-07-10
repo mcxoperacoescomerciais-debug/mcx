@@ -36,7 +36,7 @@ class ExpiringProduct:
     tipo: str | None
     validade: dt.date | None
     observacao: str | None
-    foto_path: str | None
+    foto_paths: list[str]
     dias_restantes: int | None
 
 
@@ -51,7 +51,7 @@ def _to_view(row: DamagedProduct) -> ExpiringProduct:
         tipo=row.tipo,
         validade=row.validade,
         observacao=row.observacao,
-        foto_path=row.foto_path,
+        foto_paths=row.foto_paths or [],
         dias_restantes=dias,
     )
 

@@ -35,8 +35,8 @@ else:
             )
             if item.observacao:
                 st.caption(item.observacao)
-            if item.foto_path:
-                st.image(item.foto_path, width=200)
+            if item.foto_paths:
+                st.image(item.foto_paths, width=200)
 
             label = item.validade.strftime("%d/%m/%Y") if item.validade else "-"
             if item.dias_restantes is not None and item.dias_restantes < 0:
