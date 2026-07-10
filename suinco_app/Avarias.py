@@ -1,9 +1,15 @@
 """App dedicado só ao projeto Suinco — cadastro de avaria/vencimento.
 
-Deploy separado do painel principal (app/main.py), de propósito: aqui só
-existem as páginas Avarias e Vencimentos, sem nenhum acesso aos outros
-projetos/marcas do MCX Tracker. É o link que promotores e o gerente da
-Suinco recebem.
+Deploy separado do painel principal (app/main.py) e do painel de gestão
+(suinco_admin_app/Vencimentos.py), de propósito: aqui só existe a tela de
+cadastro. Sem lista de itens, sem opção de "Resolvido", sem aba de
+Vencimentos — só o essencial pro promotor preencher e enviar. É o único
+link que os 10 promotores recebem.
+
+Se houver PINs configurados em st.secrets["promoter_pins"] (um por
+promotor), pede identificação antes do formulário. Sem isso configurado,
+cai de volta no campo de nome digitado livremente (não quebra em ambiente
+local sem secrets).
 
 Pensada para uso pelo celular: campos digitados livremente (sem seleção em
 lista), layout em coluna única.
@@ -13,7 +19,6 @@ Uso:
 """
 from __future__ import annotations
 
-import datetime as dt
 import sys
 import uuid
 from pathlib import Path
@@ -25,17 +30,95 @@ import streamlit as st
 from core.config.settings import settings
 from core.db.models import DamagedProduct
 from core.db.session import get_session
-from core.pipeline.expiry import AVARIA_PROJECT_KEY, AVARIA_PROJECT_LABEL, DEFAULT_WARNING_DAYS, list_active_products
+from core.pipeline.expiry import AVARIA_PROJECT_KEY, AVARIA_PROJECT_LABEL
 
 st.set_page_config(page_title="Avarias — Suinco", page_icon="📦", layout="centered")
 
-st.title("📦 Produtos em Avaria / Vencimento")
-st.caption(f"{AVARIA_PROJECT_LABEL} — registre produtos avariados ou perto do vencimento")
+st.markdown(
+    """
+    <style>
+    .block-container { padding-top: 2.5rem; padding-bottom: 3rem; max-width: 640px; }
+    div[data-testid="stForm"] {
+        background: rgba(255,255,255,0.03);
+        border-radius: 18px;
+        padding: 1.75rem 1.5rem 1.25rem;
+        border: 1px solid rgba(255,255,255,0.09);
+    }
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stNumberInput"] input,
+    div[data-testid="stDateInput"] input,
+    div[data-testid="stTextArea"] textarea {
+        border-radius: 10px !important;
+    }
+    button[kind="primary"] {
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        padding-top: 0.65rem !important;
+        padding-bottom: 0.65rem !important;
+    }
+    .suinco-header { display:flex; align-items:center; gap:0.7rem; margin-bottom:0.1rem; }
+    .suinco-header .icon {
+        font-size: 2.1rem; line-height:1; background: rgba(16,185,129,0.15);
+        border-radius: 14px; padding: 0.5rem 0.6rem;
+    }
+    .suinco-header h1 { font-size: 1.5rem; margin: 0; }
+    .suinco-subtitle { color: rgba(255,255,255,0.55); margin-bottom: 1.75rem; font-size: 0.95rem; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-st.subheader("Registrar novo item")
+try:
+    promoter_pins = dict(st.secrets.get("promoter_pins", {}))
+except Exception:
+    promoter_pins = {}
+
+if "promotor_atual" not in st.session_state:
+    st.session_state.promotor_atual = None
+
+if promoter_pins and not st.session_state.promotor_atual:
+    st.markdown(
+        '<div class="suinco-header"><span class="icon">📦</span>'
+        f'<h1>{AVARIA_PROJECT_LABEL}</h1></div>'
+        '<div class="suinco-subtitle">Identifique-se para continuar</div>',
+        unsafe_allow_html=True,
+    )
+    with st.form("login_promotor"):
+        nome_login = st.selectbox("Seu nome", options=sorted(promoter_pins.keys()))
+        pin_login = st.text_input("PIN (4 dígitos)", type="password", max_chars=4)
+        entrar = st.form_submit_button("Entrar", type="primary", use_container_width=True)
+    if entrar:
+        if promoter_pins.get(nome_login) == pin_login:
+            st.session_state.promotor_atual = nome_login
+            st.rerun()
+        else:
+            st.error("PIN incorreto.")
+    st.stop()
+
+promotor_fixo = st.session_state.promotor_atual
+
+st.markdown(
+    '<div class="suinco-header"><span class="icon">📦</span>'
+    f'<h1>{AVARIA_PROJECT_LABEL}</h1></div>'
+    '<div class="suinco-subtitle">Registre um produto avariado ou perto do vencimento</div>',
+    unsafe_allow_html=True,
+)
+
+if promotor_fixo:
+    top_left, top_right = st.columns([3, 1])
+    with top_left:
+        st.caption(f"Conectado como **{promotor_fixo}**")
+    with top_right:
+        if st.button("Trocar", use_container_width=True):
+            st.session_state.promotor_atual = None
+            st.rerun()
+
 with st.form("novo_item_avaria", clear_on_submit=True):
     loja = st.text_input("Loja")
-    promotor = st.text_input("Seu nome (promotor)")
+    if promotor_fixo:
+        promotor = promotor_fixo
+    else:
+        promotor = st.text_input("Seu nome (promotor)")
     produto = st.text_input("Produto")
     tipo = st.text_input("Motivo", placeholder="Ex.: Vencimento próximo, Avariado...")
     validade = st.date_input("Data de validade (se souber)", value=None, format="DD/MM/YYYY")
@@ -76,44 +159,4 @@ with st.form("novo_item_avaria", clear_on_submit=True):
                         foto_paths=foto_paths,
                     )
                 )
-            st.success("Item registrado.")
-            st.rerun()
-
-st.divider()
-
-st.subheader("Itens ativos")
-with get_session() as session:
-    items = list_active_products(session)
-
-if not items:
-    st.info("Nenhum item em avaria/vencimento registrado.")
-else:
-    for item in items:
-        with st.container(border=True):
-            st.write(f"**{item.produto}** — {item.loja}")
-            st.caption(
-                f"Promotor: {item.promotor} · Motivo: {item.tipo or '-'} · Qtd: {item.quantidade or '-'}"
-            )
-            if item.observacao:
-                st.caption(item.observacao)
-            if item.foto_paths:
-                st.image(item.foto_paths, width=200)
-
-            if item.validade:
-                label = f"Validade: {item.validade.strftime('%d/%m/%Y')}"
-                if item.dias_restantes is not None and item.dias_restantes < 0:
-                    st.error(f"{label} — VENCIDO há {abs(item.dias_restantes)} dia(s)")
-                elif item.dias_restantes is not None and item.dias_restantes <= DEFAULT_WARNING_DAYS:
-                    st.warning(f"{label} — vence em {item.dias_restantes} dia(s)")
-                else:
-                    st.write(f"{label} — {item.dias_restantes} dia(s) restantes")
-            else:
-                st.write("Sem validade informada")
-
-            if st.button("✔️ Resolvido", key=f"resolve_{item.id}", use_container_width=True):
-                with get_session() as session:
-                    db_item = session.get(DamagedProduct, item.id)
-                    db_item.status = "resolvido"
-                    db_item.resolved_at = dt.datetime.now(dt.timezone.utc)
-                    db_item.resolved_by = "painel"
-                st.rerun()
+            st.success("Item registrado com sucesso.")

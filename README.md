@@ -140,35 +140,64 @@ projeto na barra lateral, e todos os scripts de linha de comando aceitam a chave
 projeto como argumento (`python scripts/run_pipeline.py <chave>`). Veja a seção acima
 sobre como criar um projeto novo.
 
-## Avarias e alertas de vencimento (projeto Suinco) — app separado
+## Avarias e alertas de vencimento (projeto Suinco) — três apps separados
 
-Este recurso é um **app Streamlit próprio, deployado separadamente** do painel principal
-(`app/main.py`), em `suinco_app/Avarias.py`. De propósito: promotores e o gerente da
-Suinco só devem enxergar essas duas telas — nunca as marcas de café (`core/config/projects/*.yaml`)
-que aparecem no seletor de projeto do painel principal. Rodar tudo junto vazaria informação
-de um cliente pra outro.
+Este recurso vive em **três deploys independentes no Streamlit Community Cloud**, todos a
+partir deste mesmo repositório, cada um com sua própria URL e seu próprio nível de acesso.
+Rodar tudo junto num só app vazaria informação (outras marcas, ou a opção de "Resolvido")
+pra quem não deveria ver.
 
-- **📦 Avarias** (`suinco_app/Avarias.py`, página inicial): o promotor registra um produto
-  avariado ou perto do vencimento (loja, produto, motivo, validade, quantidade, foto
-  opcional) e pode marcar como "Resolvido" quando o produto sai da prateleira.
-- **⏰ Vencimentos** (`suinco_app/pages/1_⏰_Vencimentos.py`): leitura pública, sem login.
-  Mostra os produtos vencidos ou vencendo em até 10 dias (`DEFAULT_WARNING_DAYS` em
-  `core/pipeline/expiry.py`) e, embaixo, uma **mensagem curta já pronta pra copiar e colar
-  no WhatsApp** do gerente — de propósito mais resumida que a lista completa, pra não virar
-  uma enxurrada de informação pra quem só quer saber "o que vence". Não tem robô nem
-  agendador: é uma consulta refeita a cada carregamento da página.
+| App | Arquivo principal | Quem acessa | O que vê |
+|---|---|---|---|
+| Painel principal | `app/main.py` | Eduardo (uso interno) | Todas as marcas de café, sincronização com WhatsApp |
+| Avarias (promotores) | `suinco_app/Avarias.py` | Os 10 promotores da Suinco | Só o formulário de cadastro — nada de vencimentos, nada de outras marcas |
+| Vencimentos (gestão) | `suinco_admin_app/Vencimentos.py` | Eduardo + gerente da marca | Ver abaixo — dois níveis na mesma URL |
+
+### 📦 Avarias — `suinco_app/Avarias.py`
+Tela única: o promotor se identifica (PIN, ver abaixo) e registra um produto avariado ou
+perto do vencimento (loja, produto, motivo, validade, quantidade, fotos). Sem lista de
+itens, sem opção de "Resolvido" — isso é gestão, fica só no app de Vencimentos.
+
+**Login por PIN**: se `st.secrets["promoter_pins"]` estiver configurado (uma tabela TOML
+`"Nome do promotor" = "PIN"`), o app pede identificação antes do formulário e usa o nome
+autenticado — o promotor não digita mais o próprio nome. Sem esse secret configurado, cai
+de volta no campo de nome livre (não quebra em ambiente local sem secrets).
+
+### ⏰ Vencimentos — `suinco_admin_app/Vencimentos.py`
+Mesma URL, dois níveis de acesso via query string:
+- **Sem `?chave=...`** (ou com a chave errada): visão do **gerente** — só leitura, lista o
+  que está vencendo em até 10 dias (`DEFAULT_WARNING_DAYS` em `core/pipeline/expiry.py`) e
+  uma **mensagem curta pronta pra copiar e colar no WhatsApp** — de propósito mais resumida
+  que a lista inteira, pra não confundir quem só quer saber "o que vence". É esse link (sem
+  chave) que se manda pro gerente.
+- **Com `?chave=<valor de st.secrets["ADMIN_KEY"]>`**: soma a seção "Gestão (uso interno)" —
+  todos os itens ativos com botão "Marcar como resolvido", e uma aba de **Histórico** com
+  tudo que já foi resolvido (data/hora, quem resolveu). É esse link (com a chave) que só
+  Eduardo usa.
+
+Não tem robô nem agendador: as duas visões são consultas refeitas a cada carregamento da
+página.
+
+### Segredos necessários (Streamlit Cloud → app → Settings → Secrets)
+- **Todos os três apps**: `DATABASE_URL` (mesmo banco Postgres/Supabase para os três).
+- **`suinco_app`**: opcionalmente `[promoter_pins]` (login dos promotores).
+- **`suinco_admin_app`**: `ADMIN_KEY` (string qualquer, é o valor usado em `?chave=...`).
+
+Localmente, cada app lê `.streamlit/secrets.toml` de dentro da própria pasta
+(`suinco_app/.streamlit/secrets.toml`, `suinco_admin_app/.streamlit/secrets.toml`) — esses
+arquivos são git-ignorados (`**/secrets.toml`), nunca vão pro repositório.
 
 Chave do projeto fixa em `AVARIA_PROJECT_KEY`/`AVARIA_PROJECT_LABEL`
 (`core/pipeline/expiry.py`) — não é um YAML como os projetos de visita.
 
-Ambos os apps (o principal e o `suinco_app`) compartilham o mesmo repositório e o mesmo
-banco (`DATABASE_URL`), mas cada um é um deploy independente no Streamlit Community Cloud,
-com sua própria URL:
-- Deploy principal → arquivo `app/main.py` → uso interno (Eduardo).
-- Deploy Suinco → arquivo `suinco_app/Avarias.py` → link que vai pros 10 promotores e pro
-  gerente. Sem seletor de projeto, sem acesso a nenhuma outra marca.
+### Toolbar do Streamlit escondida
+`.streamlit/config.toml` tem `client.toolbarMode = "minimal"` — sem isso, qualquer visitante
+de qualquer um dos três apps consegue abrir o ícone do GitHub na barra superior e ver o
+código-fonte completo do repositório (inclusive as outras marcas). Com "minimal", esses
+ícones somem.
 
-Rodar localmente: `streamlit run suinco_app/Avarias.py`.
+Rodar localmente: `streamlit run suinco_app/Avarias.py` ou
+`streamlit run suinco_admin_app/Vencimentos.py`.
 
 ## Status
 

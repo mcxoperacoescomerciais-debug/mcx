@@ -38,6 +38,9 @@ class ExpiringProduct:
     observacao: str | None
     foto_paths: list[str]
     dias_restantes: int | None
+    status: str
+    resolved_at: dt.datetime | None
+    resolved_by: str | None
 
 
 def _to_view(row: DamagedProduct) -> ExpiringProduct:
@@ -53,6 +56,9 @@ def _to_view(row: DamagedProduct) -> ExpiringProduct:
         observacao=row.observacao,
         foto_paths=row.foto_paths or [],
         dias_restantes=dias,
+        status=row.status,
+        resolved_at=row.resolved_at,
+        resolved_by=row.resolved_by,
     )
 
 
@@ -82,6 +88,19 @@ def list_expiring_soon(
             DamagedProduct.validade <= limit_date,
         )
         .order_by(DamagedProduct.validade.asc())
+    ).scalars().all()
+    return [_to_view(r) for r in rows]
+
+
+def list_history(
+    session: Session, project: str = AVARIA_PROJECT_KEY, limit: int = 200
+) -> list[ExpiringProduct]:
+    """Itens já resolvidos, mais recente primeiro — histórico de gestão."""
+    rows = session.execute(
+        select(DamagedProduct)
+        .where(DamagedProduct.project == project, DamagedProduct.status == "resolvido")
+        .order_by(DamagedProduct.resolved_at.desc())
+        .limit(limit)
     ).scalars().all()
     return [_to_view(r) for r in rows]
 

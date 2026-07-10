@@ -8,3 +8,9 @@ font = "sans serif"
 
 [server]
 headless = true
+
+[client]
+# Esconde o menu (⋮), botão "Deploy", ícone do GitHub e "Edit" — sem isso,
+# qualquer visitante do app consegue abrir o código-fonte completo do
+# repositório (inclusive de outras marcas/projetos) direto pelo navegador.
+toolbarMode = "minimal"
