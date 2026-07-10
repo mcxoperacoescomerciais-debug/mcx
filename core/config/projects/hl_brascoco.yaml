@@ -1,0 +1,53 @@
+project: hl_brascoco
+display_name: HL Brascoco
+whatsapp:
+  group_name: Brascoco reposição HL
+sheets:
+  spreadsheet_id: 1JcymgFXz4OGH1g08DUtkTVjV5lq2uW-Zgh4tsn5Vca4
+  worksheet_name: HL Brascoco
+  header_row: 2
+  data_start_row: 3
+  columns:
+    rede: REDE
+    marca: MARCA
+    cidade: CIDADE
+    vis: VIS
+    dia_visita: DIA VISITA
+    promo: PROMO
+    resp: RESP
+    vr_atend: VR ATEND
+    semana_1: 1º SEM
+    semana_2: 2º SEM
+    semana_3: 3º SEM
+    semana_4: 4º SEM
+    semana_5: 5º SEM
+    total: TOTAL
+    pct_cumpr: '% CUMPR'
+    a_pagar: A PAGAR
+    mes_ano: MÊS/ANO
+  protected_columns:
+  - TOTAL
+  - '% CUMPR'
+  - A PAGAR
+  row_match_keys:
+    primary: rede
+    period: mes_ano
+    tiebreakers:
+    - cidade
+    - marca
+  month_year_format: MMM/YYYY
+  month_abbreviations:
+    1: JAN
+    2: FEV
+    3: MAR
+    4: ABR
+    5: MAI
+    6: JUN
+    7: JUL
+    8: AGO
+    9: SET
+    10: OUT
+    11: NOV
+    12: DEZ
+create_missing_row: false
+confidence_threshold: 0.95

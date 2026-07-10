@@ -1,0 +1,28 @@
+python-dotenv>=1.0.1
+pyyaml>=6.0.2
+
+# WhatsApp
+playwright>=1.47.0
+
+# Google Sheets
+gspread>=6.1.4
+google-auth>=2.35.0
+
+# Banco local
+SQLAlchemy>=2.0.35
+# Driver Postgres — usado quando DATABASE_URL aponta para um banco externo
+# (ex.: Supabase), como no deploy em nuvem das páginas Avarias/Vencimentos.
+# Localmente, sem essa variável, o sistema continua usando SQLite normalmente.
+psycopg2-binary>=2.9.9
+
+# OCR e Vision AI
+pytesseract>=0.3.13
+Pillow>=10.4.0
+openai>=1.51.0
+google-genai>=2.10.0
+
+# Matching de lojas
+rapidfuzz>=3.10.0
+
+# Painel
+streamlit>=1.39.0
