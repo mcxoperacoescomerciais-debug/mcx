@@ -140,30 +140,35 @@ projeto na barra lateral, e todos os scripts de linha de comando aceitam a chave
 projeto como argumento (`python scripts/run_pipeline.py <chave>`). Veja a seção acima
 sobre como criar um projeto novo.
 
-## Avarias e alertas de vencimento (projeto Suinco)
+## Avarias e alertas de vencimento (projeto Suinco) — app separado
 
-Duas abas novas no painel (barra lateral). Diferente do resto do sistema, **não** é um
-projeto configurado em `core/config/projects/*.yaml` — é fixo para uma única marca,
-"Suinco" (chave `suinco`, ver `core/pipeline/expiry.py`), sem seletor de projeto. Não
-confundir com o projeto "Adriana Café" (`adriana_cafe.yaml`), que é outra marca. Telas
-pensadas pra uso pelo celular: campos sempre digitados livremente (sem seleção em lista)
-e layout em coluna única.
+Este recurso é um **app Streamlit próprio, deployado separadamente** do painel principal
+(`app/main.py`), em `suinco_app/Avarias.py`. De propósito: promotores e o gerente da
+Suinco só devem enxergar essas duas telas — nunca as marcas de café (`core/config/projects/*.yaml`)
+que aparecem no seletor de projeto do painel principal. Rodar tudo junto vazaria informação
+de um cliente pra outro.
 
-- **📦 Avarias**: o promotor registra um produto avariado ou perto do vencimento (loja,
-  produto, motivo, validade, quantidade, foto opcional) e pode marcar como "Resolvido"
-  quando o produto sai da prateleira. Fica salvo na tabela `damaged_products` (SQLite
-  local).
-- **⏰ Vencimentos**: leitura pública, sem login — link fixo (`http://<host>:8501/Vencimentos`).
+- **📦 Avarias** (`suinco_app/Avarias.py`, página inicial): o promotor registra um produto
+  avariado ou perto do vencimento (loja, produto, motivo, validade, quantidade, foto
+  opcional) e pode marcar como "Resolvido" quando o produto sai da prateleira.
+- **⏰ Vencimentos** (`suinco_app/pages/1_⏰_Vencimentos.py`): leitura pública, sem login.
   Mostra os produtos vencidos ou vencendo em até 10 dias (`DEFAULT_WARNING_DAYS` em
   `core/pipeline/expiry.py`) e, embaixo, uma **mensagem curta já pronta pra copiar e colar
   no WhatsApp** do gerente — de propósito mais resumida que a lista completa, pra não virar
   uma enxurrada de informação pra quem só quer saber "o que vence". Não tem robô nem
   agendador: é uma consulta refeita a cada carregamento da página.
 
-Isso exige que o painel esteja acessível pela rede (não só `localhost`) — hoje ele roda
-local, então o link só funciona para quem estiver na mesma rede da máquina que roda o
-`streamlit run`. Para acesso de fora (ex.: gerente em outro lugar), o painel precisa estar
-hospedado em algum servidor.
+Chave do projeto fixa em `AVARIA_PROJECT_KEY`/`AVARIA_PROJECT_LABEL`
+(`core/pipeline/expiry.py`) — não é um YAML como os projetos de visita.
+
+Ambos os apps (o principal e o `suinco_app`) compartilham o mesmo repositório e o mesmo
+banco (`DATABASE_URL`), mas cada um é um deploy independente no Streamlit Community Cloud,
+com sua própria URL:
+- Deploy principal → arquivo `app/main.py` → uso interno (Eduardo).
+- Deploy Suinco → arquivo `suinco_app/Avarias.py` → link que vai pros 10 promotores e pro
+  gerente. Sem seletor de projeto, sem acesso a nenhuma outra marca.
+
+Rodar localmente: `streamlit run suinco_app/Avarias.py`.
 
 ## Status
 

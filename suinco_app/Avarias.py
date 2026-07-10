@@ -1,10 +1,15 @@
-"""Cadastro de produtos em avaria/vencimento — página do promotor (Suinco).
+"""App dedicado só ao projeto Suinco — cadastro de avaria/vencimento.
+
+Deploy separado do painel principal (app/main.py), de propósito: aqui só
+existem as páginas Avarias e Vencimentos, sem nenhum acesso aos outros
+projetos/marcas do MCX Tracker. É o link que promotores e o gerente da
+Suinco recebem.
 
 Pensada para uso pelo celular: campos digitados livremente (sem seleção em
 lista), layout em coluna única.
 
 Uso:
-    streamlit run app/main.py   (depois abrir "Avarias" na barra lateral)
+    streamlit run suinco_app/Avarias.py
 """
 from __future__ import annotations
 
@@ -13,7 +18,7 @@ import sys
 import uuid
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
 
