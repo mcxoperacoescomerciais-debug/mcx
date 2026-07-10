@@ -58,3 +58,30 @@ def upload_photo(file_bytes: bytes, filename: str) -> str | None:
     )
     response.raise_for_status()
     return f"{url}/storage/v1/object/public/{BUCKET}/{object_path}"
+
+
+def delete_photo(photo_url: str) -> None:
+    """Apaga uma foto do bucket a partir da URL pública salva no banco.
+
+    Silencioso se o Storage não estiver configurado ou a URL não for
+    reconhecida (ex.: era um caminho de disco local antigo) — apagar o
+    registro no banco não pode falhar por causa da limpeza da foto.
+    """
+    config = _config()
+    if not config or not photo_url:
+        return
+    url, key = config
+
+    marker = f"/storage/v1/object/public/{BUCKET}/"
+    if marker not in photo_url:
+        return
+    object_path = photo_url.split(marker, 1)[1]
+
+    try:
+        requests.delete(
+            f"{url}/storage/v1/object/{BUCKET}/{object_path}",
+            headers={"Authorization": f"Bearer {key}", "apikey": key},
+            timeout=30,
+        )
+    except requests.RequestException:
+        pass

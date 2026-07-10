@@ -35,6 +35,7 @@ from core.pipeline.expiry import (
     list_expiring_soon,
     list_history,
 )
+from core.storage.supabase_storage import delete_photo
 
 st.set_page_config(page_title="Vencimentos — Suinco", page_icon="⏰", layout="centered")
 
@@ -58,6 +59,25 @@ def _existing_photos(paths: list[str]) -> list[str]:
         elif os.path.exists(p):
             ok.append(p)
     return ok
+
+
+def _resolve_item(item_id: int, foto_paths: list[str]) -> None:
+    """Marca o item como resolvido e apaga as fotos associadas — resolvido
+    significa que o produto já saiu da prateleira, não faz sentido manter
+    a foto ocupando espaço no Storage depois disso."""
+    for path in foto_paths or []:
+        if path and (path.startswith("http://") or path.startswith("https://")):
+            delete_photo(path)
+        elif path and os.path.exists(path):
+            os.remove(path)
+
+    with get_session() as session:
+        db_item = session.get(DamagedProduct, item_id)
+        db_item.status = "resolvido"
+        db_item.resolved_at = dt.datetime.now(dt.timezone.utc)
+        db_item.resolved_by = "Eduardo"
+        db_item.foto_paths = []
+
 
 st.markdown(
     """
@@ -116,6 +136,11 @@ else:
             else:
                 st.warning(f"Vence em {item.dias_restantes} dia(s) ({label})")
 
+            if is_admin:
+                if st.button("✔️ Marcar como resolvido", key=f"resolve_top_{item.id}", use_container_width=True):
+                    _resolve_item(item.id, item.foto_paths)
+                    st.rerun()
+
 st.divider()
 st.subheader("Mensagem pronta para enviar")
 st.caption("Toque no texto, selecione tudo e copie — depois é só colar na conversa do WhatsApp.")
@@ -160,11 +185,7 @@ with tab_ativos:
                     st.write("Sem validade informada")
 
                 if st.button("✔️ Marcar como resolvido", key=f"resolve_{item.id}", use_container_width=True):
-                    with get_session() as session:
-                        db_item = session.get(DamagedProduct, item.id)
-                        db_item.status = "resolvido"
-                        db_item.resolved_at = dt.datetime.now(dt.timezone.utc)
-                        db_item.resolved_by = "Eduardo"
+                    _resolve_item(item.id, item.foto_paths)
                     st.rerun()
 
 with tab_historico:
