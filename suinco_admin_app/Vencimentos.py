@@ -17,6 +17,7 @@ Os promotores nunca recebem nenhum dos dois links — o app deles
 from __future__ import annotations
 
 import datetime as dt
+import os
 import sys
 from pathlib import Path
 
@@ -36,6 +37,17 @@ from core.pipeline.expiry import (
 )
 
 st.set_page_config(page_title="Vencimentos — Suinco", page_icon="⏰", layout="centered")
+
+
+def _existing_photos(paths: list[str]) -> list[str]:
+    """Filtra fotos que ainda existem em disco.
+
+    O armazenamento de arquivos do Streamlit Cloud não é permanente — uma
+    foto enviada num deploy anterior pode já ter sumido do disco mesmo com
+    o caminho ainda salvo no banco. Sem esse filtro, st.image() derruba a
+    página inteira com MediaFileStorageError.
+    """
+    return [p for p in (paths or []) if p and os.path.exists(p)]
 
 st.markdown(
     """
@@ -84,8 +96,9 @@ else:
             )
             if item.observacao:
                 st.caption(item.observacao)
-            if item.foto_paths:
-                st.image(item.foto_paths, width=200)
+            fotos_ok = _existing_photos(item.foto_paths)
+            if fotos_ok:
+                st.image(fotos_ok, width=200)
 
             label = item.validade.strftime("%d/%m/%Y") if item.validade else "-"
             if item.dias_restantes is not None and item.dias_restantes < 0:
@@ -122,8 +135,9 @@ with tab_ativos:
                 )
                 if item.observacao:
                     st.caption(item.observacao)
-                if item.foto_paths:
-                    st.image(item.foto_paths, width=160)
+                fotos_ok = _existing_photos(item.foto_paths)
+                if fotos_ok:
+                    st.image(fotos_ok, width=160)
                 if item.validade:
                     label = f"Validade: {item.validade.strftime('%d/%m/%Y')}"
                     if item.dias_restantes is not None and item.dias_restantes < 0:
