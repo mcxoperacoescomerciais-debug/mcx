@@ -40,14 +40,24 @@ st.set_page_config(page_title="Vencimentos — Suinco", page_icon="⏰", layout=
 
 
 def _existing_photos(paths: list[str]) -> list[str]:
-    """Filtra fotos que ainda existem em disco.
+    """Filtra fotos exibíveis: URLs (Supabase Storage) sempre passam — quem
+    resolve se carregam é o navegador, não trava a página; caminhos locais
+    só passam se o arquivo ainda existir em disco.
 
-    O armazenamento de arquivos do Streamlit Cloud não é permanente — uma
-    foto enviada num deploy anterior pode já ter sumido do disco mesmo com
-    o caminho ainda salvo no banco. Sem esse filtro, st.image() derruba a
-    página inteira com MediaFileStorageError.
+    O disco do Streamlit Cloud não é permanente — fotos enviadas antes do
+    Supabase Storage entrar em uso podem ter caminho local salvo no banco
+    mas o arquivo já sumiu. Sem esse filtro, st.image() derruba a página
+    inteira com MediaFileStorageError.
     """
-    return [p for p in (paths or []) if p and os.path.exists(p)]
+    ok = []
+    for p in paths or []:
+        if not p:
+            continue
+        if p.startswith("http://") or p.startswith("https://"):
+            ok.append(p)
+        elif os.path.exists(p):
+            ok.append(p)
+    return ok
 
 st.markdown(
     """

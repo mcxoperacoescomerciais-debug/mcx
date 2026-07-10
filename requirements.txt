@@ -24,5 +24,8 @@ google-genai>=2.10.0
 # Matching de lojas
 rapidfuzz>=3.10.0
 
+# Upload de fotos para o Supabase Storage (armazenamento permanente)
+requests>=2.32.0
+
 # Painel
 streamlit>=1.39.0

@@ -31,6 +31,7 @@ from core.config.settings import settings
 from core.db.models import DamagedProduct
 from core.db.session import get_session
 from core.pipeline.expiry import AVARIA_PROJECT_KEY, AVARIA_PROJECT_LABEL
+from core.storage.supabase_storage import upload_photo
 
 st.set_page_config(page_title="Avarias — Suinco", page_icon="📦", layout="centered")
 
@@ -136,14 +137,22 @@ with st.form("novo_item_avaria", clear_on_submit=True):
         else:
             foto_paths = []
             if fotos:
-                avarias_dir = settings.media_dir / "avarias"
-                avarias_dir.mkdir(parents=True, exist_ok=True)
                 for foto in fotos:
-                    ext = Path(foto.name).suffix or ".jpg"
-                    foto_path = str(avarias_dir / f"{uuid.uuid4().hex}{ext}")
-                    with open(foto_path, "wb") as f:
-                        f.write(foto.getbuffer())
-                    foto_paths.append(foto_path)
+                    file_bytes = foto.getbuffer().tobytes()
+                    url = upload_photo(file_bytes, foto.name)
+                    if url:
+                        foto_paths.append(url)
+                    else:
+                        # Sem Supabase Storage configurado (ex.: local sem
+                        # secrets) — cai de volta pro disco local, sabendo
+                        # que ele não é permanente no Streamlit Cloud.
+                        avarias_dir = settings.media_dir / "avarias"
+                        avarias_dir.mkdir(parents=True, exist_ok=True)
+                        ext = Path(foto.name).suffix or ".jpg"
+                        foto_path = str(avarias_dir / f"{uuid.uuid4().hex}{ext}")
+                        with open(foto_path, "wb") as f:
+                            f.write(file_bytes)
+                        foto_paths.append(foto_path)
 
             with get_session() as session:
                 session.add(
