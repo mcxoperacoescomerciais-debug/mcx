@@ -82,18 +82,44 @@ def _resolve_item(item_id: int, foto_paths: list[str]) -> None:
 st.markdown(
     """
     <style>
-    .block-container { padding-top: 2.5rem; padding-bottom: 3rem; max-width: 700px; }
+    #MainMenu, footer { visibility: hidden; }
+    .block-container { padding-top: 1.75rem; padding-bottom: 3rem; max-width: 700px; }
+
+    .suinco-hero {
+        background: linear-gradient(135deg, #E8552E 0%, #F2824F 100%);
+        border-radius: 22px;
+        padding: 1.5rem 1.4rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 10px 28px rgba(232, 85, 46, 0.28);
+    }
+    .suinco-hero .icon {
+        font-size: 2rem; line-height: 1;
+        background: rgba(255,255,255,0.22);
+        border-radius: 16px; padding: 0.5rem 0.65rem;
+    }
+    .suinco-hero h1 { font-size: 1.3rem; margin: 0; color: #FFFFFF; font-weight: 800; }
+    .suinco-hero p { margin: 0.15rem 0 0; color: rgba(255,255,255,0.92); font-size: 0.88rem; }
+
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 14px !important;
+        border-radius: 18px !important;
+        box-shadow: 0 4px 18px rgba(43, 34, 29, 0.06);
+        border: 1px solid #F1E3D8 !important;
     }
-    button[kind="primary"] { border-radius: 10px !important; font-weight: 600 !important; }
-    .suinco-header { display:flex; align-items:center; gap:0.7rem; margin-bottom:0.1rem; }
-    .suinco-header .icon {
-        font-size: 2.1rem; line-height:1; background: rgba(16,185,129,0.15);
-        border-radius: 14px; padding: 0.5rem 0.6rem;
+    button[kind="primary"] {
+        border-radius: 12px !important; font-weight: 700 !important;
+        box-shadow: 0 6px 16px rgba(232, 85, 46, 0.3);
     }
-    .suinco-header h1 { font-size: 1.5rem; margin: 0; }
-    .suinco-subtitle { color: rgba(255,255,255,0.55); margin-bottom: 1.5rem; font-size: 0.95rem; }
+    button[kind="secondary"] { border-radius: 12px !important; font-weight: 600 !important; }
+    div[data-testid="stTextArea"] textarea { border-radius: 12px !important; }
+    .suinco-badge {
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        background: #FBEDE4; color: #2B221D; border-radius: 999px;
+        padding: 0.3rem 0.85rem; font-size: 0.85rem; font-weight: 700;
+        margin-bottom: 0.75rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -106,11 +132,13 @@ except Exception:
 is_admin = bool(ADMIN_KEY) and st.query_params.get("chave") == ADMIN_KEY
 
 st.markdown(
-    '<div class="suinco-header"><span class="icon">⏰</span>'
-    f'<h1>Vencimentos — {AVARIA_PROJECT_LABEL}</h1></div>'
-    f'<div class="suinco-subtitle">Produtos vencidos ou vencendo em até {DEFAULT_WARNING_DAYS} dias.</div>',
+    '<div class="suinco-hero"><span class="icon">⏰</span>'
+    f'<div><h1>Vencimentos — {AVARIA_PROJECT_LABEL}</h1>'
+    f'<p>Produtos vencidos ou vencendo em até {DEFAULT_WARNING_DAYS} dias</p></div></div>',
     unsafe_allow_html=True,
 )
+if is_admin:
+    st.markdown('<span class="suinco-badge">🔧 Modo administrador</span>', unsafe_allow_html=True)
 
 with get_session() as session:
     items = list_expiring_soon(session)

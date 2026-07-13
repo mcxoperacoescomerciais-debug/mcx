@@ -38,32 +38,56 @@ st.set_page_config(page_title="Avarias — Suinco", page_icon="📦", layout="ce
 st.markdown(
     """
     <style>
-    .block-container { padding-top: 2.5rem; padding-bottom: 3rem; max-width: 640px; }
+    #MainMenu, footer { visibility: hidden; }
+    .block-container { padding-top: 1.75rem; padding-bottom: 3rem; max-width: 640px; }
+
+    .suinco-hero {
+        background: linear-gradient(135deg, #E8552E 0%, #F2824F 100%);
+        border-radius: 22px;
+        padding: 1.5rem 1.4rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 10px 28px rgba(232, 85, 46, 0.28);
+    }
+    .suinco-hero .icon {
+        font-size: 2rem;
+        line-height: 1;
+        background: rgba(255,255,255,0.22);
+        border-radius: 16px;
+        padding: 0.5rem 0.65rem;
+    }
+    .suinco-hero h1 { font-size: 1.35rem; margin: 0; color: #FFFFFF; font-weight: 800; }
+    .suinco-hero p { margin: 0.15rem 0 0; color: rgba(255,255,255,0.92); font-size: 0.9rem; }
+
     div[data-testid="stForm"] {
-        background: rgba(255,255,255,0.03);
-        border-radius: 18px;
-        padding: 1.75rem 1.5rem 1.25rem;
-        border: 1px solid rgba(255,255,255,0.09);
+        background: #FFFFFF;
+        border-radius: 20px;
+        padding: 1.75rem 1.5rem 1.35rem;
+        border: 1px solid #F1E3D8;
+        box-shadow: 0 6px 24px rgba(43, 34, 29, 0.07);
     }
     div[data-testid="stTextInput"] input,
     div[data-testid="stNumberInput"] input,
     div[data-testid="stDateInput"] input,
-    div[data-testid="stTextArea"] textarea {
-        border-radius: 10px !important;
+    div[data-testid="stTextArea"] textarea,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        border-radius: 12px !important;
     }
     button[kind="primary"] {
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-        padding-top: 0.65rem !important;
-        padding-bottom: 0.65rem !important;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+        box-shadow: 0 6px 16px rgba(232, 85, 46, 0.35);
     }
-    .suinco-header { display:flex; align-items:center; gap:0.7rem; margin-bottom:0.1rem; }
-    .suinco-header .icon {
-        font-size: 2.1rem; line-height:1; background: rgba(16,185,129,0.15);
-        border-radius: 14px; padding: 0.5rem 0.6rem;
+    button[kind="secondary"] { border-radius: 14px !important; font-weight: 600 !important; }
+    .suinco-chip {
+        display: inline-flex; align-items: center; gap: 0.4rem;
+        background: #FBEDE4; color: #2B221D; border-radius: 999px;
+        padding: 0.35rem 0.9rem; font-size: 0.88rem; font-weight: 600;
     }
-    .suinco-header h1 { font-size: 1.5rem; margin: 0; }
-    .suinco-subtitle { color: rgba(255,255,255,0.55); margin-bottom: 1.75rem; font-size: 0.95rem; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -79,15 +103,15 @@ if "promotor_atual" not in st.session_state:
 
 if promoter_pins and not st.session_state.promotor_atual:
     st.markdown(
-        '<div class="suinco-header"><span class="icon">📦</span>'
-        f'<h1>{AVARIA_PROJECT_LABEL}</h1></div>'
-        '<div class="suinco-subtitle">Identifique-se para continuar</div>',
+        '<div class="suinco-hero"><span class="icon">📦</span>'
+        f'<div><h1>{AVARIA_PROJECT_LABEL}</h1>'
+        '<p>Identifique-se para continuar</p></div></div>',
         unsafe_allow_html=True,
     )
     with st.form("login_promotor"):
         nome_login = st.selectbox("Seu nome", options=sorted(promoter_pins.keys()))
         pin_login = st.text_input("PIN (4 dígitos)", type="password", max_chars=4)
-        entrar = st.form_submit_button("Entrar", type="primary", use_container_width=True)
+        entrar = st.form_submit_button("Entrar 👋", type="primary", use_container_width=True)
     if entrar:
         if promoter_pins.get(nome_login) == pin_login:
             st.session_state.promotor_atual = nome_login
@@ -99,20 +123,21 @@ if promoter_pins and not st.session_state.promotor_atual:
 promotor_fixo = st.session_state.promotor_atual
 
 st.markdown(
-    '<div class="suinco-header"><span class="icon">📦</span>'
-    f'<h1>{AVARIA_PROJECT_LABEL}</h1></div>'
-    '<div class="suinco-subtitle">Registre um produto avariado ou perto do vencimento</div>',
+    '<div class="suinco-hero"><span class="icon">📦</span>'
+    f'<div><h1>{AVARIA_PROJECT_LABEL}</h1>'
+    '<p>Registre um produto avariado ou perto do vencimento</p></div></div>',
     unsafe_allow_html=True,
 )
 
 if promotor_fixo:
     top_left, top_right = st.columns([3, 1])
     with top_left:
-        st.caption(f"Conectado como **{promotor_fixo}**")
+        st.markdown(f'<span class="suinco-chip">👤 {promotor_fixo}</span>', unsafe_allow_html=True)
     with top_right:
         if st.button("Trocar", use_container_width=True):
             st.session_state.promotor_atual = None
             st.rerun()
+    st.write("")
 
 with st.form("novo_item_avaria", clear_on_submit=True):
     loja = st.text_input("Loja")
@@ -129,7 +154,7 @@ with st.form("novo_item_avaria", clear_on_submit=True):
     )
     observacao = st.text_area("Observação (opcional)")
 
-    submitted = st.form_submit_button("✅ Registrar", type="primary", use_container_width=True)
+    submitted = st.form_submit_button("📤 Registrar item", type="primary", use_container_width=True)
 
     if submitted:
         if not loja or not promotor or not produto:
@@ -168,4 +193,5 @@ with st.form("novo_item_avaria", clear_on_submit=True):
                         foto_paths=foto_paths,
                     )
                 )
-            st.success("Item registrado com sucesso.")
+            st.success("🎉 Item registrado com sucesso! Obrigado.")
+            st.balloons()
