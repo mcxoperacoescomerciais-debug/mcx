@@ -113,11 +113,11 @@ st.markdown(
     .mcx-subtitle { margin-top: 0.5rem; font-size: 0.88rem; color: rgba(242, 243, 247, 0.68); }
 
     div[data-testid="stForm"] {
-        background: #161D42;
+        background: #232B5C;
         border-radius: 18px;
         padding: 1.75rem 1.5rem 1.35rem;
-        border: 1px solid rgba(201, 162, 39, 0.25);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+        border: 1.5px solid rgba(201, 162, 39, 0.5);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
     }
     div[data-testid="stTextInput"] input,
     div[data-testid="stNumberInput"] input,
@@ -125,6 +125,8 @@ st.markdown(
     div[data-testid="stTextArea"] textarea,
     div[data-testid="stSelectbox"] div[data-baseweb="select"] {
         border-radius: 10px !important;
+        background-color: #0F1638 !important;
+        border: 1px solid rgba(201, 162, 39, 0.3) !important;
     }
     button[kind="primary"] {
         border-radius: 12px !important;

@@ -149,16 +149,21 @@ st.markdown(
     .mcx-subtitle { margin-top: 0.5rem; font-size: 0.88rem; color: rgba(242, 243, 247, 0.68); }
 
     div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: #232B5C !important;
         border-radius: 16px !important;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
-        border: 1px solid rgba(201, 162, 39, 0.2) !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        border: 1.5px solid rgba(201, 162, 39, 0.4) !important;
     }
     button[kind="primary"] {
         border-radius: 12px !important; font-weight: 700 !important;
         box-shadow: 0 6px 16px rgba(201, 162, 39, 0.3);
     }
     button[kind="secondary"] { border-radius: 12px !important; font-weight: 600 !important; }
-    div[data-testid="stTextArea"] textarea { border-radius: 10px !important; }
+    div[data-testid="stTextArea"] textarea {
+        border-radius: 10px !important;
+        background-color: #0F1638 !important;
+        border: 1px solid rgba(201, 162, 39, 0.3) !important;
+    }
     .mcx-badge {
         display: inline-flex; align-items: center; gap: 0.35rem;
         background: rgba(201, 162, 39, 0.14); color: #F2F3F7; border-radius: 999px;
