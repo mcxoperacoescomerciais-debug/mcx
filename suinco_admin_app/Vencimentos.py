@@ -13,9 +13,12 @@ URL, diferenciados por um parâmetro secreto na URL:
 
 Os promotores nunca recebem nenhum dos dois links — o app deles
 (suinco_app) não tem essa página.
+
+Visual: identidade MCX (azul-marinho + dourado, ver assets/mcx_logo.png).
 """
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import os
 import sys
@@ -37,7 +40,31 @@ from core.pipeline.expiry import (
 )
 from core.storage.supabase_storage import delete_photo
 
-st.set_page_config(page_title="Vencimentos — Suinco", page_icon="⏰", layout="centered")
+st.set_page_config(page_title="Vencimentos — Suinco | MCX", page_icon="🗂️", layout="centered")
+
+LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "mcx_logo.png"
+
+
+def _logo_html() -> str:
+    if LOGO_PATH.exists():
+        b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode()
+        return f'<img class="mcx-logo-img" src="data:image/png;base64,{b64}" />'
+    return '<span class="mcx-logo-fallback">MCX</span>'
+
+
+def render_header(subtitle: str) -> None:
+    st.markdown(
+        f"""
+        <div class="mcx-header">
+            {_logo_html()}
+            <div>
+                <div class="mcx-wordmark">MCX<span>OPERAÇÕES COMERCIAIS</span></div>
+                <div class="mcx-subtitle">{subtitle}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _existing_photos(paths: list[str]) -> list[str]:
@@ -85,39 +112,50 @@ st.markdown(
     #MainMenu, footer { visibility: hidden; }
     .block-container { padding-top: 1.75rem; padding-bottom: 3rem; max-width: 700px; }
 
-    .suinco-hero {
-        background: linear-gradient(135deg, #E8552E 0%, #F2824F 100%);
-        border-radius: 22px;
-        padding: 1.5rem 1.4rem;
+    .mcx-header {
+        background: linear-gradient(135deg, #0B1130 0%, #1B2456 100%);
+        border: 1px solid rgba(201, 162, 39, 0.35);
+        border-radius: 18px;
+        padding: 1.3rem 1.4rem;
         margin-bottom: 1.5rem;
         display: flex;
         align-items: center;
-        gap: 1rem;
-        box-shadow: 0 10px 28px rgba(232, 85, 46, 0.28);
+        gap: 1.1rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     }
-    .suinco-hero .icon {
-        font-size: 2rem; line-height: 1;
-        background: rgba(255,255,255,0.22);
-        border-radius: 16px; padding: 0.5rem 0.65rem;
+    .mcx-logo-img { width: 52px; height: 52px; border-radius: 10px; object-fit: contain; }
+    .mcx-logo-fallback {
+        font-family: Georgia, 'Times New Roman', serif;
+        font-weight: 700; font-size: 1.5rem; color: #C9A227;
+        width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+        border: 1.5px solid rgba(201, 162, 39, 0.5); border-radius: 10px;
     }
-    .suinco-hero h1 { font-size: 1.3rem; margin: 0; color: #FFFFFF; font-weight: 800; }
-    .suinco-hero p { margin: 0.15rem 0 0; color: rgba(255,255,255,0.92); font-size: 0.88rem; }
+    .mcx-wordmark {
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 1.15rem; font-weight: 700; letter-spacing: 0.03em; color: #F2F3F7;
+    }
+    .mcx-wordmark span {
+        display: block; font-family: sans-serif; font-size: 0.65rem; font-weight: 500;
+        letter-spacing: 0.14em; color: #C9A227; margin-top: 0.2rem;
+    }
+    .mcx-subtitle { margin-top: 0.5rem; font-size: 0.88rem; color: rgba(242, 243, 247, 0.68); }
 
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 18px !important;
-        box-shadow: 0 4px 18px rgba(43, 34, 29, 0.06);
-        border: 1px solid #F1E3D8 !important;
+        border-radius: 16px !important;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+        border: 1px solid rgba(201, 162, 39, 0.2) !important;
     }
     button[kind="primary"] {
         border-radius: 12px !important; font-weight: 700 !important;
-        box-shadow: 0 6px 16px rgba(232, 85, 46, 0.3);
+        box-shadow: 0 6px 16px rgba(201, 162, 39, 0.3);
     }
     button[kind="secondary"] { border-radius: 12px !important; font-weight: 600 !important; }
-    div[data-testid="stTextArea"] textarea { border-radius: 12px !important; }
-    .suinco-badge {
+    div[data-testid="stTextArea"] textarea { border-radius: 10px !important; }
+    .mcx-badge {
         display: inline-flex; align-items: center; gap: 0.35rem;
-        background: #FBEDE4; color: #2B221D; border-radius: 999px;
-        padding: 0.3rem 0.85rem; font-size: 0.85rem; font-weight: 700;
+        background: rgba(201, 162, 39, 0.14); color: #F2F3F7; border-radius: 999px;
+        padding: 0.3rem 0.85rem; font-size: 0.83rem; font-weight: 700;
+        border: 1px solid rgba(201, 162, 39, 0.3);
         margin-bottom: 0.75rem;
     }
     </style>
@@ -131,20 +169,18 @@ except Exception:
     ADMIN_KEY = ""
 is_admin = bool(ADMIN_KEY) and st.query_params.get("chave") == ADMIN_KEY
 
-st.markdown(
-    '<div class="suinco-hero"><span class="icon">⏰</span>'
-    f'<div><h1>Vencimentos — {AVARIA_PROJECT_LABEL}</h1>'
-    f'<p>Produtos vencidos ou vencendo em até {DEFAULT_WARNING_DAYS} dias</p></div></div>',
-    unsafe_allow_html=True,
+render_header(
+    f"{AVARIA_PROJECT_LABEL} — Controle de Vencimentos "
+    f"(produtos vencidos ou vencendo em até {DEFAULT_WARNING_DAYS} dias)"
 )
 if is_admin:
-    st.markdown('<span class="suinco-badge">🔧 Modo administrador</span>', unsafe_allow_html=True)
+    st.markdown('<span class="mcx-badge">Acesso Administrativo</span>', unsafe_allow_html=True)
 
 with get_session() as session:
     items = list_expiring_soon(session)
 
 if not items:
-    st.success("Nenhum produto vencendo nos próximos dias. 🎉")
+    st.success("Nenhum produto vencendo nos próximos dias.")
 else:
     for item in items:
         with st.container(border=True):
@@ -165,13 +201,13 @@ else:
                 st.warning(f"Vence em {item.dias_restantes} dia(s) ({label})")
 
             if is_admin:
-                if st.button("✔️ Marcar como resolvido", key=f"resolve_top_{item.id}", use_container_width=True):
+                if st.button("Marcar como Resolvido", key=f"resolve_top_{item.id}", use_container_width=True):
                     _resolve_item(item.id, item.foto_paths)
                     st.rerun()
 
 st.divider()
-st.subheader("Mensagem pronta para enviar")
-st.caption("Toque no texto, selecione tudo e copie — depois é só colar na conversa do WhatsApp.")
+st.subheader("Mensagem para Envio")
+st.caption("Selecione o texto abaixo e copie para encaminhar via WhatsApp.")
 st.text_area("Mensagem", value=build_whatsapp_message(items), height=220, label_visibility="collapsed")
 
 if not is_admin:
@@ -179,9 +215,9 @@ if not is_admin:
 
 # --- A partir daqui, só quem acessa com a chave de administrador -----------
 st.divider()
-st.header("🔧 Gestão (uso interno)")
+st.header("Painel de Gestão")
 
-tab_ativos, tab_historico = st.tabs(["📋 Todos os itens ativos", "🕘 Histórico"])
+tab_ativos, tab_historico = st.tabs(["Itens Ativos", "Histórico"])
 
 with tab_ativos:
     with get_session() as session:
@@ -212,7 +248,7 @@ with tab_ativos:
                 else:
                     st.write("Sem validade informada")
 
-                if st.button("✔️ Marcar como resolvido", key=f"resolve_{item.id}", use_container_width=True):
+                if st.button("Marcar como Resolvido", key=f"resolve_{item.id}", use_container_width=True):
                     _resolve_item(item.id, item.foto_paths)
                     st.rerun()
 

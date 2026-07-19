@@ -1,9 +1,11 @@
 [theme]
-base = "light"
-primaryColor = "#E8552E"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#FBEDE4"
-textColor = "#2B221D"
+# Paleta executiva MCX: azul-marinho profundo + dourado, a mesma
+# combinação da logo (fundo marinho, "MCX" em prata/dourado).
+base = "dark"
+primaryColor = "#C9A227"
+backgroundColor = "#0B1130"
+secondaryBackgroundColor = "#161D42"
+textColor = "#F2F3F7"
 font = "sans serif"
 
 [server]

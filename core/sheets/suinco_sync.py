@@ -30,7 +30,7 @@ from core.config.settings import settings
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-TITLE = "SUINCO — CONTROLE DE AVARIAS E VENCIMENTO"
+TITLE = "MCX OPERAÇÕES COMERCIAIS — SUINCO | CONTROLE DE AVARIAS E VENCIMENTO"
 
 HEADER = [
     "Data/Hora", "Loja", "Promotor", "Produto", "Motivo",
@@ -39,10 +39,11 @@ HEADER = [
 
 _COLUMN_WIDTHS = [130, 170, 140, 170, 150, 100, 95, 240, 110, 110, 110]
 
-_COLOR_TITLE_BG = {"red": 0.153, "green": 0.161, "blue": 0.180}  # cinza-chumbo
-_COLOR_HEADER_BG = {"red": 0.910, "green": 0.333, "blue": 0.180}  # laranja da marca
+# Paleta executiva MCX: azul-marinho + dourado, a mesma da logo.
+_COLOR_TITLE_BG = {"red": 0.043, "green": 0.067, "blue": 0.188}  # azul-marinho
+_COLOR_HEADER_BG = {"red": 0.788, "green": 0.635, "blue": 0.153}  # dourado
 _COLOR_WHITE = {"red": 1, "green": 1, "blue": 1}
-_COLOR_BAND = {"red": 0.975, "green": 0.953, "blue": 0.937}  # bege bem claro
+_COLOR_BAND = {"red": 0.965, "green": 0.957, "blue": 0.925}  # bege claro (tom dourado suave)
 
 
 def _apply_professional_formatting(worksheet: gspread.Worksheet) -> None:
@@ -60,7 +61,9 @@ def _apply_professional_formatting(worksheet: gspread.Worksheet) -> None:
     worksheet.format(f"A2:{gspread.utils.rowcol_to_a1(2, n_cols)}", {
         "backgroundColor": _COLOR_HEADER_BG,
         "horizontalAlignment": "CENTER",
-        "textFormat": {"bold": True, "fontSize": 10, "foregroundColor": _COLOR_WHITE},
+        # Texto escuro (não branco) — dourado é claro demais pra manter
+        # contraste legível com texto branco.
+        "textFormat": {"bold": True, "fontSize": 10, "foregroundColor": _COLOR_TITLE_BG},
     })
     worksheet.freeze(rows=2)
 
@@ -78,23 +81,36 @@ def _apply_professional_formatting(worksheet: gspread.Worksheet) -> None:
                 "fields": "pixelSize",
             }
         })
-    requests.append({
-        "addBanding": {
-            "bandedRange": {
-                "range": {
-                    "sheetId": worksheet.id,
-                    "startRowIndex": 2,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": n_cols,
-                },
-                "rowProperties": {
-                    "headerColorStyle": {"rgbColor": _COLOR_WHITE},
-                    "firstBandColorStyle": {"rgbColor": _COLOR_WHITE},
-                    "secondBandColorStyle": {"rgbColor": _COLOR_BAND},
-                },
-            }
-        }
-    })
+    banded_range = {
+        "range": {
+            "sheetId": worksheet.id,
+            "startRowIndex": 2,
+            "startColumnIndex": 0,
+            "endColumnIndex": n_cols,
+        },
+        "rowProperties": {
+            "headerColorStyle": {"rgbColor": _COLOR_WHITE},
+            "firstBandColorStyle": {"rgbColor": _COLOR_WHITE},
+            "secondBandColorStyle": {"rgbColor": _COLOR_BAND},
+        },
+    }
+    # Reaplicar a formatação não pode dar erro se a faixa (banding) já
+    # existir de uma vez anterior — nesse caso, atualiza em vez de tentar
+    # adicionar de novo (a API rejeita "addBanding" numa faixa que já tem).
+    existing_banded_ranges = worksheet.spreadsheet.fetch_sheet_metadata().get("sheets", [])
+    existing_band_id = None
+    for sheet_meta in existing_banded_ranges:
+        if sheet_meta["properties"]["sheetId"] == worksheet.id:
+            for band in sheet_meta.get("bandedRanges", []):
+                existing_band_id = band["bandedRangeId"]
+                break
+
+    if existing_band_id is not None:
+        banded_range["bandedRangeId"] = existing_band_id
+        requests.append({"updateBanding": {"bandedRange": banded_range, "fields": "*"}})
+    else:
+        requests.append({"addBanding": {"bandedRange": banded_range}})
+
     worksheet.spreadsheet.batch_update({"requests": requests})
 
 @lru_cache(maxsize=1)
