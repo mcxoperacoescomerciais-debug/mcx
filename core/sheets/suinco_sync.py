@@ -19,6 +19,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import sys
+import traceback
 from functools import lru_cache
 
 import gspread
@@ -84,10 +86,16 @@ def append_avaria_row(
     disso."""
     sheet_id = os.getenv("SUINCO_SHEET_ID", "")
     if not sheet_id:
+        print("[suinco_sync] SUINCO_SHEET_ID não configurado — pulando sincronização.", file=sys.stderr)
         return False
 
     client = _get_client()
     if not client:
+        print(
+            "[suinco_sync] Sem credencial do Google (GOOGLE_SERVICE_ACCOUNT_JSON não "
+            "configurado e arquivo local não encontrado) — pulando sincronização.",
+            file=sys.stderr,
+        )
         return False
 
     try:
@@ -118,4 +126,6 @@ def append_avaria_row(
         worksheet.append_row(row, value_input_option="USER_ENTERED")
         return True
     except Exception:
+        print("[suinco_sync] Falha ao gravar na planilha:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         return False
