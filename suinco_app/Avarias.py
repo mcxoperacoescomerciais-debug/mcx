@@ -31,6 +31,7 @@ from core.config.settings import settings
 from core.db.models import DamagedProduct
 from core.db.session import get_session
 from core.pipeline.expiry import AVARIA_PROJECT_KEY, AVARIA_PROJECT_LABEL
+from core.sheets.suinco_sync import append_avaria_row
 from core.storage.supabase_storage import upload_photo
 
 st.set_page_config(page_title="Avarias — Suinco", page_icon="📦", layout="centered")
@@ -193,5 +194,21 @@ with st.form("novo_item_avaria", clear_on_submit=True):
                         foto_paths=foto_paths,
                     )
                 )
+
+            # A planilha é só um espelho pros gestores acompanharem — o
+            # banco acima é a fonte de verdade. Se isso falhar (planilha
+            # não configurada, sem internet, etc.), o cadastro já foi
+            # salvo mesmo assim.
+            append_avaria_row(
+                loja=loja,
+                promotor=promotor,
+                produto=produto,
+                tipo=tipo,
+                validade=validade,
+                quantidade=int(quantidade) or None,
+                observacao=observacao,
+                foto_paths=foto_paths,
+            )
+
             st.success("🎉 Item registrado com sucesso! Obrigado.")
             st.balloons()
