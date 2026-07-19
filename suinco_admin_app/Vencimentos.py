@@ -45,26 +45,34 @@ st.set_page_config(page_title="Vencimentos — Suinco | MCX", page_icon="🗂️
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "mcx_logo.png"
 
 
-def _logo_html() -> str:
-    if LOGO_PATH.exists():
-        b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode()
-        return f'<img class="mcx-logo-img" src="data:image/png;base64,{b64}" />'
-    return '<span class="mcx-logo-fallback">MCX</span>'
-
-
 def render_header(subtitle: str) -> None:
-    st.markdown(
-        f"""
-        <div class="mcx-header">
-            {_logo_html()}
-            <div>
-                <div class="mcx-wordmark">MCX<span>OPERAÇÕES COMERCIAIS</span></div>
+    if LOGO_PATH.exists():
+        # A logo já traz "MCX Operações Comerciais" escrito nela — não
+        # repete o texto do wordmark ao lado, só a logo + o subtítulo.
+        b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode()
+        logo_html = f'<img class="mcx-logo-img" src="data:image/png;base64,{b64}" />'
+        st.markdown(
+            f"""
+            <div class="mcx-header">
+                {logo_html}
                 <div class="mcx-subtitle">{subtitle}</div>
             </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"""
+            <div class="mcx-header">
+                <span class="mcx-logo-fallback">MCX</span>
+                <div>
+                    <div class="mcx-wordmark">MCX<span>OPERAÇÕES COMERCIAIS</span></div>
+                    <div class="mcx-subtitle">{subtitle}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def _existing_photos(paths: list[str]) -> list[str]:
@@ -123,7 +131,7 @@ st.markdown(
         gap: 1.1rem;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     }
-    .mcx-logo-img { width: 52px; height: 52px; border-radius: 10px; object-fit: contain; }
+    .mcx-logo-img { width: 84px; height: 84px; border-radius: 12px; object-fit: contain; }
     .mcx-logo-fallback {
         font-family: Georgia, 'Times New Roman', serif;
         font-weight: 700; font-size: 1.5rem; color: #C9A227;
