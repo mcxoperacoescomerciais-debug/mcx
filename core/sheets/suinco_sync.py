@@ -32,12 +32,14 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 TITLE = "MCX OPERAÇÕES COMERCIAIS — SUINCO | CONTROLE DE AVARIAS E VENCIMENTO"
 
+MAX_FOTOS_PLANILHA = 10
+
 HEADER = [
     "Data/Hora", "Loja", "Promotor", "Produto", "Motivo",
-    "Validade", "Quantidade", "Observação", "Foto 1", "Foto 2", "Foto 3",
-]
+    "Validade", "Quantidade", "Observação",
+] + [f"Foto {i}" for i in range(1, MAX_FOTOS_PLANILHA + 1)]
 
-_COLUMN_WIDTHS = [130, 170, 140, 170, 150, 100, 95, 240, 110, 110, 110]
+_COLUMN_WIDTHS = [130, 170, 140, 170, 150, 100, 95, 240] + [110] * MAX_FOTOS_PLANILHA
 
 # Paleta executiva MCX: azul-marinho + dourado, a mesma da logo.
 _COLOR_TITLE_BG = {"red": 0.043, "green": 0.067, "blue": 0.188}  # azul-marinho
@@ -187,8 +189,8 @@ def append_avaria_row(
             worksheet.update(values=[HEADER], range_name="A2")
             _apply_professional_formatting(worksheet)
 
-        fotos = list(foto_paths or [])[:3]
-        fotos += [None] * (3 - len(fotos))
+        fotos = list(foto_paths or [])[:MAX_FOTOS_PLANILHA]
+        fotos += [None] * (MAX_FOTOS_PLANILHA - len(fotos))
 
         row = [
             dt.datetime.now().strftime("%d/%m/%Y %H:%M"),
@@ -199,10 +201,7 @@ def append_avaria_row(
             validade.strftime("%d/%m/%Y") if validade else "",
             quantidade if quantidade is not None else "",
             observacao or "",
-            _foto_formula(fotos[0]),
-            _foto_formula(fotos[1]),
-            _foto_formula(fotos[2]),
-        ]
+        ] + [_foto_formula(f) for f in fotos]
         worksheet.append_row(row, value_input_option="USER_ENTERED")
         return True
     except Exception:
