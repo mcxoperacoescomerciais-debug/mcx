@@ -30,10 +30,72 @@ from core.config.settings import settings
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
+TITLE = "SUINCO — CONTROLE DE AVARIAS E VENCIMENTO"
+
 HEADER = [
     "Data/Hora", "Loja", "Promotor", "Produto", "Motivo",
     "Validade", "Quantidade", "Observação", "Foto 1", "Foto 2", "Foto 3",
 ]
+
+_COLUMN_WIDTHS = [130, 170, 140, 170, 150, 100, 95, 240, 110, 110, 110]
+
+_COLOR_TITLE_BG = {"red": 0.153, "green": 0.161, "blue": 0.180}  # cinza-chumbo
+_COLOR_HEADER_BG = {"red": 0.910, "green": 0.333, "blue": 0.180}  # laranja da marca
+_COLOR_WHITE = {"red": 1, "green": 1, "blue": 1}
+_COLOR_BAND = {"red": 0.975, "green": 0.953, "blue": 0.937}  # bege bem claro
+
+
+def _apply_professional_formatting(worksheet: gspread.Worksheet) -> None:
+    """Aplica visual de planilha corporativa: título mesclado, cabeçalho
+    colorido, colunas com largura razoável, linhas congeladas e listras
+    alternadas — pra ficar apresentável pra diretoria, não só funcional."""
+    n_cols = len(HEADER)
+    last_col_a1 = gspread.utils.rowcol_to_a1(1, n_cols)
+    worksheet.merge_cells(f"A1:{last_col_a1}")
+    worksheet.format(f"A1:{last_col_a1}", {
+        "backgroundColor": _COLOR_TITLE_BG,
+        "horizontalAlignment": "CENTER",
+        "textFormat": {"bold": True, "fontSize": 12, "foregroundColor": _COLOR_WHITE},
+    })
+    worksheet.format(f"A2:{gspread.utils.rowcol_to_a1(2, n_cols)}", {
+        "backgroundColor": _COLOR_HEADER_BG,
+        "horizontalAlignment": "CENTER",
+        "textFormat": {"bold": True, "fontSize": 10, "foregroundColor": _COLOR_WHITE},
+    })
+    worksheet.freeze(rows=2)
+
+    requests = []
+    for i, width in enumerate(_COLUMN_WIDTHS):
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": worksheet.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": i,
+                    "endIndex": i + 1,
+                },
+                "properties": {"pixelSize": width},
+                "fields": "pixelSize",
+            }
+        })
+    requests.append({
+        "addBanding": {
+            "bandedRange": {
+                "range": {
+                    "sheetId": worksheet.id,
+                    "startRowIndex": 2,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": n_cols,
+                },
+                "rowProperties": {
+                    "headerColorStyle": {"rgbColor": _COLOR_WHITE},
+                    "firstBandColorStyle": {"rgbColor": _COLOR_WHITE},
+                    "secondBandColorStyle": {"rgbColor": _COLOR_BAND},
+                },
+            }
+        }
+    })
+    worksheet.spreadsheet.batch_update({"requests": requests})
 
 @lru_cache(maxsize=1)
 def _get_client() -> gspread.Client | None:
@@ -105,7 +167,9 @@ def append_avaria_row(
         # Planilha "vazia" ainda devolve [[]] (uma linha vazia), não [] —
         # por isso o "any" em vez de só checar se a lista está vazia.
         if not any(existing_values):
-            worksheet.append_row(HEADER, value_input_option="USER_ENTERED")
+            worksheet.update(values=[[TITLE]], range_name="A1")
+            worksheet.update(values=[HEADER], range_name="A2")
+            _apply_professional_formatting(worksheet)
 
         fotos = list(foto_paths or [])[:3]
         fotos += [None] * (3 - len(fotos))

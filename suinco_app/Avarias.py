@@ -36,6 +36,10 @@ from core.storage.supabase_storage import upload_photo
 
 st.set_page_config(page_title="Avarias — Suinco", page_icon="📦", layout="centered")
 
+MOTIVO_VENCIMENTO = "VENCIMENTO"
+MOTIVO_AVARIA = "PACOTE COM AVARIA"
+MOTIVO_OPTIONS = [MOTIVO_VENCIMENTO, MOTIVO_AVARIA]
+
 st.markdown(
     """
     <style>
@@ -140,6 +144,10 @@ if promotor_fixo:
             st.rerun()
     st.write("")
 
+# Fora do form: precisa de rerun imediato ao trocar, pra decidir se mostra
+# o campo de validade (só faz sentido pra VENCIMENTO, não pra avaria).
+tipo = st.radio("Motivo", options=MOTIVO_OPTIONS, horizontal=True)
+
 with st.form("novo_item_avaria", clear_on_submit=True):
     loja = st.text_input("Loja")
     if promotor_fixo:
@@ -147,8 +155,10 @@ with st.form("novo_item_avaria", clear_on_submit=True):
     else:
         promotor = st.text_input("Seu nome (promotor)")
     produto = st.text_input("Produto")
-    tipo = st.text_input("Motivo", placeholder="Ex.: Vencimento próximo, Avariado...")
-    validade = st.date_input("Data de validade (se souber)", value=None, format="DD/MM/YYYY")
+    if tipo == MOTIVO_VENCIMENTO:
+        validade = st.date_input("Data de validade (se souber)", value=None, format="DD/MM/YYYY")
+    else:
+        validade = None
     quantidade = st.number_input("Quantidade", min_value=0, step=1, value=0)
     fotos = st.file_uploader(
         "Fotos (opcional)", type=["jpg", "jpeg", "png"], accept_multiple_files=True
