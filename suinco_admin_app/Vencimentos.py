@@ -121,6 +121,12 @@ st.markdown(
     #MainMenu, footer { visibility: hidden; }
     .block-container { padding-top: 1.75rem; padding-bottom: 3rem; max-width: 700px; }
 
+    /* Selos flutuantes do Streamlit Community Cloud ("Hosted with
+    Streamlit", botão de Fork, "Created by ...") — classes com hash
+    variável, por isso o seletor usa "contém" em vez do nome exato. */
+    a[class*="viewerBadge"], div[class*="profileContainer"],
+    div[class*="stateContainer"] { display: none !important; }
+
     .mcx-header {
         background: linear-gradient(135deg, #0B1130 0%, #1B2456 100%);
         border: 1px solid rgba(201, 162, 39, 0.35);

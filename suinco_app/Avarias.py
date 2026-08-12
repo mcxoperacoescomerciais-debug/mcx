@@ -71,62 +71,85 @@ def _current_app_version() -> str:
     return _dt.datetime.now().strftime("dev-%Y%m%d%H%M%S")
 
 
-def _publish_pwa_assets(version: str) -> None:
-    """Instala o app como PWA (ícone na tela inicial) e injeta o aviso de
-    atualização — feito via JS porque o Streamlit não deixa a gente editar
-    o <head> da página diretamente. O componente roda num iframe
-    same-origin, então alcança `window.parent.document` (a página real)
-    pra inserir o manifest/ícones e pra checar periodicamente se já existe
-    uma versão mais nova publicada (comparando com o arquivo estático
-    /app/static/version.txt, que é reescrito a cada novo deploy)."""
+def _write_version_file(version: str) -> None:
+    """Reescreve /app/static/version.txt com a versão em execução agora —
+    é nisso que o promotor já logado compara pra saber se surgiu um deploy
+    novo (ver `_show_update_gate`)."""
     try:
         STATIC_DIR.mkdir(parents=True, exist_ok=True)
         (STATIC_DIR / "version.txt").write_text(version, encoding="utf-8")
     except Exception:
         pass
 
+
+def _register_pwa_manifest() -> None:
+    """Deixa o app instalável na tela inicial (ícone, tela cheia) — feito
+    via JS porque o Streamlit não deixa a gente editar o <head> da página
+    diretamente. Roda sempre, mesmo antes do login, pra funcionar já na
+    tela de autenticação. O componente roda num iframe same-origin, então
+    alcança `window.parent.document` (a página real)."""
+    html = """
+    <script>
+    (function() {
+        var doc = window.parent.document;
+
+        function ensureHead(tag, attrs) {
+            var selector = tag + Object.keys(attrs).map(function(k) {
+                return '[' + k + '="' + attrs[k] + '"]';
+            }).join('');
+            if (doc.head.querySelector(selector)) return;
+            var el = doc.createElement(tag);
+            Object.keys(attrs).forEach(function(k) { el.setAttribute(k, attrs[k]); });
+            doc.head.appendChild(el);
+        }
+
+        ensureHead('link', { rel: 'manifest', href: '/app/static/manifest.json' });
+        ensureHead('meta', { name: 'theme-color', content: '#0B1130' });
+        ensureHead('link', { rel: 'apple-touch-icon', href: '/app/static/apple-touch-icon.png' });
+        ensureHead('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
+        ensureHead('meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' });
+
+        if ('serviceWorker' in navigator && !window.__mcxSwRegistered) {
+            window.__mcxSwRegistered = true;
+            navigator.serviceWorker.register('/app/static/sw.js').catch(function() {});
+        }
+    })();
+    </script>
+    """
+    components.html(html, height=0, width=0)
+
+
+def _show_update_gate(version: str) -> None:
+    """Bloqueia o app com um pop-up (sem botão de fechar) quando detecta
+    que já existe uma versão mais nova publicada — só chamado DEPOIS do
+    login, pra não incomodar quem ainda nem entrou. Compara com
+    /app/static/version.txt (reescrito a cada novo deploy) a cada ~45s;
+    o único jeito de sair do pop-up é clicando "Atualizar agora", que
+    recarrega a página."""
     html = f"""
     <script>
     (function() {{
         var doc = window.parent.document;
-
-        function ensureHead(tag, attrs) {{
-            var selector = tag + Object.keys(attrs).map(function(k) {{
-                return '[' + k + '="' + attrs[k] + '"]';
-            }}).join('');
-            if (doc.head.querySelector(selector)) return;
-            var el = doc.createElement(tag);
-            Object.keys(attrs).forEach(function(k) {{ el.setAttribute(k, attrs[k]); }});
-            doc.head.appendChild(el);
-        }}
-
-        ensureHead('link', {{ rel: 'manifest', href: '/app/static/manifest.json' }});
-        ensureHead('meta', {{ name: 'theme-color', content: '#0B1130' }});
-        ensureHead('link', {{ rel: 'apple-touch-icon', href: '/app/static/apple-touch-icon.png' }});
-        ensureHead('meta', {{ name: 'apple-mobile-web-app-capable', content: 'yes' }});
-        ensureHead('meta', {{ name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }});
-
-        if ('serviceWorker' in navigator && !window.__mcxSwRegistered) {{
-            window.__mcxSwRegistered = true;
-            navigator.serviceWorker.register('/app/static/sw.js').catch(function() {{}});
-        }}
-
         var CURRENT_VERSION = {version!r};
 
-        if (!doc.getElementById('mcx-update-banner')) {{
-            var banner = doc.createElement('div');
-            banner.id = 'mcx-update-banner';
-            banner.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;'
-                + 'background:#0B1130;border-top:2px solid #C9A227;padding:0.85rem 1.1rem;'
-                + 'display:none;align-items:center;justify-content:space-between;gap:0.8rem;'
-                + 'font-family:sans-serif;box-shadow:0 -6px 20px rgba(0,0,0,0.4);';
-            banner.innerHTML = '<span style="color:#F2F3F7;font-size:0.9rem;">'
-                + 'Nova atualização disponível.</span>'
-                + '<button id="mcx-update-btn" style="background:#C9A227;color:#0B1130;'
-                + 'border:none;border-radius:8px;padding:0.5rem 1rem;font-weight:700;'
-                + 'cursor:pointer;flex-shrink:0;">Atualizar</button>';
-            doc.body.appendChild(banner);
-            doc.getElementById('mcx-update-btn').addEventListener('click', function() {{
+        if (!doc.getElementById('mcx-update-gate')) {{
+            var overlay = doc.createElement('div');
+            overlay.id = 'mcx-update-gate';
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;'
+                + 'background:rgba(6,10,32,0.92);display:none;align-items:center;'
+                + 'justify-content:center;padding:1.5rem;font-family:sans-serif;';
+            overlay.innerHTML = '<div style="background:#161D42;border:1.5px solid #C9A227;'
+                + 'border-radius:18px;padding:2rem 1.75rem;max-width:360px;text-align:center;'
+                + 'box-shadow:0 20px 50px rgba(0,0,0,0.5);">'
+                + '<div style="font-size:1.05rem;font-weight:700;color:#F2F3F7;margin-bottom:0.6rem;">'
+                + 'Nova atualização disponível</div>'
+                + '<div style="font-size:0.9rem;color:rgba(242,243,247,0.8);margin-bottom:1.4rem;">'
+                + 'Atualize o app para continuar usando.</div>'
+                + '<button id="mcx-update-gate-btn" style="background:#C9A227;color:#0B1130;'
+                + 'border:none;border-radius:10px;padding:0.7rem 1.6rem;font-weight:700;'
+                + 'font-size:0.95rem;cursor:pointer;">Atualizar agora</button></div>';
+            doc.body.appendChild(overlay);
+            doc.getElementById('mcx-update-gate-btn').addEventListener('click', function() {{
                 window.parent.location.reload();
             }});
         }}
@@ -137,15 +160,15 @@ def _publish_pwa_assets(version: str) -> None:
                 .then(function(v) {{
                     v = v.trim();
                     if (v && v !== CURRENT_VERSION) {{
-                        var b = doc.getElementById('mcx-update-banner');
-                        if (b) b.style.display = 'flex';
+                        var g = doc.getElementById('mcx-update-gate');
+                        if (g) g.style.display = 'flex';
                     }}
                 }})
                 .catch(function() {{}});
         }}
         if (!window.__mcxVersionInterval) {{
-            window.__mcxVersionInterval = setInterval(checkVersion, 60000);
-            setTimeout(checkVersion, 5000);
+            window.__mcxVersionInterval = setInterval(checkVersion, 45000);
+            setTimeout(checkVersion, 4000);
         }}
     }})();
     </script>
@@ -153,7 +176,9 @@ def _publish_pwa_assets(version: str) -> None:
     components.html(html, height=0, width=0)
 
 
-_publish_pwa_assets(_current_app_version())
+APP_VERSION = _current_app_version()
+_write_version_file(APP_VERSION)
+_register_pwa_manifest()
 
 MOTIVO_VENCIMENTO = "VENCIMENTO"
 MOTIVO_AVARIA = "PACOTE COM AVARIA"
@@ -223,6 +248,12 @@ st.markdown(
     <style>
     #MainMenu, footer { visibility: hidden; }
     .block-container { padding-top: 1.75rem; padding-bottom: 3rem; max-width: 640px; }
+
+    /* Selos flutuantes do Streamlit Community Cloud ("Hosted with
+    Streamlit", botão de Fork, "Created by ...") — classes com hash
+    variável, por isso o seletor usa "contém" em vez do nome exato. */
+    a[class*="viewerBadge"], div[class*="profileContainer"],
+    div[class*="stateContainer"] { display: none !important; }
 
     /* Tela de abertura do login — mais elaborada, com as duas marcas e frase de efeito */
     .mcx-hero-login {
@@ -347,6 +378,10 @@ if promoter_pins and not st.session_state.promotor_atual:
 promotor_fixo = st.session_state.promotor_atual
 
 if promotor_fixo:
+    # Só checa/bloqueia por atualização DEPOIS do login — antes disso
+    # incomodaria sem necessidade quem ainda nem entrou no app.
+    _show_update_gate(APP_VERSION)
+
     # Botão discreto no canto, tipo app nativo — em vez de um botão largo
     # ocupando uma linha inteira do conteúdo.
     corner_spacer, corner_btn = st.columns([5, 1])
