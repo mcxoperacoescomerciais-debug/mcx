@@ -10,6 +10,9 @@ font = "sans serif"
 
 [server]
 headless = true
+# Serve arquivos estáticos (manifest.json, ícones, service worker) da pasta
+# "static" deste app — necessário pro PWA (instalar na tela inicial).
+enableStaticServing = true
 
 [client]
 # Esconde o menu (⋮), botão "Deploy", ícone do GitHub e "Edit" — sem isso,

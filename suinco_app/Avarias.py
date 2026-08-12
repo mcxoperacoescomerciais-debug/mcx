@@ -27,6 +27,7 @@ Uso:
 from __future__ import annotations
 
 import base64
+import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -34,6 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core.config.settings import settings
 from core.db.models import DamagedProduct
@@ -43,6 +45,115 @@ from core.sheets.suinco_sync import append_avaria_row
 from core.storage.supabase_storage import upload_photo
 
 st.set_page_config(page_title="Avarias — Suinco | MCX", page_icon="🗂️", layout="centered")
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+def _current_app_version() -> str:
+    """Identifica a versão em execução agora (hash curto do commit) — sem
+    precisar lembrar de atualizar nenhum número manualmente a cada deploy.
+    Cai pra um valor com timestamp se não achar o git (ex.: rodando sem
+    histórico do repositório)."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=Path(__file__).resolve().parent.parent,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    import datetime as _dt
+
+    return _dt.datetime.now().strftime("dev-%Y%m%d%H%M%S")
+
+
+def _publish_pwa_assets(version: str) -> None:
+    """Instala o app como PWA (ícone na tela inicial) e injeta o aviso de
+    atualização — feito via JS porque o Streamlit não deixa a gente editar
+    o <head> da página diretamente. O componente roda num iframe
+    same-origin, então alcança `window.parent.document` (a página real)
+    pra inserir o manifest/ícones e pra checar periodicamente se já existe
+    uma versão mais nova publicada (comparando com o arquivo estático
+    /app/static/version.txt, que é reescrito a cada novo deploy)."""
+    try:
+        STATIC_DIR.mkdir(parents=True, exist_ok=True)
+        (STATIC_DIR / "version.txt").write_text(version, encoding="utf-8")
+    except Exception:
+        pass
+
+    html = f"""
+    <script>
+    (function() {{
+        var doc = window.parent.document;
+
+        function ensureHead(tag, attrs) {{
+            var selector = tag + Object.keys(attrs).map(function(k) {{
+                return '[' + k + '="' + attrs[k] + '"]';
+            }}).join('');
+            if (doc.head.querySelector(selector)) return;
+            var el = doc.createElement(tag);
+            Object.keys(attrs).forEach(function(k) {{ el.setAttribute(k, attrs[k]); }});
+            doc.head.appendChild(el);
+        }}
+
+        ensureHead('link', {{ rel: 'manifest', href: '/app/static/manifest.json' }});
+        ensureHead('meta', {{ name: 'theme-color', content: '#0B1130' }});
+        ensureHead('link', {{ rel: 'apple-touch-icon', href: '/app/static/apple-touch-icon.png' }});
+        ensureHead('meta', {{ name: 'apple-mobile-web-app-capable', content: 'yes' }});
+        ensureHead('meta', {{ name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }});
+
+        if ('serviceWorker' in navigator && !window.__mcxSwRegistered) {{
+            window.__mcxSwRegistered = true;
+            navigator.serviceWorker.register('/app/static/sw.js').catch(function() {{}});
+        }}
+
+        var CURRENT_VERSION = {version!r};
+
+        if (!doc.getElementById('mcx-update-banner')) {{
+            var banner = doc.createElement('div');
+            banner.id = 'mcx-update-banner';
+            banner.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;'
+                + 'background:#0B1130;border-top:2px solid #C9A227;padding:0.85rem 1.1rem;'
+                + 'display:none;align-items:center;justify-content:space-between;gap:0.8rem;'
+                + 'font-family:sans-serif;box-shadow:0 -6px 20px rgba(0,0,0,0.4);';
+            banner.innerHTML = '<span style="color:#F2F3F7;font-size:0.9rem;">'
+                + 'Nova atualização disponível.</span>'
+                + '<button id="mcx-update-btn" style="background:#C9A227;color:#0B1130;'
+                + 'border:none;border-radius:8px;padding:0.5rem 1rem;font-weight:700;'
+                + 'cursor:pointer;flex-shrink:0;">Atualizar</button>';
+            doc.body.appendChild(banner);
+            doc.getElementById('mcx-update-btn').addEventListener('click', function() {{
+                window.parent.location.reload();
+            }});
+        }}
+
+        function checkVersion() {{
+            fetch('/app/static/version.txt', {{ cache: 'no-store' }})
+                .then(function(r) {{ return r.text(); }})
+                .then(function(v) {{
+                    v = v.trim();
+                    if (v && v !== CURRENT_VERSION) {{
+                        var b = doc.getElementById('mcx-update-banner');
+                        if (b) b.style.display = 'flex';
+                    }}
+                }})
+                .catch(function() {{}});
+        }}
+        if (!window.__mcxVersionInterval) {{
+            window.__mcxVersionInterval = setInterval(checkVersion, 60000);
+            setTimeout(checkVersion, 5000);
+        }}
+    }})();
+    </script>
+    """
+    components.html(html, height=0, width=0)
+
+
+_publish_pwa_assets(_current_app_version())
 
 MOTIVO_VENCIMENTO = "VENCIMENTO"
 MOTIVO_AVARIA = "PACOTE COM AVARIA"
