@@ -211,6 +211,9 @@ class DamagedProduct(Base):
     tipo: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # motivo digitado livremente (ex.: "Vencimento próximo", "Avariado")
     validade: Mapped[dt.date | None] = mapped_column(nullable=True)
+    preco: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # preço unitário do produto — só preenchido quando tipo == vencimento,
+    # avaria não pede preço (ver suinco_app/Avarias.py)
     observacao: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     foto_paths: Mapped[list] = mapped_column(JSON, default=list)  # lista de caminhos, pode ter varias fotos
 

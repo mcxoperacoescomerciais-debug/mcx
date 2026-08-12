@@ -189,8 +189,10 @@ else:
     for item in items:
         with st.container(border=True):
             st.write(f"**{item.produto}** — {item.loja}")
+            preco_str = f" · Preço: R$ {item.preco:.2f}".replace(".", ",") if item.preco is not None else ""
             st.caption(
-                f"Motivo: {item.tipo or '-'} · Qtd: {item.quantidade or '-'} · Registrado por: {item.promotor}"
+                f"Motivo: {item.tipo or '-'} · Qtd: {item.quantidade or '-'} · "
+                f"Registrado por: {item.promotor}{preco_str}"
             )
             if item.observacao:
                 st.caption(item.observacao)
@@ -233,8 +235,10 @@ with tab_ativos:
         for item in ativos:
             with st.container(border=True):
                 st.write(f"**{item.produto}** — {item.loja}")
+                preco_str = f" · Preço: R$ {item.preco:.2f}".replace(".", ",") if item.preco is not None else ""
                 st.caption(
-                    f"Promotor: {item.promotor} · Motivo: {item.tipo or '-'} · Qtd: {item.quantidade or '-'}"
+                    f"Promotor: {item.promotor} · Motivo: {item.tipo or '-'} · "
+                    f"Qtd: {item.quantidade or '-'}{preco_str}"
                 )
                 if item.observacao:
                     st.caption(item.observacao)
@@ -273,6 +277,7 @@ with tab_historico:
                     "Motivo": item.tipo or "-",
                     "Qtd": item.quantidade or "-",
                     "Validade": item.validade.strftime("%d/%m/%Y") if item.validade else "-",
+                    "Preço": f"R$ {item.preco:.2f}".replace(".", ",") if item.preco is not None else "-",
                 }
                 for item in historico
             ],

@@ -6,14 +6,17 @@ cadastro. Sem lista de itens, sem opção de "Resolvido", sem aba de
 Vencimentos — só o essencial pro promotor preencher e enviar. É o único
 link que os 10 promotores recebem.
 
-Se houver PINs configurados em st.secrets["promoter_pins"] (um por
-promotor), pede identificação antes do formulário. Sem isso configurado,
-cai de volta no campo de nome digitado livremente (não quebra em ambiente
-local sem secrets).
+Se houver credenciais configuradas em st.secrets["promoter_pins"] (nome
+completo -> senha), pede login (nome + senha digitados, sem lista de
+seleção — uma lista suspensa exporia o nome de todos os promotores pra
+qualquer um) antes do formulário. Sem isso configurado, cai de volta no
+campo de nome digitado livremente (não quebra em ambiente local sem
+secrets).
 
-Visual: identidade MCX (azul-marinho + dourado, ver assets/mcx_logo.png).
-Sem o arquivo da logo, cai num selo "MCX" estilizado em texto no lugar da
-imagem — não quebra se a logo ainda não tiver sido adicionada.
+Visual: identidade MCX + Adriana Fontes (azul-marinho + dourado, ver
+assets/mcx_logo.png e assets/af_logo.png). Sem os arquivos de logo, cai
+num selo em texto no lugar da imagem — não quebra se ainda não tiverem
+sido adicionados.
 
 Pensada para uso pelo celular: campos digitados livremente (sem seleção em
 lista), layout em coluna única.
@@ -183,6 +186,19 @@ st.markdown(
         padding: 0.35rem 0.9rem; font-size: 0.86rem; font-weight: 600;
         border: 1px solid rgba(201, 162, 39, 0.3);
     }
+    /* Botão "Sair" discreto, no canto, como num app nativo — em vez de um
+    botão grande ocupando uma linha inteira do conteúdo. */
+    .mcx-corner-btn button {
+        background: transparent !important;
+        border: 1px solid rgba(201, 162, 39, 0.35) !important;
+        color: rgba(242, 243, 247, 0.75) !important;
+        font-size: 0.78rem !important;
+        font-weight: 500 !important;
+        padding: 0.25rem 0.7rem !important;
+        border-radius: 999px !important;
+        box-shadow: none !important;
+        min-height: 0 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -199,29 +215,40 @@ if "promotor_atual" not in st.session_state:
 if promoter_pins and not st.session_state.promotor_atual:
     render_login_hero()
     with st.form("login_promotor"):
-        nome_login = st.selectbox("Nome do promotor", options=sorted(promoter_pins.keys()))
-        pin_login = st.text_input("Código de acesso (PIN)", type="password", max_chars=4)
+        # Campo de texto livre, não lista suspensa — uma lista exporia o
+        # nome de todos os promotores pra qualquer um que abrisse o app.
+        nome_login = st.text_input("Nome do Promotor", placeholder="Nome e sobrenome")
+        senha_login = st.text_input("Senha do Promotor", type="password")
         entrar = st.form_submit_button("Acessar", type="primary", use_container_width=True)
     if entrar:
-        if promoter_pins.get(nome_login) == pin_login:
-            st.session_state.promotor_atual = nome_login
+        nome_digitado = nome_login.strip().lower()
+        nome_cadastrado = next(
+            (nome for nome in promoter_pins if nome.strip().lower() == nome_digitado),
+            None,
+        )
+        if nome_cadastrado and promoter_pins.get(nome_cadastrado) == senha_login:
+            st.session_state.promotor_atual = nome_cadastrado
             st.rerun()
         else:
-            st.error("Código de acesso incorreto.")
+            st.error("Nome ou senha incorretos.")
     st.stop()
 
 promotor_fixo = st.session_state.promotor_atual
 
-render_header(f"{AVARIA_PROJECT_LABEL} — Registro de Avarias e Vencimentos")
-
 if promotor_fixo:
-    top_left, top_right = st.columns([3, 1])
-    with top_left:
-        st.markdown(f'<span class="mcx-chip">Promotor: {promotor_fixo}</span>', unsafe_allow_html=True)
-    with top_right:
-        if st.button("Sair", use_container_width=True):
+    # Botão discreto no canto, tipo app nativo — em vez de um botão largo
+    # ocupando uma linha inteira do conteúdo.
+    corner_spacer, corner_btn = st.columns([5, 1])
+    with corner_btn:
+        st.markdown('<div class="mcx-corner-btn">', unsafe_allow_html=True)
+        if st.button("Sair", key="btn_sair"):
             st.session_state.promotor_atual = None
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+render_header(f"{AVARIA_PROJECT_LABEL} — Registro de Avarias e Vencimentos")
+if promotor_fixo:
+    st.markdown(f'<span class="mcx-chip">Promotor: {promotor_fixo}</span>', unsafe_allow_html=True)
     st.write("")
 
 # Fora do form: precisa de rerun imediato ao trocar, pra decidir se mostra
@@ -237,11 +264,13 @@ with st.form("novo_item_avaria", clear_on_submit=True):
     produto = st.text_input("Produto")
     if tipo == MOTIVO_VENCIMENTO:
         validade = st.date_input("Data de Validade", value=None, format="DD/MM/YYYY")
+        preco = st.number_input("Preço (R$)", min_value=0.0, step=0.01, format="%.2f")
     else:
         validade = None
+        preco = None
     quantidade = st.number_input("Quantidade", min_value=0, step=1, value=0)
     fotos = st.file_uploader(
-        "Evidência Fotográfica (opcional)", type=["jpg", "jpeg", "png"], accept_multiple_files=True
+        "Evidência Fotográfica", type=["jpg", "jpeg", "png"], accept_multiple_files=True
     )
     observacao = st.text_area("Observação (opcional)")
 
@@ -250,6 +279,8 @@ with st.form("novo_item_avaria", clear_on_submit=True):
     if submitted:
         if not loja or not promotor or not produto:
             st.error("Preencha loja, promotor e produto.")
+        elif not fotos:
+            st.error("Anexe pelo menos uma foto como evidência.")
         else:
             foto_paths = []
             if fotos:
@@ -286,6 +317,7 @@ with st.form("novo_item_avaria", clear_on_submit=True):
                         quantidade=int(quantidade) or None,
                         tipo=tipo or None,
                         validade=validade,
+                        preco=preco,
                         observacao=observacao or None,
                         foto_paths=foto_paths,
                     )
@@ -301,6 +333,7 @@ with st.form("novo_item_avaria", clear_on_submit=True):
                 produto=produto,
                 tipo=tipo,
                 validade=validade,
+                preco=preco,
                 quantidade=int(quantidade) or None,
                 observacao=observacao,
                 foto_paths=foto_paths,

@@ -35,6 +35,7 @@ class ExpiringProduct:
     quantidade: int | None
     tipo: str | None
     validade: dt.date | None
+    preco: float | None
     observacao: str | None
     foto_paths: list[str]
     dias_restantes: int | None
@@ -53,6 +54,7 @@ def _to_view(row: DamagedProduct) -> ExpiringProduct:
         quantidade=row.quantidade,
         tipo=row.tipo,
         validade=row.validade,
+        preco=row.preco,
         observacao=row.observacao,
         foto_paths=row.foto_paths or [],
         dias_restantes=dias,
@@ -120,7 +122,8 @@ def build_whatsapp_message(items: list[ExpiringProduct], project_label: str = AV
             situacao = f"vence em {item.dias_restantes} dia(s)"
         else:
             situacao = "sem data de validade"
-        lines.append(f"{i}. {item.produto} — {item.loja} — {situacao} ({validade_str})")
+        preco_str = f" — R$ {item.preco:.2f}" if item.preco is not None else ""
+        lines.append(f"{i}. {item.produto} — {item.loja} — {situacao} ({validade_str}){preco_str}")
 
     lines.append("")
     lines.append("Por favor, verificar e providenciar a retirada/troca desses itens.")
