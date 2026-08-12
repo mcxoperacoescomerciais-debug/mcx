@@ -42,37 +42,38 @@ from core.storage.supabase_storage import delete_photo
 
 st.set_page_config(page_title="Vencimentos — Suinco | MCX", page_icon="🗂️", layout="centered")
 
-LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "mcx_logo.png"
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+MCX_LOGO_PATH = ASSETS_DIR / "mcx_logo.png"
+AF_LOGO_PATH = ASSETS_DIR / "af_logo.png"
+
+
+def _img_data_uri(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return f"data:image/png;base64,{base64.b64encode(path.read_bytes()).decode()}"
 
 
 def render_header(subtitle: str) -> None:
-    if LOGO_PATH.exists():
-        # A logo já traz "MCX Operações Comerciais" escrito nela — não
-        # repete o texto do wordmark ao lado, só a logo + o subtítulo.
-        b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode()
-        logo_html = f'<img class="mcx-logo-img" src="data:image/png;base64,{b64}" />'
-        st.markdown(
-            f"""
-            <div class="mcx-header">
-                {logo_html}
-                <div class="mcx-subtitle">{subtitle}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f"""
-            <div class="mcx-header">
-                <span class="mcx-logo-fallback">MCX</span>
-                <div>
-                    <div class="mcx-wordmark">MCX<span>OPERAÇÕES COMERCIAIS</span></div>
-                    <div class="mcx-subtitle">{subtitle}</div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    af_uri = _img_data_uri(AF_LOGO_PATH)
+    mcx_uri = _img_data_uri(MCX_LOGO_PATH)
+    parts = []
+    if af_uri:
+        parts.append(f'<img class="af-logo-img-sm" src="{af_uri}" />')
+    if af_uri and mcx_uri:
+        parts.append('<span class="mcx-mini-divider"></span>')
+    if mcx_uri:
+        parts.append(f'<img class="mcx-logo-img-sm" src="{mcx_uri}" />')
+    logos = "".join(parts) if parts else '<span class="mcx-logo-fallback">AF · MCX</span>'
+
+    st.markdown(
+        f"""
+        <div class="mcx-header">
+            <div class="mcx-header-logos">{logos}</div>
+            <div class="mcx-subtitle">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _existing_photos(paths: list[str]) -> list[str]:
@@ -124,29 +125,19 @@ st.markdown(
         background: linear-gradient(135deg, #0B1130 0%, #1B2456 100%);
         border: 1px solid rgba(201, 162, 39, 0.35);
         border-radius: 18px;
-        padding: 1.3rem 1.4rem;
+        padding: 1.2rem 1.4rem;
         margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 1.1rem;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     }
-    .mcx-logo-img { width: 84px; height: 84px; border-radius: 12px; object-fit: contain; }
+    .mcx-header-logos { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.6rem; }
+    .af-logo-img-sm { width: 44px; height: 44px; object-fit: contain; }
+    .mcx-logo-img-sm { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; }
+    .mcx-mini-divider { width: 1px; height: 30px; background: rgba(201, 162, 39, 0.4); }
     .mcx-logo-fallback {
         font-family: Georgia, 'Times New Roman', serif;
-        font-weight: 700; font-size: 1.5rem; color: #C9A227;
-        width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
-        border: 1.5px solid rgba(201, 162, 39, 0.5); border-radius: 10px;
+        font-weight: 700; font-size: 1.1rem; color: #C9A227; letter-spacing: 0.04em;
     }
-    .mcx-wordmark {
-        font-family: Georgia, 'Times New Roman', serif;
-        font-size: 1.15rem; font-weight: 700; letter-spacing: 0.03em; color: #F2F3F7;
-    }
-    .mcx-wordmark span {
-        display: block; font-family: sans-serif; font-size: 0.65rem; font-weight: 500;
-        letter-spacing: 0.14em; color: #C9A227; margin-top: 0.2rem;
-    }
-    .mcx-subtitle { margin-top: 0.5rem; font-size: 0.88rem; color: rgba(242, 243, 247, 0.68); }
+    .mcx-subtitle { font-size: 0.88rem; color: rgba(242, 243, 247, 0.68); }
 
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background: #232B5C !important;
