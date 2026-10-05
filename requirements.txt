@@ -14,6 +14,9 @@ SQLAlchemy>=2.0.35
 # (ex.: Supabase), como no deploy em nuvem das páginas Avarias/Vencimentos.
 # Localmente, sem essa variável, o sistema continua usando SQLite normalmente.
 psycopg2-binary>=2.9.9
+# Rede de segurança: se algum dia a URL voltar a usar o driver psycopg (v3),
+# ele precisa estar instalado, senão o app inteiro cai com ModuleNotFoundError.
+psycopg[binary]>=3.2
 
 # OCR e Vision AI
 pytesseract>=0.3.13

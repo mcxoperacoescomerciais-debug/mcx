@@ -44,7 +44,7 @@ def _pin_postgres_driver(url: str) -> str:
     é só "postgresql://", mas o que instalamos (requirements.txt) é o
     psycopg2 — sem fixar, o app na nuvem quebra com ModuleNotFoundError.
     """
-    for prefix in ("postgresql://", "postgres://"):
+    for prefix in ("postgresql+psycopg://", "postgresql://", "postgres://"):
         if url.startswith(prefix):
             return "postgresql+psycopg2://" + url[len(prefix):]
     return url
