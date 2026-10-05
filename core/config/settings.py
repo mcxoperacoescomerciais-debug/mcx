@@ -37,6 +37,19 @@ def _resolve_sqlite_url(url: str) -> str:
     return f"{prefix}{_resolve_path(url[len(prefix):])}"
 
 
+def _pin_postgres_driver(url: str) -> str:
+    """Fixa o driver psycopg2 em URLs Postgres sem driver explícito.
+
+    Versões novas do SQLAlchemy passaram a assumir psycopg (v3) quando a URL
+    é só "postgresql://", mas o que instalamos (requirements.txt) é o
+    psycopg2 — sem fixar, o app na nuvem quebra com ModuleNotFoundError.
+    """
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg2://" + url[len(prefix):]
+    return url
+
+
 @dataclass(frozen=True)
 class Settings:
     database_url: str
@@ -51,8 +64,10 @@ class Settings:
 
 def load_settings() -> Settings:
     return Settings(
-        database_url=_resolve_sqlite_url(
-            os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'mcx_tracker.db'}")
+        database_url=_pin_postgres_driver(
+            _resolve_sqlite_url(
+                os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'mcx_tracker.db'}")
+            )
         ),
         google_service_account_file=_resolve_path(
             os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", DATA_DIR / "credentials" / "service_account.json")
