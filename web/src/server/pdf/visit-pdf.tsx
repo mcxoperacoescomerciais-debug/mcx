@@ -9,13 +9,15 @@ import { Document, Image, Page, Text, View, renderToBuffer } from "@react-pdf/re
 import { base, C, Footer, LOGOS, SectionTitle, SeverityPill } from "./theme";
 import { groupOccurrences, type VisitDetail, type VisitOccurrence } from "../visits";
 import { storage } from "../storage";
-import { DAMAGE_KIND_LABEL, LOCATION_LABEL, RUPTURE_KIND_LABEL } from "@/lib/domain";
+import { DAMAGE_KIND_LABEL, LOCATION_LABEL } from "@/lib/domain";
 import { describeDays, formatIsoBr } from "@/lib/validity";
 
 const timeFmt = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 const dateTimeFmt = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
 
-type PhotoData = { id: string; data: Buffer; format: "jpg" | "png"; caption: string };
+/** Origem da foto no relatório: de qual seção ela veio. */
+type PhotoSource = "Validade · Área de vendas" | "Validade · Estoque" | "Avaria" | "Ruptura";
+type PhotoData = { id: string; data: Buffer; format: "jpg" | "png"; caption: string; source: PhotoSource };
 
 /** Formato pelo conteúdo do arquivo (não pela extensão). O PDF só aceita JPEG e PNG. */
 function imageFormat(bytes: Uint8Array): "jpg" | "png" | null {
@@ -169,19 +171,38 @@ function SimpleTable({ head, rows }: { head: { label: string; flex: number }[]; 
   );
 }
 
+const SOURCE_COLOR: Record<PhotoSource, string> = {
+  "Validade · Área de vendas": "#1D4E9E",
+  "Validade · Estoque": "#1D4E9E",
+  Avaria: "#9A4A00",
+  Ruptura: "#B42318",
+};
+
+/** Registro fotográfico separado por origem: Validade (área de vendas / estoque) e Avaria. */
 function Photos({ photos }: { photos: PhotoData[] }) {
   if (!photos.length) return null;
+  const groups = [...new Set(photos.map((p) => p.source))];
   return (
     <View break={photos.length > 2}>
       <SectionTitle>Registro fotográfico</SectionTitle>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -5 }}>
-        {photos.map((p) => (
-          <View key={p.id} style={{ width: "50%", paddingHorizontal: 5, marginBottom: 10 }} wrap={false}>
-            <Image src={{ data: p.data, format: p.format }} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 4 }} />
-            <Text style={{ fontSize: 8, color: C.ink2, marginTop: 3 }}>{p.caption}</Text>
+      {groups.map((source) => (
+        <View key={source} style={{ marginBottom: 6 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }} minPresenceAhead={200}>
+            <View style={{ width: 4, height: 12, backgroundColor: SOURCE_COLOR[source], borderRadius: 2, marginRight: 6 }} />
+            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, color: SOURCE_COLOR[source] }}>Fotos de {source}</Text>
           </View>
-        ))}
-      </View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -5 }}>
+            {photos
+              .filter((p) => p.source === source)
+              .map((p) => (
+                <View key={p.id} style={{ width: "50%", paddingHorizontal: 5, marginBottom: 10 }} wrap={false}>
+                  <Image src={{ data: p.data, format: p.format }} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 4 }} />
+                  <Text style={{ fontSize: 8, color: C.ink2, marginTop: 3 }}>{p.caption}</Text>
+                </View>
+              ))}
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -204,16 +225,30 @@ function VisitDocument({ visit, photos, photoRefs }: { visit: VisitDetail; photo
 
           <SectionTitle>Rupturas</SectionTitle>
           <SimpleTable
-            head={[{ label: "Produto", flex: 3 }, { label: "Situação", flex: 2 }, { label: "Observação", flex: 3 }]}
-            rows={g.ruptures.map((o) => ({ key: o.id, cells: [withRef(o.productName, photoRefs[o.id]), o.ruptureKind ? RUPTURE_KIND_LABEL[o.ruptureKind] : "—", o.notes ?? "—"] }))}
+            head={[{ label: "Produto", flex: 4 }, { label: "Situação", flex: 2 }]}
+            rows={g.ruptures.map((o) => ({ key: o.id, cells: [withRef(o.productName, photoRefs[o.id]), "Ruptura total"] }))}
           />
 
           <SectionTitle>Avarias</SectionTitle>
           <SimpleTable
-            head={[{ label: "Produto", flex: 3 }, { label: "Qtd", flex: 1 }, { label: "Tipo", flex: 2 }, { label: "Observação", flex: 3 }]}
+            head={[
+              { label: "Produto", flex: 3 },
+              { label: "Qtd", flex: 0.8 },
+              { label: "Tipo", flex: 1.8 },
+              { label: "Validade", flex: 1.3 },
+              { label: "Lote", flex: 1.1 },
+              { label: "Observação", flex: 2.2 },
+            ]}
             rows={g.damages.map((o) => ({
               key: o.id,
-              cells: [withRef(o.productName, photoRefs[o.id]), `${o.quantity ?? "—"} ${o.unit}`, o.damageKind ? DAMAGE_KIND_LABEL[o.damageKind] : "—", o.notes ?? "—"],
+              cells: [
+                withRef(o.productName, photoRefs[o.id]),
+                `${o.quantity ?? "—"} ${o.unit}`,
+                o.damageKind ? DAMAGE_KIND_LABEL[o.damageKind] : "—",
+                o.expiryDate ? formatIsoBr(o.expiryDate) : "—",
+                o.lot ?? "—",
+                o.notes ?? "—",
+              ],
             }))}
           />
 
@@ -244,13 +279,15 @@ export async function renderVisitPdf(visit: VisitDetail): Promise<Buffer> {
         o.type === "validity"
           ? `${o.quantity} ${o.unit} · val. ${formatIsoBr(o.expiryDate)}`
           : o.type === "damage"
-            ? `Avaria · ${o.damageKind ? DAMAGE_KIND_LABEL[o.damageKind] : ""}`
-            : "Ruptura";
+            ? `${o.quantity ?? ""} un · ${o.damageKind ? DAMAGE_KIND_LABEL[o.damageKind] : ""}${o.expiryDate ? ` · val. ${formatIsoBr(o.expiryDate)}` : ""}`
+            : "Ruptura total";
+      const source: PhotoSource =
+        o.type === "damage" ? "Avaria" : o.type === "rupture" ? "Ruptura" : o.location === "stock" ? "Validade · Estoque" : "Validade · Área de vendas";
       const format = imageFormat(data);
       if (!format) continue;
       const n = photos.length + 1;
       photoRefs[o.id] = photoRefs[o.id] ? `${photoRefs[o.id]}, ${n}` : `Foto ${n}`;
-      photos.push({ id: p.id, data: Buffer.from(data), format, caption: `Foto ${n} · ${o.productName} — ${detail}` });
+      photos.push({ id: p.id, data: Buffer.from(data), format, source, caption: `Foto ${n} · ${o.productName} — ${detail}` });
     }
   }
   return renderToBuffer(<VisitDocument visit={visit} photos={photos} photoRefs={photoRefs} />);

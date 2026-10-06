@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { getScope, requireRole, STAFF_ROLES } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { Badge, Button, Card, PageHeader } from "@/components/ui";
-import { STORE_FORMAT_LABEL, UNITS, type StoreFormat } from "@/lib/domain";
+import { STORE_FORMAT_LABEL, UNIT_LABEL, UNITS, type StoreFormat } from "@/lib/domain";
 import { Field, FormNotice, Input, Select } from "../../../_components/form";
 import { saveProductAction } from "../../actions";
 
@@ -52,10 +52,12 @@ export default async function ProductFormPage({ params, searchParams }: PageProp
               ))}
             </Select>
           </Field>
-          <Field label="Unidade padrão">
-            <Select name="defaultUnit" defaultValue={p?.defaultUnit ?? "un"}>
+          <Field label="Unidade padrão" hint="Escolha kg só para produto fracionado: é o único caso em que o promotor vê a opção kg.">
+            <Select name="defaultUnit" defaultValue={p?.defaultUnit === "pct" ? "un" : (p?.defaultUnit ?? "un")}>
               {UNITS.map((u) => (
-                <option key={u}>{u}</option>
+                <option key={u} value={u}>
+                  {UNIT_LABEL[u]}
+                </option>
               ))}
             </Select>
           </Field>

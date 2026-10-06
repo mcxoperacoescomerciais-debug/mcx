@@ -51,13 +51,20 @@ export type RuptureKind = keyof typeof RUPTURE_KIND_LABEL;
 
 export const DAMAGE_KIND_LABEL = {
   damaged_package: "Embalagem danificada",
-  crushed: "Produto amassado",
-  leak: "Vazamento",
   violated: "Embalagem violada",
+  no_vacuum: "Sem vácuo",
+  strange_color: "Coloração estranha",
+  liquid: "Líquido",
   unfit: "Produto impróprio",
   other: "Outro",
+  // Tipos antigos: não aparecem mais para o promotor, mas registros já feitos continuam legíveis.
+  crushed: "Produto amassado",
+  leak: "Vazamento",
 } as const;
 export type DamageKind = keyof typeof DAMAGE_KIND_LABEL;
+
+/** Tipos de avaria oferecidos ao promotor, nesta ordem. */
+export const DAMAGE_KIND_OPTIONS: DamageKind[] = ["damaged_package", "violated", "no_vacuum", "strange_color", "liquid", "unfit", "other"];
 
 export const OCCURRENCE_STATUS_LABEL = {
   open: "Aberto",
@@ -75,8 +82,14 @@ export const ROLE_LABEL = {
 } as const;
 export type Role = keyof typeof ROLE_LABEL;
 
-export const UNITS = ["un", "cx", "kg", "pct"] as const;
-export type Unit = (typeof UNITS)[number];
+/**
+ * Unidades de contagem. Pacote e unidade são a mesma coisa na operação; "kg"
+ * só aparece para o promotor em produtos fracionados (unidade padrão = kg no
+ * cadastro do produto), para não confundir. "pct" existe só em registros antigos.
+ */
+export const UNITS = ["un", "cx", "kg"] as const;
+export type Unit = (typeof UNITS)[number] | "pct";
+export const UNIT_LABEL: Record<(typeof UNITS)[number], string> = { un: "un", cx: "cx", kg: "kg (fracionado)" };
 
 /** Itens do checklist de visita (configurável por cliente). */
 export interface ChecklistItem {
@@ -90,6 +103,7 @@ export const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { key: "validity", label: "Conferi as validades" },
   { key: "rupture", label: "Conferi rupturas" },
   { key: "damage", label: "Conferi avarias" },
+  { key: "price", label: "Conferi preço na área de vendas" },
 ];
 
 export const STORE_STATUS_LABEL = { normal: "Normal", attention: "Atenção", critical: "Crítica" } as const;

@@ -9,12 +9,12 @@ import { useMemo, useState } from "react";
 import { Camera, ChevronRight, ShieldAlert } from "lucide-react";
 import { BottomBar, TopBar } from "./primitives";
 import { ProductList, type ProductMark } from "./product-picker";
-import { DamageSheet, RuptureSheet, ValiditySheet, type SheetTarget } from "./occurrence-sheets";
+import { DamageSheet, ValiditySheet, type SheetTarget } from "./occurrence-sheets";
 import { MissingVisit, sectionItems, storeTitle, useSeverityOf, type Section } from "./visit-common";
 import { SeverityBadge } from "@/components/ui";
-import { DAMAGE_KIND_LABEL, RUPTURE_KIND_LABEL, SEVERITY_COLOR, type Location } from "@/lib/domain";
+import { DAMAGE_KIND_LABEL, SEVERITY_COLOR, type Location } from "@/lib/domain";
 import { describeDays, formatIsoBr } from "@/lib/validity";
-import { saveOccurrence } from "../_lib/local-store";
+import { deleteOccurrence, saveOccurrence } from "../_lib/local-store";
 import { back, haptic, useCatalog, useVisit } from "../_lib/hooks";
 
 const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
@@ -118,18 +118,12 @@ export function ValidityScreen({ visitId, location }: { visitId: string; locatio
 
 // ───────────────────────────── Ruptura ─────────────────────────────
 
+/** Ruptura é só "ruptura total": tocar no produto marca, tocar de novo desmarca. */
 export function RuptureScreen({ visitId }: { visitId: string }) {
   const visit = useVisit(visitId);
   const { storeById } = useCatalog();
-  const [target, setTarget] = useState<SheetTarget | null>(null);
   const items = useMemo(() => (visit ? sectionItems(visit, "ruptura") : []), [visit]);
-  const marks = useMemo(
-    () =>
-      Object.fromEntries(
-        items.map((o) => [o.productId, { label: o.ruptureKind ? RUPTURE_KIND_LABEL[o.ruptureKind] : "Ruptura", tone: "alert" as const }]),
-      ),
-    [items],
-  );
+  const marks = useMemo(() => Object.fromEntries(items.map((o) => [o.productId, { label: "Ruptura total", tone: "alert" as const }])), [items]);
   if (!visit) return <MissingVisit />;
   const store = storeById.get(visit.storeId);
   const byProduct = new Map(items.map((o) => [o.productId, o]));
@@ -139,15 +133,17 @@ export function RuptureScreen({ visitId }: { visitId: string }) {
       <TopBar title="Ruptura" subtitle={storeTitle(store)} onBack={() => back(`visita/${visitId}`)} />
       <div className="max-w-xl mx-auto px-4 pt-3 space-y-3">
         <p className="text-[14px] text-ink-2">
-          Toque nos produtos do mix que <b>estão em falta</b> (registra ruptura total). Toque de novo para mudar a situação, anexar foto ou remover.
+          Toque nos produtos do mix que <b>estão em falta</b>. Para desmarcar, toque de novo.
         </p>
         <ProductList
           store={store}
           marks={marks}
           onPick={async (p) => {
             const occ = byProduct.get(p.id);
-            if (occ) setTarget({ product: p, existing: occ });
-            else {
+            if (occ) {
+              await deleteOccurrence(visitId, occ.id);
+              haptic(30);
+            } else {
               await saveOccurrence(visitId, { productId: p.id, type: "rupture", location: "sales_floor", unit: "un", ruptureKind: "total" });
               haptic();
             }
@@ -159,7 +155,6 @@ export function RuptureScreen({ visitId }: { visitId: string }) {
           {items.length ? `Concluir · ${items.length} em ruptura` : "Concluir seção"}
         </button>
       </BottomBar>
-      <RuptureSheet visitId={visitId} target={target} onClose={() => setTarget(null)} />
     </div>
   );
 }
@@ -190,7 +185,7 @@ export function DamageScreen({ visitId }: { visitId: string }) {
                       <span className="flex-1 min-w-0">
                         <span className="block text-[15px] font-semibold truncate">{product?.name}</span>
                         <span className="block text-[13px] text-ink-2">
-                          {o.quantity} un · {o.damageKind ? DAMAGE_KIND_LABEL[o.damageKind] : ""} · {o.photos.length} foto{o.photos.length === 1 ? "" : "s"}
+                          {o.quantity} un · {o.damageKind ? DAMAGE_KIND_LABEL[o.damageKind] : ""}{o.expiryDate ? ` · val. ${formatIsoBr(o.expiryDate, false)}` : ""} · {o.photos.length} foto{o.photos.length === 1 ? "" : "s"}
                         </span>
                       </span>
                       <ChevronRight className="size-5 text-muted" />
@@ -211,7 +206,7 @@ export function DamageScreen({ visitId }: { visitId: string }) {
           Concluir seção
         </button>
       </BottomBar>
-      <DamageSheet visitId={visitId} target={target} onClose={() => setTarget(null)} />
+      <DamageSheet visitId={visitId} visitDate={visit.visitDate} target={target} onClose={() => setTarget(null)} />
     </div>
   );
 }

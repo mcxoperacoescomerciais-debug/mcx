@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, Loader2, X } from "lucide-react";
+import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { compressImage } from "../_lib/photo";
 import { getPhotoBlob, type LocalPhoto } from "../_lib/local-store";
 import { useObjectUrl } from "../_lib/hooks";
@@ -55,15 +55,16 @@ export function PhotoPicker({
   required?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const gallery = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const total = existing.length + pending.length;
 
-  async function handleFiles(files: FileList | null) {
+  async function handleFiles(files: FileList | null, source: HTMLInputElement) {
     if (!files?.length) return;
     setBusy(true);
     for (const f of Array.from(files).slice(0, 6)) onAdd(await compressImage(f));
     setBusy(false);
-    if (input.current) input.current.value = "";
+    source.value = "";
   }
 
   return (
@@ -83,6 +84,14 @@ export function PhotoPicker({
           {busy ? <Loader2 className="size-6 animate-spin" /> : <Camera className="size-6" />}
           <span className="text-[11px] font-semibold">Câmera</span>
         </button>
+        <button
+          type="button"
+          onClick={() => gallery.current?.click()}
+          className="size-20 shrink-0 rounded-xl border-2 border-dashed border-line-strong text-ink-2 flex flex-col items-center justify-center gap-1 active:bg-navy-50"
+        >
+          <ImagePlus className="size-6" />
+          <span className="text-[11px] font-semibold">Galeria</span>
+        </button>
         {existing.map((p) => (
           <StoredThumb key={p.id} photo={p} onRemove={() => onRemoveExisting(p.id)} />
         ))}
@@ -90,7 +99,9 @@ export function PhotoPicker({
           <Thumb key={i} blob={b} onRemove={() => onRemovePending(i)} />
         ))}
       </div>
-      <input ref={input} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => void handleFiles(e.target.files)} />
+      {/* Câmera abre direto a câmera traseira; Galeria permite enviar uma foto já tirada. */}
+      <input ref={input} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => void handleFiles(e.target.files, e.target)} />
+      <input ref={gallery} type="file" accept="image/*" multiple className="hidden" onChange={(e) => void handleFiles(e.target.files, e.target)} />
     </div>
   );
 }

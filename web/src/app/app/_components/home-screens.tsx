@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, FileText, History, Home, LogOut, MapPin, Play, RefreshCw, Search, Store, User } from "lucide-react";
+import { ChevronRight, FileText, History, Home, LogOut, MapPin, Play, RefreshCw, Search, Store, User, WifiOff } from "lucide-react";
 import clsx from "clsx";
 import { SyncPill, TopBar } from "./primitives";
 import { go, useCatalog, useLocal } from "../_lib/hooks";
@@ -46,6 +46,27 @@ export function TabBar({ active }: { active: "inicio" | "lojas" | "historico" | 
         })}
       </div>
     </nav>
+  );
+}
+
+/**
+ * Mostra quando o aparelho já guardou o app e as lojas/produtos: a partir daí
+ * toda a visita (inclusive fotos) é preenchida sem internet; a internet só é
+ * usada para enviar e gerar o PDF.
+ */
+function OfflineReady() {
+  const { bootstrap } = useLocal();
+  const [swReady, setSwReady] = useState(false);
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.getRegistration().then((r) => setSwReady(Boolean(r?.active)));
+  }, []);
+  if (!bootstrap) return null;
+  return (
+    <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 h-6 text-[11.5px] font-semibold text-[#7BE0A3]">
+      <WifiOff className="size-3.5" />
+      {swReady ? "Pronto para preencher sem internet" : "Preparando uso sem internet…"}
+    </p>
   );
 }
 
@@ -140,6 +161,7 @@ export function HomeScreen() {
           <p className="text-silver-300 text-[14px] first-letter:uppercase">
             {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
           </p>
+          <OfflineReady />
         </div>
       </header>
       <div className="max-w-xl mx-auto px-4 -mt-9 space-y-5">

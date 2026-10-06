@@ -333,12 +333,20 @@ export function ReviewScreen({ visitId }: { visitId: string }) {
 export function DoneScreen({ visitId }: { visitId: string }) {
   const visit = useVisit(visitId);
   const { storeById } = useCatalog();
-  const { sync } = useLocal();
+  const { sync, bootstrap } = useLocal();
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [openedAt] = useState(() => Date.now());
   if (!visit) return <MissingVisit />;
   const store = storeById.get(visit.storeId);
+  // Mensagem que acompanha o PDF no grupo do WhatsApp (sem link, só o arquivo).
+  const shareText = [
+    "Relatório de visita SUINCO",
+    `Promotor: ${bootstrap?.user.name ?? ""}`,
+    `Loja: ${storeTitle(store)}`,
+    `Cidade: ${store?.city ?? ""}`,
+  ].join("\n");
   const dataSent = visit.rev === visit.syncedRev;
   const pendingPhotos = Object.values(visit.occurrences).reduce((n, o) => n + o.photos.filter((p) => !p.uploaded).length, 0);
   // O PDF só é liberado com as fotos já no servidor; senão ele sairia sem elas.
@@ -354,7 +362,17 @@ export function DoneScreen({ visitId }: { visitId: string }) {
       if (!res.ok) throw new Error();
       const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "relatorio-visita.pdf";
       const file = new File([await res.blob()], name, { type: "application/pdf" });
-      if (navigator.canShare?.({ files: [file] })) {
+      // A mensagem também vai para a área de transferência: se o WhatsApp não
+      // mostrar o texto junto do PDF, o promotor só cola na conversa.
+      try {
+        await navigator.clipboard.writeText(shareText);
+        setCopied(true);
+      } catch {
+        /* sem permissão de área de transferência */
+      }
+      if (navigator.canShare?.({ files: [file], text: shareText })) {
+        await navigator.share({ files: [file], text: shareText, title: "Relatório de visita SUINCO" });
+      } else if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: "Relatório de visita SUINCO" });
       } else {
         const a = document.createElement("a");
@@ -406,6 +424,12 @@ export function DoneScreen({ visitId }: { visitId: string }) {
             <Share2 className="size-5" /> {sharing ? "Gerando PDF…" : ready ? "Enviar PDF no WhatsApp" : dataSent ? "Aguardando as fotos…" : "Aguardando sinal para gerar o PDF"}
           </button>
           {shareError ? <p className="text-[13px] text-[#FFB4B4] text-center">{shareError}</p> : null}
+          {ready ? (
+            <div className="rounded-xl bg-white/8 border border-white/10 px-3 py-2.5 text-[12.5px] text-silver-300">
+              <p className="font-semibold text-white mb-0.5">Mensagem que vai junto do PDF{copied ? " (copiada)" : ""}:</p>
+              <p className="whitespace-pre-line">{shareText}</p>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-2.5">
             <a
               href={ready ? pdfUrl : undefined}

@@ -21,7 +21,7 @@ export const occurrenceInput = z.object({
   lot: z.string().max(60).nullable().optional(),
   price: z.number().min(0).max(100000).nullable().optional(),
   ruptureKind: z.enum(["total", "partial", "not_found", "empty_space", "no_stock"]).nullable().optional(),
-  damageKind: z.enum(["damaged_package", "crushed", "leak", "violated", "unfit", "other"]).nullable().optional(),
+  damageKind: z.enum(["damaged_package", "violated", "no_vacuum", "strange_color", "liquid", "unfit", "other", "crushed", "leak"]).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
 });
 export type OccurrenceInput = z.infer<typeof occurrenceInput>;

@@ -159,7 +159,7 @@ function normalizeOccurrence(o: OccurrenceInput) {
     location: o.type === "validity" ? o.location : o.location ?? "sales_floor",
     quantity: o.quantity ?? null,
     unit: o.unit,
-    expiryDate: o.type === "validity" ? o.expiryDate ?? null : null,
+    expiryDate: o.type === "validity" || o.type === "damage" ? o.expiryDate ?? null : null,
     lot: o.lot?.trim() || null,
     price: o.price === null || o.price === undefined ? null : o.price.toFixed(2),
     ruptureKind: o.type === "rupture" ? o.ruptureKind ?? "total" : null,
@@ -276,7 +276,8 @@ export async function syncVisit(scope: Scope, input: VisitInput): Promise<SyncRe
       for (const raw of input.occurrences) {
         if (!changes.some((c) => c.id === raw.id)) continue;
         const occ = normalizeOccurrence(raw);
-        const days = occ.expiryDate ? daysBetween(input.visitDate, occ.expiryDate) : null;
+        // Classificação de vencimento só para validades; na avaria a validade é informativa.
+        const days = occ.type === "validity" && occ.expiryDate ? daysBetween(input.visitDate, occ.expiryDate) : null;
         const values = {
           ...occ,
           daysToExpiry: days,
