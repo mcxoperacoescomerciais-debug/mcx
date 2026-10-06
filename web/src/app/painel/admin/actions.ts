@@ -92,7 +92,7 @@ export async function saveStoreAction(fd: FormData) {
   const r = await saveStore(scope, {
     id,
     networkId: str(fd, "networkId"),
-    format: format in STORE_FORMAT_LABEL ? format : "varejo",
+    format: format in STORE_FORMAT_LABEL || (format as string) === "" ? format : "varejo",
     name: str(fd, "name"),
     code: str(fd, "code"),
     address: str(fd, "address"),

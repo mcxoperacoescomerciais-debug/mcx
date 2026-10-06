@@ -121,18 +121,25 @@ export async function getBootstrap(scope: Scope): Promise<BootstrapPayload> {
     stores: storeRows.map(({ networkId, ...st }) => {
       const last = lastVisits.find((v) => v.storeId === st.id);
       const seen = new Set<string>();
+      const networkMix = officialMix.filter((m) => m.networkId === networkId);
+      const formatOptions = [...new Set(networkMix.map((m) => m.format))];
+      const mixByFormat = Object.fromEntries(formatOptions.map((f) => [f, networkMix.filter((m) => m.format === f).map((m) => m.productId)]));
+      const chainCodesByFormat = Object.fromEntries(
+        formatOptions.map((f) => [f, Object.fromEntries(networkMix.filter((m) => m.format === f && m.chainCode).map((m) => [m.productId, m.chainCode!]))]),
+      );
+      const seenProducts = seenRows.filter((m) => m.storeId === st.id).map((m) => m.productId);
+      // Rede com um só formato (ex.: BH) não precisa de escolha: usa esse formato.
+      const format = formatOptions.length === 1 ? formatOptions[0] : formatOptions.includes(st.format) ? st.format : "";
       return {
         ...st,
+        format,
+        formatOptions,
         lastVisitDate: last?.visitDate ?? null,
-        mix: [
-          ...new Set([
-            ...officialMix.filter((m) => m.networkId === networkId && m.format === st.format).map((m) => m.productId),
-            ...seenRows.filter((m) => m.storeId === st.id).map((m) => m.productId),
-          ]),
-        ],
-        chainCodes: Object.fromEntries(
-          officialMix.filter((m) => m.networkId === networkId && m.format === st.format && m.chainCode).map((m) => [m.productId, m.chainCode!]),
-        ),
+        mix: [...new Set([...(mixByFormat[format] ?? []), ...seenProducts])],
+        chainCodes: chainCodesByFormat[format] ?? {},
+        mixByFormat,
+        chainCodesByFormat,
+        seenProducts,
         lastItems: lastItems
           .filter((i) => i.visitId === last?.id)
           .filter((i) => {
@@ -254,6 +261,21 @@ export async function syncVisit(scope: Scope, input: VisitInput): Promise<SyncRe
 
       if (locked && (changes.length || deletions.length || visitChanged)) {
         return { visitId: input.id, ok: false, error: "Visita finalizada há mais de 24h: peça a correção ao gestor." };
+      }
+
+      // Formato escolhido pelo promotor (ABC varejo/plus/cash) passa a valer para a loja,
+      // desde que a rede tenha mix cadastrado para esse formato.
+      if (input.storeFormat) {
+        const [store] = await tx.select({ format: s.stores.format, networkId: s.stores.networkId }).from(s.stores).where(eq(s.stores.id, input.storeId));
+        const [hasMix] = await tx
+          .select({ id: s.productMixes.productId })
+          .from(s.productMixes)
+          .where(and(eq(s.productMixes.networkId, store.networkId), eq(s.productMixes.format, input.storeFormat)))
+          .limit(1);
+        if (hasMix && store.format !== input.storeFormat) {
+          await tx.update(s.stores).set({ format: input.storeFormat, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.stores.id, input.storeId));
+          auditQueue.push([actor, "store", input.storeId, "update", { format: store.format }, { format: input.storeFormat }]);
+        }
       }
 
       if (!existing) {

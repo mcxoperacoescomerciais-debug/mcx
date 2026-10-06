@@ -134,7 +134,7 @@ export async function saveNetwork(scope: Scope, input: { id?: string; name: stri
 export interface StoreInput {
   id?: string;
   networkId: string;
-  format: StoreFormat;
+  format: StoreFormat | "";
   name: string;
   code?: string | null;
   address?: string | null;

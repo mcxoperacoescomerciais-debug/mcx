@@ -26,8 +26,10 @@ import { BottomBar, TopBar } from "./primitives";
 import { MissingVisit, sectionItems, storeTitle, useSeverityOf, type Section } from "./visit-common";
 import { SeverityBadge } from "@/components/ui";
 import { formatIsoBr } from "@/lib/validity";
-import { discardVisit, finishVisit, isVisitFullySynced, reopenVisit, setVisitFields, syncNow, type LocalVisit } from "../_lib/local-store";
-import { back, go, haptic, useCatalog, useLocal, useVisit } from "../_lib/hooks";
+import { chooseStoreFormat, discardVisit, finishVisit, isVisitFullySynced, reopenVisit, setVisitFields, syncNow, type LocalVisit } from "../_lib/local-store";
+import { back, go, haptic, needsFormatChoice, useCatalog, useLocal, useVisit } from "../_lib/hooks";
+import { FormatSheet } from "./format-sheet";
+import { STORE_FORMAT_LABEL, type StoreFormat } from "@/lib/domain";
 
 // ───────────────────────────── Hub ─────────────────────────────
 
@@ -36,6 +38,7 @@ export function VisitHub({ visitId }: { visitId: string }) {
   const { storeById } = useCatalog();
   const sev = useSeverityOf();
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [choosingFormat, setChoosingFormat] = useState(false);
   const finished = visit?.status === "finished";
   useEffect(() => {
     if (finished) go(`visita/${visitId}/ok`, true);
@@ -69,6 +72,31 @@ export function VisitHub({ visitId }: { visitId: string }) {
       <div className="max-w-xl mx-auto px-4 pt-5">
         <h1 className="text-[22px] font-semibold text-ink">Como está a loja?</h1>
         <p className="text-[14px] text-muted mt-0.5">Toque em uma seção para registrar. Pode registrar várias.</p>
+
+        {store && (store.formatOptions?.length ?? 0) > 1 ? (
+          <button
+            type="button"
+            onClick={() => setChoosingFormat(true)}
+            className={clsx(
+              "mt-4 w-full flex items-center justify-between rounded-xl px-3.5 py-3 text-left",
+              needsFormatChoice(store) ? "bg-gold-100 border border-gold-400/50" : "bg-surface border border-line",
+            )}
+          >
+            <span className="text-[14px] text-ink">
+              Tipo da loja:{" "}
+              <b>{store.format ? `${store.network} ${STORE_FORMAT_LABEL[store.format as StoreFormat] ?? store.format}` : "toque para definir"}</b>
+            </span>
+            <span className="text-[13px] font-semibold text-navy-700">{store.format ? "Trocar" : "Definir"}</span>
+          </button>
+        ) : null}
+        <FormatSheet
+          store={choosingFormat ? (store ?? null) : null}
+          onClose={() => setChoosingFormat(false)}
+          onChoose={(f) => {
+            setChoosingFormat(false);
+            void chooseStoreFormat(visit.storeId, f);
+          }}
+        />
 
         {urgent > 0 ? (
           <div className="mt-4 flex items-center gap-2.5 rounded-xl bg-[#FDECEC] text-[#8E1B1B] px-3.5 py-3">

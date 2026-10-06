@@ -8,11 +8,31 @@ export function useLocal(): LocalState {
   return useSyncExternalStore(localStore.subscribe, localStore.getSnapshot, localStore.getServerSnapshot);
 }
 
+/**
+ * Aplica o formato escolhido pelo promotor (ex.: ABC Plus) sobre a loja do
+ * catálogo: troca o mix e os códigos da rede pelos do formato escolhido.
+ */
+function withFormat(store: BootstrapStore, choice: string | undefined): BootstrapStore {
+  const format = choice && store.formatOptions?.includes(choice) ? choice : store.format;
+  if (!store.mixByFormat) return store;
+  return {
+    ...store,
+    format,
+    mix: [...new Set([...(store.mixByFormat[format] ?? []), ...(store.seenProducts ?? [])])],
+    chainCodes: store.chainCodesByFormat?.[format] ?? {},
+  };
+}
+
+/** A loja precisa que o promotor escolha o formato (rede com mais de um mix e formato ainda não definido). */
+export function needsFormatChoice(store: BootstrapStore | undefined): boolean {
+  return Boolean(store && (store.formatOptions?.length ?? 0) > 1 && !store.format);
+}
+
 export function useCatalog() {
-  const { bootstrap } = useLocal();
+  const { bootstrap, formatChoices } = useLocal();
   return useMemo(() => {
     const products = bootstrap?.products ?? [];
-    const stores = bootstrap?.stores ?? [];
+    const stores = (bootstrap?.stores ?? []).map((s) => withFormat(s, formatChoices[s.id]));
     return {
       products,
       stores,
@@ -20,7 +40,7 @@ export function useCatalog() {
       storeById: new Map<string, BootstrapStore>(stores.map((s) => [s.id, s])),
       bands: bootstrap?.bands,
     };
-  }, [bootstrap]);
+  }, [bootstrap, formatChoices]);
 }
 
 export function useVisit(visitId: string): LocalVisit | undefined {

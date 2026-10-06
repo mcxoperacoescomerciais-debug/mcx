@@ -67,7 +67,7 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/pain
                   </Link>
                 </td>
                 <td className="px-3">
-                  {r.network} <Badge>{STORE_FORMAT_LABEL[r.format as StoreFormat] ?? r.format}</Badge>
+                  {r.network} <Badge>{STORE_FORMAT_LABEL[r.format as StoreFormat] ?? (r.format || "A definir")}</Badge>
                 </td>
                 <td className="px-3">
                   {r.city} – {r.state}

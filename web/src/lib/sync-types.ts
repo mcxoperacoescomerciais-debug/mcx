@@ -37,6 +37,8 @@ export const visitInput = z.object({
   notes: z.string().max(4000).nullable().optional(),
   occurrences: z.array(occurrenceInput).max(500),
   deletedOccurrenceIds: z.array(z.uuid()).max(500).default([]),
+  /** Formato da loja escolhido pelo promotor (ABC: varejo, plus ou cash). Atualiza o cadastro da loja. */
+  storeFormat: z.enum(["varejo", "plus", "cash"]).nullable().optional(),
 });
 export type VisitInput = z.infer<typeof visitInput>;
 
@@ -68,13 +70,20 @@ export interface BootstrapStore {
   city: string;
   state: string;
   network: string;
-  /** Formato da loja na rede (varejo, plus, cash). */
+  /** Formato da loja na rede (varejo, plus, cash); "" = ainda não definido (o promotor escolhe). */
   format: string;
+  /** Formatos com mix cadastrado na rede. Mais de um = o promotor escolhe o formato da loja (ex.: ABC). */
+  formatOptions: string[];
   lastVisitDate: string | null;
   /** Mix oficial da loja (rede + formato) na ordem da planilha, seguido de produtos já vistos nela. */
   mix: string[];
   /** Código do produto na rede (etiqueta da gôndola), por productId — também é pesquisável. */
   chainCodes: Record<string, string>;
+  /** Mix e códigos de cada formato da rede: permitem trocar o formato sem internet. */
+  mixByFormat: Record<string, string[]>;
+  chainCodesByFormat: Record<string, Record<string, string>>;
+  /** Produtos fora do mix que já apareceram na loja (últimos 90 dias). */
+  seenProducts: string[];
   /** Itens da última visita: base do "repetir produtos da última visita". */
   lastItems: { productId: string; type: "validity" | "rupture" | "damage"; location: string; unit: string }[];
 }

@@ -56,6 +56,7 @@ export default async function StoreFormPage({ params, searchParams }: PageProps<
           </Field>
           <Field label="Formato" hint="Define o mix de produtos">
             <Select name="format" defaultValue={store?.format ?? "varejo"}>
+              <option value="">A definir (o promotor escolhe)</option>
               {Object.entries(STORE_FORMAT_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}

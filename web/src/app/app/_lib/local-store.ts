@@ -56,11 +56,14 @@ export interface LocalState {
   sync: SyncState;
   /** true quando o servidor respondeu 401 — o app manda para o login. */
   sessionExpired: boolean;
+  /** Formato escolhido pelo promotor por loja (ABC: varejo/plus/cash), valendo mesmo sem internet. */
+  formatChoices: Record<string, string>;
 }
 
 const idb = typeof window !== "undefined" ? createStore("mcx-suinco", "kv") : undefined;
 const KEY_BOOTSTRAP = "bootstrap";
 const KEY_VISITS = "visits";
+const KEY_FORMATS = "storeFormats";
 const photoKey = (id: string) => `photo:${id}`;
 
 let state: LocalState = {
@@ -70,6 +73,7 @@ let state: LocalState = {
   history: null,
   sync: { online: true, syncing: false, lastSyncAt: null, lastError: null },
   sessionExpired: false,
+  formatChoices: {},
 };
 const listeners = new Set<() => void>();
 
@@ -99,11 +103,18 @@ let initialized = false;
 export async function initLocalStore(): Promise<void> {
   if (initialized) return;
   initialized = true;
-  const [bootstrap, visits] = await Promise.all([
+  const [bootstrap, visits, formatChoices] = await Promise.all([
     get<BootstrapPayload>(KEY_BOOTSTRAP, idb),
     get<Record<string, LocalVisit>>(KEY_VISITS, idb),
+    get<Record<string, string>>(KEY_FORMATS, idb),
   ]);
-  emit({ ready: true, bootstrap: bootstrap ?? null, visits: visits ?? {}, sync: { ...state.sync, online: navigator.onLine } });
+  emit({
+    ready: true,
+    bootstrap: bootstrap ?? null,
+    visits: visits ?? {},
+    formatChoices: formatChoices ?? {},
+    sync: { ...state.sync, online: navigator.onLine },
+  });
 
   window.addEventListener("online", () => {
     emit({ sync: { ...state.sync, online: true } });
@@ -169,6 +180,15 @@ function updateVisit(visitId: string, fn: (v: LocalVisit) => LocalVisit): Promis
   const p = persistVisits({ ...state.visits, [visitId]: next });
   scheduleSync();
   return p;
+}
+
+/** Guarda o formato da loja escolhido pelo promotor; vai para o servidor junto com a próxima visita da loja. */
+export async function chooseStoreFormat(storeId: string, format: string): Promise<void> {
+  const formatChoices = { ...state.formatChoices, [storeId]: format };
+  emit({ formatChoices });
+  await set(KEY_FORMATS, formatChoices, idb);
+  // Visitas em andamento da loja reenviam o formato novo.
+  for (const v of Object.values(state.visits)) if (v.storeId === storeId && v.status === "in_progress") await updateVisit(v.id, (x) => x);
 }
 
 export async function startVisit(storeId: string): Promise<string> {
@@ -308,6 +328,7 @@ function toVisitInput(v: LocalVisit): VisitInput {
     notes: v.notes || null,
     occurrences: Object.values(v.occurrences).map(toOccurrenceInput),
     deletedOccurrenceIds: v.deletedOccurrenceIds,
+    storeFormat: (state.formatChoices[v.storeId] as VisitInput["storeFormat"]) ?? null,
   };
 }
 
