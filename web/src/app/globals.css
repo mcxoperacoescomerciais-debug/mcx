@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/*
+ * Identidade MCX: azul-marinho profundo (fundo da logo) + prata + dourado
+ * como acento. Superfícies claras para leitura sob a luz do supermercado e
+ * para o painel analítico. Cores de severidade ficam em src/lib/domain.ts e
+ * são usadas SOMENTE para status (vencido, crítico...), nunca decoração.
+ */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-serif), Georgia, serif;
+
+  --color-navy-950: #070c27;
+  --color-navy-900: #0b1236;
+  --color-navy-800: #141d4d;
+  --color-navy-700: #1f2a63;
+  --color-navy-600: #34407e;
+  --color-navy-100: #e6e9f4;
+  --color-navy-50: #f2f4fa;
+
+  --color-gold-600: #a8851a;
+  --color-gold-500: #c9a227;
+  --color-gold-400: #d9b84a;
+  --color-gold-100: #f8f0d6;
+
+  --color-silver-300: #c9ced9;
+
+  --color-canvas: #f4f5f9;
+  --color-surface: #ffffff;
+  --color-line: #e3e6ee;
+  --color-line-strong: #cfd4e0;
+  --color-ink: #0e1430;
+  --color-ink-2: #3c4462;
+  --color-muted: #6b7290;
+
+  --color-sev-expired: #b42318;
+  --color-sev-critical: #e5484d;
+  --color-sev-high: #f07c1b;
+  --color-sev-attention: #e3b008;
+  --color-sev-monitor: #3b82f6;
+  --color-sev-normal: #2f9e5b;
+
+  --radius-card: 14px;
+  --shadow-card: 0 1px 2px rgb(14 20 48 / 0.04), 0 1px 3px rgb(14 20 48 / 0.06);
+  --shadow-pop: 0 10px 30px rgb(14 20 48 / 0.16);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Números tabulares em tabelas e KPIs: colunas alinhadas, sem "pulo" ao atualizar. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Área segura do iPhone/Android com barra de gestos. */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold-500);
+  outline-offset: 2px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

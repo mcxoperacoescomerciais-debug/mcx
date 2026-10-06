@@ -1,0 +1,733 @@
+{
+ "Super BH": {
+  "mixes": [
+   {
+    "format": "varejo",
+    "items": [
+     {
+      "seq": 1,
+      "chainCode": "29874",
+      "suincoCode": "30034",
+      "description": "BACON EM PEDACOS COZINHA PREMIADA",
+      "note": null
+     },
+     {
+      "seq": 2,
+      "chainCode": "159675",
+      "suincoCode": "10710",
+      "description": "PICANHA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 3,
+      "chainCode": "159625",
+      "suincoCode": "10740",
+      "description": "ALCATRA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 4,
+      "chainCode": "280861",
+      "suincoCode": "10760",
+      "description": "BARRIGA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 5,
+      "chainCode": "272122",
+      "suincoCode": "1190",
+      "description": "COSTELA TEMPERADA RESFRIADA",
+      "note": null
+     },
+     {
+      "seq": 6,
+      "chainCode": "280869",
+      "suincoCode": "10720",
+      "description": "FILE MIGNON TEMPERADO RESFRIADA",
+      "note": null
+     }
+    ]
+   }
+  ],
+  "prices": {
+   "10710": 8.9,
+   "10720": 9.74,
+   "10740": 7.68,
+   "10760": 8.89,
+   "30034": 10.23
+  }
+ },
+ "Super ABC": {
+  "mixes": [
+   {
+    "format": "varejo",
+    "items": [
+     {
+      "seq": 1,
+      "chainCode": "20318",
+      "suincoCode": "40000",
+      "description": "PRESUNTO RESF. COZINHA PREMIADA",
+      "note": "Manipulação Fatiada bandeija de 100g a 200 g"
+     },
+     {
+      "seq": 2,
+      "chainCode": "13092",
+      "suincoCode": "50000",
+      "description": "APRESUNTADO RESF. COZINHA PREMIADA",
+      "note": "Manipulação Fatiada bandeija de 100g a 200 g"
+     },
+     {
+      "seq": 3,
+      "chainCode": "10117",
+      "suincoCode": "30020",
+      "description": "BACON EM MANTA",
+      "note": "Manipulação Pedaços filme de 200 g a 300 g"
+     },
+     {
+      "seq": 4,
+      "chainCode": "10115",
+      "suincoCode": "30060",
+      "description": "PAPADA DEFUMADA",
+      "note": "Manipulação Pedaços filme de 200 g a 300 g"
+     },
+     {
+      "seq": 5,
+      "chainCode": "30555",
+      "suincoCode": "20230",
+      "description": "LINGUICA PARA CHURRASCO CONG. 15kg",
+      "note": "Manipulação bandeija Filme de 400g a 500 g"
+     },
+     {
+      "seq": 6,
+      "chainCode": "30554",
+      "suincoCode": "30103",
+      "description": "LINGUICA TIPO CALABRESA 2,5 kg",
+      "note": "Manipulação Filme 1 ou 2 unidades por embalagem"
+     },
+     {
+      "seq": 7,
+      "chainCode": "48234",
+      "suincoCode": "30056",
+      "description": "BACON DE PALETA EM CUBOS 250g",
+      "note": null
+     },
+     {
+      "seq": 8,
+      "chainCode": "10126",
+      "suincoCode": "30034",
+      "description": "BACON EM PEDACOS COZINHA PREMIADA",
+      "note": null
+     },
+     {
+      "seq": 9,
+      "chainCode": "10119",
+      "suincoCode": "10710",
+      "description": "PICANHA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 10,
+      "chainCode": "10122",
+      "suincoCode": "10740",
+      "description": "ALCATRA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 11,
+      "chainCode": "10124",
+      "suincoCode": "10760",
+      "description": "BARRIGA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 12,
+      "chainCode": "67730",
+      "suincoCode": "10732",
+      "description": "SOBREPALETA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 13,
+      "chainCode": "67729",
+      "suincoCode": "10810",
+      "description": "FRALDINHA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 14,
+      "chainCode": "49810",
+      "suincoCode": "01189",
+      "description": "COSTELINHA A PASSARINHO TEMPERADA CONGELADA",
+      "note": null
+     },
+     {
+      "seq": 15,
+      "chainCode": "49536",
+      "suincoCode": "30085",
+      "description": "TENDER SUINCO",
+      "note": null
+     },
+     {
+      "seq": 16,
+      "chainCode": "25304",
+      "suincoCode": "12221",
+      "description": "PE SUINO SALGADO PORCIONADO",
+      "note": null
+     },
+     {
+      "seq": 17,
+      "chainCode": "25609",
+      "suincoCode": "12226",
+      "description": "RABO SUINO SALGADO PORCIONADO",
+      "note": null
+     },
+     {
+      "seq": 18,
+      "chainCode": "46825",
+      "suincoCode": "12231",
+      "description": "MASCARA SUINA SALGADA PORCIONADA",
+      "note": null
+     }
+    ]
+   },
+   {
+    "format": "plus",
+    "items": [
+     {
+      "seq": 1,
+      "chainCode": "20318",
+      "suincoCode": "40000",
+      "description": "PRESUNTO RESF. COZINHA PREMIADA",
+      "note": "Manipulação Fatiada bandeija de 100g a 200 g"
+     },
+     {
+      "seq": 2,
+      "chainCode": "13092",
+      "suincoCode": "50000",
+      "description": "APRESUNTADO RESF. COZINHA PREMIADA",
+      "note": "Manipulação Fatiada bandeija de 100g a 200 g"
+     },
+     {
+      "seq": 3,
+      "chainCode": "10117",
+      "suincoCode": "30020",
+      "description": "BACON EM MANTA",
+      "note": "Manipulação Pedaços filme de 200 g a 300 g"
+     },
+     {
+      "seq": 4,
+      "chainCode": "10115",
+      "suincoCode": "30060",
+      "description": "PAPADA DEFUMADA",
+      "note": "Manipulação Pedaços filme de 200 g a 300 g"
+     },
+     {
+      "seq": 5,
+      "chainCode": "30555",
+      "suincoCode": "20230",
+      "description": "LINGUICA PARA CHURRASCO CONG. 15kg",
+      "note": "Manipulação bandeija Filme de 400g a 500 g"
+     },
+     {
+      "seq": 6,
+      "chainCode": "48234",
+      "suincoCode": "30056",
+      "description": "BACON DE PALETA EM CUBOS 250g",
+      "note": "Manipulação Filme 1 ou 2 unidades por embalagem"
+     },
+     {
+      "seq": 7,
+      "chainCode": "10126",
+      "suincoCode": "30034",
+      "description": "BACON EM PEDACOS COZINHA PREMIADA",
+      "note": null
+     },
+     {
+      "seq": 8,
+      "chainCode": "30554",
+      "suincoCode": "30103",
+      "description": "LINGUICA TIPO CALABRESA 2,5 kg",
+      "note": null
+     },
+     {
+      "seq": 9,
+      "chainCode": "10119",
+      "suincoCode": "10710",
+      "description": "PICANHA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 10,
+      "chainCode": "10122",
+      "suincoCode": "10740",
+      "description": "ALCATRA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 11,
+      "chainCode": "10124",
+      "suincoCode": "10760",
+      "description": "BARRIGA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 12,
+      "chainCode": "67730",
+      "suincoCode": "10732",
+      "description": "SOBREPALETA TEMPERADA RESFRIADA",
+      "note": null
+     },
+     {
+      "seq": 13,
+      "chainCode": "67729",
+      "suincoCode": "10810",
+      "description": "FRALDINHA TEMPERADA RESFRIADA",
+      "note": null
+     },
+     {
+      "seq": 14,
+      "chainCode": "49810",
+      "suincoCode": "01189",
+      "description": "COSTELINHA A PASSARINHO TEMPERADA CONGELADA",
+      "note": null
+     },
+     {
+      "seq": 15,
+      "chainCode": "47342",
+      "suincoCode": "10736",
+      "description": "SOBREPALETA SUINA TEMPERADA CONGELADA",
+      "note": null
+     },
+     {
+      "seq": 16,
+      "chainCode": "47340",
+      "suincoCode": "10815",
+      "description": "FRALDINHA SUINA TEMPERADA CONGELADA",
+      "note": null
+     },
+     {
+      "seq": 17,
+      "chainCode": "49809",
+      "suincoCode": "30155",
+      "description": "LINGUICA TIPO CALABRESA FATIADA 1KG",
+      "note": null
+     },
+     {
+      "seq": 18,
+      "chainCode": "49811",
+      "suincoCode": "30055",
+      "description": "BACON DE PALETA EM CUBOS 1 KG",
+      "note": null
+     },
+     {
+      "seq": 19,
+      "chainCode": "67722",
+      "suincoCode": "30051",
+      "description": "BACON FATIADO 1 KG",
+      "note": null
+     },
+     {
+      "seq": 20,
+      "chainCode": "68432",
+      "suincoCode": "70041",
+      "description": "TORRESMO POTE 90 G",
+      "note": null
+     },
+     {
+      "seq": 21,
+      "chainCode": "67727",
+      "suincoCode": "30175",
+      "description": "LINGUIÇA PETISCO 500 G",
+      "note": null
+     },
+     {
+      "seq": 22,
+      "chainCode": "67721",
+      "suincoCode": "20053",
+      "description": "LINGUIÇA COM QUEIJO 600 G",
+      "note": null
+     },
+     {
+      "seq": 23,
+      "chainCode": "71110",
+      "suincoCode": "70054",
+      "description": "LOMBO CURADO SUINCO 100 G FAT",
+      "note": null
+     },
+     {
+      "seq": 24,
+      "chainCode": "71111",
+      "suincoCode": "70055",
+      "description": "SALAME TP MILANO SUINCO 100 G FAT DEF",
+      "note": null
+     },
+     {
+      "seq": 25,
+      "chainCode": "71107",
+      "suincoCode": "70056",
+      "description": "SALAME TP ITALIANO SUINCO 100 G FAT DEF",
+      "note": null
+     },
+     {
+      "seq": 26,
+      "chainCode": "71112",
+      "suincoCode": "70057",
+      "description": "COPA CURADOA SUINCO 100 G FAT",
+      "note": null
+     },
+     {
+      "seq": 27,
+      "chainCode": "49536",
+      "suincoCode": "30085",
+      "description": "TENDER SUINCO",
+      "note": null
+     },
+     {
+      "seq": 28,
+      "chainCode": "25304",
+      "suincoCode": "12221",
+      "description": "PE SUINO SALGADO PORCIONADO",
+      "note": null
+     },
+     {
+      "seq": 29,
+      "chainCode": "25609",
+      "suincoCode": "12226",
+      "description": "RABO SUINO SALGADO PORCIONADO",
+      "note": null
+     },
+     {
+      "seq": 30,
+      "chainCode": "46825",
+      "suincoCode": "12231",
+      "description": "MASCARA SUINA SALGADA PORCIONADA",
+      "note": null
+     }
+    ]
+   },
+   {
+    "format": "cash",
+    "items": [
+     {
+      "seq": 1,
+      "chainCode": "20318",
+      "suincoCode": "40000",
+      "description": "PRESUNTO RESF. COZINHA PREMIADA",
+      "note": "Manipulação Fatiada bandeija de 100g a 200 g"
+     },
+     {
+      "seq": 2,
+      "chainCode": "47018",
+      "suincoCode": "40009",
+      "description": "PRESUNTO RETANGULAR SUINCO RESF",
+      "note": "Manipulação Fatiada bandeija de 100g a 200 g"
+     },
+     {
+      "seq": 3,
+      "chainCode": "13092",
+      "suincoCode": "50000",
+      "description": "APRESUNTADO RESF. COZINHA PREMIADA",
+      "note": "Manipulação Fatiada bandeija de 100g a 200 g"
+     },
+     {
+      "seq": 4,
+      "chainCode": "10117",
+      "suincoCode": "30020",
+      "description": "BACON EM MANTA",
+      "note": "Manipulação Pedaços filme de 200 g a 300 g"
+     },
+     {
+      "seq": 5,
+      "chainCode": "10115",
+      "suincoCode": "30060",
+      "description": "PAPADA DEFUMADA",
+      "note": "Manipulação Pedaços filme de 200 g a 300 g"
+     },
+     {
+      "seq": 6,
+      "chainCode": "30555",
+      "suincoCode": "20230",
+      "description": "LINGUICA PARA CHURRASCO CONG. 15kg",
+      "note": "Manipulação bandeija Filme de 400g a 500 g"
+     },
+     {
+      "seq": 7,
+      "chainCode": "30554",
+      "suincoCode": "30103",
+      "description": "LINGUICA TIPO CALABRESA 2,5 kg",
+      "note": "Manipulação Filme 1 ou 2 unidades por embalagem"
+     },
+     {
+      "seq": 8,
+      "chainCode": "48234",
+      "suincoCode": "30056",
+      "description": "BACON DE PALETA EM CUBOS 250g",
+      "note": null
+     },
+     {
+      "seq": 9,
+      "chainCode": "10126",
+      "suincoCode": "30034",
+      "description": "BACON EM PEDACOS COZINHA PREMIADA",
+      "note": null
+     },
+     {
+      "seq": 10,
+      "chainCode": "10119",
+      "suincoCode": "10710",
+      "description": "PICANHA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 11,
+      "chainCode": "10122",
+      "suincoCode": "10740",
+      "description": "ALCATRA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 12,
+      "chainCode": "10124",
+      "suincoCode": "10760",
+      "description": "BARRIGA SUINA TEMPERADA RESF",
+      "note": null
+     },
+     {
+      "seq": 13,
+      "chainCode": "67731",
+      "suincoCode": "10700",
+      "description": "LOMBO TEMPERADO RESFRIADO",
+      "note": null
+     },
+     {
+      "seq": 14,
+      "chainCode": "67730",
+      "suincoCode": "10732",
+      "description": "SOBREPALETA TEMPERADA RESFRIADA",
+      "note": null
+     },
+     {
+      "seq": 15,
+      "chainCode": "67729",
+      "suincoCode": "10810",
+      "description": "FRALDINHA TEMPERADA RESFRIADA",
+      "note": null
+     },
+     {
+      "seq": 16,
+      "chainCode": "49810",
+      "suincoCode": "01189",
+      "description": "COSTELINHA A PASSARINHO TEMPERADA CONGELADA",
+      "note": null
+     },
+     {
+      "seq": 17,
+      "chainCode": "47342",
+      "suincoCode": "10736",
+      "description": "SOBREPALETA SUINA TEMPERADA CONGELADA",
+      "note": null
+     },
+     {
+      "seq": 18,
+      "chainCode": "47340",
+      "suincoCode": "10815",
+      "description": "FRALDINHA SUINA TEMPERADA CONGELADA",
+      "note": null
+     },
+     {
+      "seq": 19,
+      "chainCode": "47341",
+      "suincoCode": "30106",
+      "description": "EMBUTIDO MISTO COZIDO E DEFUMADO 2,5 KG",
+      "note": null
+     },
+     {
+      "seq": 20,
+      "chainCode": "49809",
+      "suincoCode": "30155",
+      "description": "LINGUICA TIPO CALABRESA FATIADA 1KG",
+      "note": null
+     },
+     {
+      "seq": 21,
+      "chainCode": "49811",
+      "suincoCode": "30055",
+      "description": "BACON DE PALETA EM CUBOS 1 KG",
+      "note": null
+     },
+     {
+      "seq": 22,
+      "chainCode": "49815",
+      "suincoCode": "20221",
+      "description": "LINGUICA CHURRASCO 1 KG",
+      "note": null
+     },
+     {
+      "seq": 23,
+      "chainCode": "49818",
+      "suincoCode": "20240",
+      "description": "LINGUICA FININHA COM PIMENTA SUINCO 1KG",
+      "note": null
+     },
+     {
+      "seq": 24,
+      "chainCode": "49816",
+      "suincoCode": "20236",
+      "description": "LINGUICA COM PIMENTA BIQUINHO CONG 600G",
+      "note": null
+     },
+     {
+      "seq": 25,
+      "chainCode": "49813",
+      "suincoCode": "20040",
+      "description": "LINGUICA PERNIL COM PIMENTA CONG. 600G",
+      "note": null
+     },
+     {
+      "seq": 26,
+      "chainCode": "49814",
+      "suincoCode": "20045",
+      "description": "LINGUICA DE PERNIL COM ALHO CONG. 600G",
+      "note": null
+     },
+     {
+      "seq": 27,
+      "chainCode": "49812",
+      "suincoCode": "20048",
+      "description": "LINGUICA DE PERNIL COM BACON CONG. 600G",
+      "note": null
+     },
+     {
+      "seq": 28,
+      "chainCode": "47343",
+      "suincoCode": "30095",
+      "description": "MORTADELA TUBULAR 1KG",
+      "note": null
+     },
+     {
+      "seq": 29,
+      "chainCode": "47344",
+      "suincoCode": "30096",
+      "description": "MORTADELA TUBULAR 3 KG",
+      "note": null
+     },
+     {
+      "seq": 30,
+      "chainCode": "67728",
+      "suincoCode": "30098",
+      "description": "MORTADELA DEFUMADA",
+      "note": null
+     },
+     {
+      "seq": 31,
+      "chainCode": "67722",
+      "suincoCode": "30057",
+      "description": "BACON FATIADO 500 G",
+      "note": null
+     },
+     {
+      "seq": 32,
+      "chainCode": "67720",
+      "suincoCode": "30112",
+      "description": "CALABRESA 400 G 2 GOMOS",
+      "note": null
+     },
+     {
+      "seq": 33,
+      "chainCode": "67725",
+      "suincoCode": "30170",
+      "description": "CALABRESA FININHA 2,5 KG",
+      "note": null
+     },
+     {
+      "seq": 34,
+      "chainCode": "67723",
+      "suincoCode": "30150",
+      "description": "PAIO 2 GOMOS",
+      "note": null
+     },
+     {
+      "seq": 35,
+      "chainCode": "67724",
+      "suincoCode": "30193",
+      "description": "CALABRESA RETA 2,5 KG",
+      "note": null
+     },
+     {
+      "seq": 36,
+      "chainCode": "67721",
+      "suincoCode": "20053",
+      "description": "LINGUIÇA COM QUEIJO 600 G",
+      "note": null
+     },
+     {
+      "seq": 37,
+      "chainCode": "68432",
+      "suincoCode": "70041",
+      "description": "TORRESMO POTE 90 G",
+      "note": null
+     },
+     {
+      "seq": 38,
+      "chainCode": "49536",
+      "suincoCode": "30085",
+      "description": "TENDER SUINCO",
+      "note": null
+     },
+     {
+      "seq": 39,
+      "chainCode": "69725",
+      "suincoCode": "30051",
+      "description": "BACON FATIADO 1 KG",
+      "note": null
+     },
+     {
+      "seq": 40,
+      "chainCode": "25304",
+      "suincoCode": "12221",
+      "description": "PE SUINO SALGADO PORCIONADO",
+      "note": null
+     },
+     {
+      "seq": 41,
+      "chainCode": "25609",
+      "suincoCode": "12226",
+      "description": "RABO SUINO SALGADO PORCIONADO",
+      "note": null
+     },
+     {
+      "seq": 42,
+      "chainCode": "46825",
+      "suincoCode": "12231",
+      "description": "MASCARA SUINA SALGADA PORCIONADA",
+      "note": null
+     }
+    ]
+   }
+  ],
+  "prices": {
+   "10700": 10.33,
+   "10710": 8.9,
+   "10732": 6.83,
+   "10740": 7.68,
+   "10760": 8.89,
+   "10810": 7.01,
+   "10815": 7.65,
+   "20221": 6.53,
+   "20230": 6.35,
+   "30020": 9.81,
+   "30034": 10.23,
+   "30051": 10.54,
+   "30055": 8.56,
+   "30056": 8.73,
+   "30057": 11.5,
+   "30060": 5.64,
+   "30103": 5.97,
+   "30150": 6.35,
+   "30170": 6,
+   "30193": 7.26,
+   "40000": 6.54,
+   "50000": 5.48
+  }
+ }
+}

@@ -1,0 +1,65 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "tsx --tsconfig tsconfig.scripts.json --test tests/*.test.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --tsconfig tsconfig.scripts.json scripts/migrate.ts",
+    "db:bootstrap": "tsx --tsconfig tsconfig.scripts.json scripts/bootstrap.ts",
+    "typecheck": "tsc --noEmit",
+    "start:demo": "node scripts/start-demo.mjs",
+    "start:render": "npm run db:migrate && npm run db:bootstrap && next start"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@react-pdf/renderer": "^4.9.0",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "drizzle-orm": "^0.45.3",
+    "exceljs": "^4.4.0",
+    "idb-keyval": "^6.3.0",
+    "jose": "^6.2.12",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.52.0",
+    "next": "16.3.8",
+    "papaparse": "^5.7.0",
+    "postgres": "^3.4.9",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-leaflet": "^5.0.0",
+    "recharts": "^3.10.1",
+    "server-only": "^0.0.1",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.8",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "allowScripts": {
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "unrs-resolver@1.12.2": true
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.9"
+  }
+}
