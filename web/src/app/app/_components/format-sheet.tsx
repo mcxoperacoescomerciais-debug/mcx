@@ -35,7 +35,7 @@ export function FormatSheet({ store, onClose, onChoose }: { store: BootstrapStor
         </div>
       }
     >
-      <p className="text-[14px] text-ink-2 mb-3">Cada tipo de {store.network} tem uma lista de produtos diferente. Toque no tipo desta loja para iniciar a visita.</p>
+      <p className="text-[14px] text-ink-2 mb-3">Cada tipo de {store.network} tem uma lista de produtos diferente. Escolha uma vez: nas próximas visitas a loja já abre com este tipo.</p>
       <div className="space-y-2 pb-2">
         {[...store.formatOptions].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)).map((f) => (
           <button

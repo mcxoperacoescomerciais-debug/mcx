@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, FileText, History, Home, LogOut, MapPin, Play, RefreshCw, Search, Store, User, WifiOff } from "lucide-react";
 import clsx from "clsx";
 import { SyncPill, TopBar } from "./primitives";
-import { go, useCatalog, useLocal } from "../_lib/hooks";
+import { go, needsFormatChoice, useCatalog, useLocal } from "../_lib/hooks";
 import { chooseStoreFormat, isVisitFullySynced, pendingCount, refreshHistory, startVisit, syncNow, type LocalVisit } from "../_lib/local-store";
 import { FormatSheet } from "./format-sheet";
 import { STORE_FORMAT_LABEL, type StoreFormat } from "@/lib/domain";
@@ -134,7 +134,7 @@ function StoreRow({ store, ongoing }: { store: BootstrapStore; ongoing?: LocalVi
       </div>
       <button
         type="button"
-        onClick={() => (ongoing ? go(`visita/${ongoing.id}`) : multiFormat ? setChoosing(true) : void begin(store.id))}
+        onClick={() => (ongoing ? go(`visita/${ongoing.id}`) : needsFormatChoice(store) ? setChoosing(true) : void begin(store.id))}
         className={clsx("h-11 px-4 rounded-xl font-semibold text-[14px] shrink-0", ongoing ? "bg-gold-500 text-navy-950" : "bg-navy-900 text-white active:bg-navy-950")}
       >
         {ongoing ? "Continuar" : "Iniciar visita"}
