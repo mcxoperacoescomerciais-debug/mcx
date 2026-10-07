@@ -9,6 +9,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { getClientSettings } from "./settings";
 import { audit, diffFields } from "./audit";
+import { notifyCriticalVisit } from "./whatsapp-alert";
 import { addDays, classify, daysBetween, todayIso } from "@/lib/validity";
 import type {
   BootstrapPayload,
@@ -339,6 +340,8 @@ export async function syncVisit(scope: Scope, input: VisitInput): Promise<SyncRe
       return { visitId: input.id, ok: true };
     });
     for (const entry of auditQueue) await audit(...entry);
+    // Alerta de validade crítica no WhatsApp da gestão (em segundo plano: não atrasa o envio do promotor).
+    if (result.ok && input.status === "finished") void notifyCriticalVisit(scope, input.id);
     return result;
   } catch (err) {
     console.error("[sync] erro na visita", input.id, err);
