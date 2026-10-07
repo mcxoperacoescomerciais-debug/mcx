@@ -366,6 +366,35 @@ export function DoneScreen({ visitId }: { visitId: string }) {
   const [shareError, setShareError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [openedAt] = useState(() => Date.now());
+  // O PDF é preparado assim que a visita está no servidor: o celular só abre a
+  // janela de compartilhar logo após o toque, então o toque não pode esperar o download.
+  const [pdf, setPdf] = useState<{ rev: number; file: File } | null>(null);
+  const [pdfFailed, setPdfFailed] = useState(false);
+  const [pdfAttempt, setPdfAttempt] = useState(0);
+  const readyRev = visit && visit.rev === visit.syncedRev && isVisitFullySynced(visit) ? visit.syncedRev : null;
+  useEffect(() => {
+    if (readyRev === null) return;
+    let cancelled = false;
+    void (async () => {
+      setPdfFailed(false);
+      for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
+        try {
+          const res = await fetch(`/api/visits/${visitId}/pdf`, { cache: "no-store" });
+          if (!res.ok) throw new Error(String(res.status));
+          const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "relatorio-visita.pdf";
+          const file = new File([await res.blob()], name, { type: "application/pdf" });
+          if (!cancelled) setPdf({ rev: readyRev, file });
+          return;
+        } catch {
+          await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        }
+      }
+      if (!cancelled) setPdfFailed(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [readyRev, visitId, pdfAttempt]);
   if (!visit) return <MissingVisit />;
   const store = storeById.get(visit.storeId);
   // Mensagem que acompanha o PDF no grupo do WhatsApp (sem link, só o arquivo).
@@ -382,22 +411,21 @@ export function DoneScreen({ visitId }: { visitId: string }) {
   const pdfUrl = `/api/visits/${visitId}/pdf`;
   const editable = visit.finishedAt && openedAt - new Date(visit.finishedAt).getTime() < 24 * 3_600_000;
 
+  const pdfReady = Boolean(ready && pdf && pdf.rev === visit.syncedRev);
+
   async function share() {
+    if (!pdf || !pdfReady) return;
+    const file = pdf.file;
     setSharing(true);
     setShareError(null);
     try {
-      const res = await fetch(pdfUrl);
-      if (!res.ok) throw new Error();
-      const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "relatorio-visita.pdf";
-      const file = new File([await res.blob()], name, { type: "application/pdf" });
-      // A mensagem também vai para a área de transferência: se o WhatsApp não
-      // mostrar o texto junto do PDF, o promotor só cola na conversa.
-      try {
-        await navigator.clipboard.writeText(shareText);
-        setCopied(true);
-      } catch {
-        /* sem permissão de área de transferência */
-      }
+      // A mensagem também vai para a área de transferência (sem esperar: o
+      // compartilhar precisa sair no mesmo toque). Se o WhatsApp não mostrar o
+      // texto junto do PDF, o promotor só cola na conversa.
+      navigator.clipboard?.writeText(shareText).then(
+        () => setCopied(true),
+        () => undefined,
+      );
       if (navigator.canShare?.({ files: [file], text: shareText })) {
         await navigator.share({ files: [file], text: shareText, title: "Relatório de visita SUINCO" });
       } else if (navigator.canShare?.({ files: [file] })) {
@@ -405,11 +433,13 @@ export function DoneScreen({ visitId }: { visitId: string }) {
       } else {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(file);
-        a.download = name;
+        a.download = file.name;
         a.click();
       }
     } catch (e) {
-      if ((e as Error)?.name !== "AbortError") setShareError("Não foi possível gerar o PDF agora. Tente de novo.");
+      const name = (e as Error)?.name;
+      if (name === "NotAllowedError") setShareError("O celular bloqueou a janela de compartilhar. Toque de novo no botão.");
+      else if (name !== "AbortError") setShareError("Não foi possível compartilhar agora. Tente de novo.");
     } finally {
       setSharing(false);
     }
@@ -445,11 +475,11 @@ export function DoneScreen({ visitId }: { visitId: string }) {
         <div className="mt-auto space-y-2.5 pt-8">
           <button
             type="button"
-            disabled={!ready || sharing}
-            onClick={() => void share()}
+            disabled={!(pdfReady || (ready && pdfFailed)) || sharing}
+            onClick={() => (pdfReady ? void share() : setPdfAttempt((n) => n + 1))}
             className="w-full h-14 rounded-2xl bg-gold-500 text-navy-950 font-bold text-[16px] inline-flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            <Share2 className="size-5" /> {sharing ? "Gerando PDF…" : ready ? "Enviar PDF no WhatsApp" : dataSent ? "Aguardando as fotos…" : "Aguardando sinal para gerar o PDF"}
+            <Share2 className="size-5" /> {sharing ? "Abrindo WhatsApp…" : pdfReady ? "Enviar PDF no WhatsApp" : ready ? (pdfFailed ? "Tentar preparar o PDF de novo" : "Preparando o PDF…") : dataSent ? "Aguardando as fotos…" : "Aguardando sinal para gerar o PDF"}
           </button>
           {shareError ? <p className="text-[13px] text-[#FFB4B4] text-center">{shareError}</p> : null}
           {ready ? (

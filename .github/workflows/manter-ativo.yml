@@ -1,0 +1,17 @@
+# Mantém o SUINCO Gestão de Loja acordado: o plano gratuito do Render desliga o
+# servidor após 15 min sem acesso, e a primeira abertura depois disso leva ~50 s.
+# Um serviço ligado o mês todo usa ~744 h das 750 h grátis do Render.
+name: Manter site ativo
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Acordar o servidor
+        run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 https://suinco-gestao.onrender.com/api/health

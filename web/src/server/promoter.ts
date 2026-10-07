@@ -31,37 +31,73 @@ export async function getAssignedStoreIds(scope: Scope): Promise<string[]> {
 
 export async function getBootstrap(scope: Scope): Promise<BootstrapPayload> {
   const db = await getDb();
-  const settings = await getClientSettings(scope.clientId);
   const today = todayIso();
 
-  const [user] = await db.select().from(s.users).where(eq(s.users.id, scope.userId));
-  const [client] = await db.select().from(s.clients).where(eq(s.clients.id, scope.clientId));
-
-  const storeRows = await db
-    .select({
-      id: s.stores.id,
-      name: s.stores.name,
-      code: s.stores.code,
-      city: s.stores.city,
-      state: s.stores.state,
-      format: s.stores.format,
-      networkId: s.stores.networkId,
-      network: s.networks.name,
-    })
-    .from(s.storeAssignments)
-    .innerJoin(s.stores, eq(s.stores.id, s.storeAssignments.storeId))
-    .innerJoin(s.networks, eq(s.networks.id, s.stores.networkId))
-    .where(and(eq(s.storeAssignments.userId, scope.userId), eq(s.stores.clientId, scope.clientId), eq(s.stores.status, "active")))
-    .orderBy(s.stores.city, s.stores.name);
+  // O banco fica em São Paulo e o servidor nos EUA: cada consulta custa uma ida e
+  // volta. As independentes vão juntas (3 rodadas em vez de 9 em sequência).
+  const [settings, [user], [client], storeRows, products] = await Promise.all([
+    getClientSettings(scope.clientId),
+    db.select().from(s.users).where(eq(s.users.id, scope.userId)),
+    db.select().from(s.clients).where(eq(s.clients.id, scope.clientId)),
+    db
+      .select({
+        id: s.stores.id,
+        name: s.stores.name,
+        code: s.stores.code,
+        city: s.stores.city,
+        state: s.stores.state,
+        format: s.stores.format,
+        networkId: s.stores.networkId,
+        network: s.networks.name,
+      })
+      .from(s.storeAssignments)
+      .innerJoin(s.stores, eq(s.stores.id, s.storeAssignments.storeId))
+      .innerJoin(s.networks, eq(s.networks.id, s.stores.networkId))
+      .where(and(eq(s.storeAssignments.userId, scope.userId), eq(s.stores.clientId, scope.clientId), eq(s.stores.status, "active")))
+      .orderBy(s.stores.city, s.stores.name),
+    db
+      .select({
+        id: s.products.id,
+        name: s.products.name,
+        code: s.products.code,
+        category: s.products.category,
+        presentation: s.products.presentation,
+        defaultUnit: s.products.defaultUnit,
+        aliases: s.products.aliases,
+        referencePrice: s.products.referencePrice,
+      })
+      .from(s.products)
+      .where(and(eq(s.products.clientId, scope.clientId), eq(s.products.status, "active")))
+      .orderBy(s.products.name),
+  ]);
   const storeIds = storeRows.map((r) => r.id);
+  const networkIds = [...new Set(storeRows.map((r) => r.networkId))];
 
-  const lastVisits = storeIds.length
-    ? await db
-        .selectDistinctOn([s.visits.storeId], { storeId: s.visits.storeId, id: s.visits.id, visitDate: s.visits.visitDate })
-        .from(s.visits)
-        .where(and(inArray(s.visits.storeId, storeIds), eq(s.visits.status, "finished")))
-        .orderBy(s.visits.storeId, desc(s.visits.visitDate), desc(s.visits.startedAt))
-    : [];
+  const [lastVisits, officialMix, seenRows] = await Promise.all([
+    storeIds.length
+      ? db
+          .selectDistinctOn([s.visits.storeId], { storeId: s.visits.storeId, id: s.visits.id, visitDate: s.visits.visitDate })
+          .from(s.visits)
+          .where(and(inArray(s.visits.storeId, storeIds), eq(s.visits.status, "finished")))
+          .orderBy(s.visits.storeId, desc(s.visits.visitDate), desc(s.visits.startedAt))
+      : [],
+    // Mix oficial (planilhas de MIX por rede + formato), na ordem da planilha.
+    networkIds.length
+      ? db
+          .select({ networkId: s.productMixes.networkId, format: s.productMixes.format, productId: s.productMixes.productId, chainCode: s.productMixes.chainCode })
+          .from(s.productMixes)
+          .where(inArray(s.productMixes.networkId, networkIds))
+          .orderBy(s.productMixes.seq)
+      : [],
+    // Produtos fora do mix que já apareceram na loja (últimos 90 dias) entram no fim da lista.
+    storeIds.length
+      ? db
+          .selectDistinct({ storeId: s.occurrences.storeId, productId: s.occurrences.productId })
+          .from(s.occurrences)
+          .innerJoin(s.visits, eq(s.visits.id, s.occurrences.visitId))
+          .where(and(inArray(s.occurrences.storeId, storeIds), gte(s.visits.visitDate, addDays(today, -90))))
+      : [],
+  ]);
   const lastVisitIds = lastVisits.map((v) => v.id);
 
   const lastItems = lastVisitIds.length
@@ -76,40 +112,6 @@ export async function getBootstrap(scope: Scope): Promise<BootstrapPayload> {
         .from(s.occurrences)
         .where(and(inArray(s.occurrences.visitId, lastVisitIds), sql`${s.occurrences.deletedAt} is null`))
     : [];
-
-  // Mix oficial (planilhas de MIX por rede + formato), na ordem da planilha.
-  const networkIds = [...new Set(storeRows.map((r) => r.networkId))];
-  const officialMix = networkIds.length
-    ? await db
-        .select({ networkId: s.productMixes.networkId, format: s.productMixes.format, productId: s.productMixes.productId, chainCode: s.productMixes.chainCode })
-        .from(s.productMixes)
-        .where(inArray(s.productMixes.networkId, networkIds))
-        .orderBy(s.productMixes.seq)
-    : [];
-
-  // Produtos fora do mix que já apareceram na loja (últimos 90 dias) entram no fim da lista.
-  const seenRows = storeIds.length
-    ? await db
-        .selectDistinct({ storeId: s.occurrences.storeId, productId: s.occurrences.productId })
-        .from(s.occurrences)
-        .innerJoin(s.visits, eq(s.visits.id, s.occurrences.visitId))
-        .where(and(inArray(s.occurrences.storeId, storeIds), gte(s.visits.visitDate, addDays(today, -90))))
-    : [];
-
-  const products = await db
-    .select({
-      id: s.products.id,
-      name: s.products.name,
-      code: s.products.code,
-      category: s.products.category,
-      presentation: s.products.presentation,
-      defaultUnit: s.products.defaultUnit,
-      aliases: s.products.aliases,
-      referencePrice: s.products.referencePrice,
-    })
-    .from(s.products)
-    .where(and(eq(s.products.clientId, scope.clientId), eq(s.products.status, "active")))
-    .orderBy(s.products.name);
 
   return {
     serverToday: today,
@@ -189,10 +191,8 @@ function validateOccurrence(o: ReturnType<typeof normalizeOccurrence>): string |
 
 export async function syncVisit(scope: Scope, input: VisitInput): Promise<SyncResult> {
   const db = await getDb();
-  const settings = await getClientSettings(scope.clientId);
   const today = todayIso();
-
-  const assigned = await getAssignedStoreIds(scope);
+  const [settings, assigned] = await Promise.all([getClientSettings(scope.clientId), getAssignedStoreIds(scope)]);
   if (!assigned.includes(input.storeId)) return { visitId: input.id, ok: false, error: "Loja não atribuída a você." };
   if (daysBetween(input.visitDate, today) < -1 || daysBetween(input.visitDate, today) > 30) {
     return { visitId: input.id, ok: false, error: "Data da visita fora do permitido." };
