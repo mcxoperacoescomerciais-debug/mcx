@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import Link from "next/link";
 import { getScope } from "@/server/auth";
 import { filterOptions, loadFacts, productRanking } from "@/server/analytics";
@@ -24,6 +25,7 @@ export default async function ProductsPage({ searchParams }: PageProps<"/painel/
       <PageHeader title="Produtos" subtitle={`Produtos com ocorrências · ${range.label.toLowerCase()} · ordenado por recorrência de alerta`} />
       <FilterBar filters={filters} options={options} fields={["network", "store", "city", "promoter", "category"]} />
       <Card className="overflow-hidden">
+        <ListSearch placeholder="Pesquisar produto ou código..." />
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>

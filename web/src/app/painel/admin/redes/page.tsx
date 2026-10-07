@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import { eq, sql } from "drizzle-orm";
 import { getScope, requireRole, STAFF_ROLES } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
@@ -33,6 +34,7 @@ export default async function NetworksPage({ searchParams }: PageProps<"/painel/
       </div>
       <div className="max-w-3xl space-y-4">
         <Card className="overflow-hidden">
+          <ListSearch placeholder="Pesquisar rede..." />
           <table className="w-full text-[13px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-muted border-b border-line bg-navy-50/50">

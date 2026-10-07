@@ -8,6 +8,7 @@ import { Badge, Card, EmptyState, PageHeader, SeverityBadge } from "@/components
 import { DAMAGE_KIND_LABEL, LOCATION_LABEL, OCCURRENCE_STATUS_LABEL, RUPTURE_KIND_LABEL, type DamageKind, type RuptureKind } from "@/lib/domain";
 import { describeDays, formatIsoBr } from "@/lib/validity";
 import { FilterBar } from "../_components/filter-bar";
+import { ListSearch } from "../_components/list-search";
 import { OpenOccurrence, STATUS_TONE } from "../_components/occurrence-drawer";
 
 export const metadata: Metadata = { title: "Alertas" };
@@ -117,6 +118,7 @@ export default async function AlertsPage({ searchParams }: PageProps<"/painel/al
         subtitle="Situação atual: o que a última visita de cada loja encontrou e ainda não foi tratado. Dias contados a partir de hoje."
       />
       <FilterBar filters={filters} options={options} showPeriod={false} fields={["network", "store", "city", "promoter", "product", "category"]} />
+      <ListSearch scope="main" placeholder="Pesquisar nas listas de alerta: produto, loja, cidade, promotor..." className="mb-6" />
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
         {groups.map((g) => (

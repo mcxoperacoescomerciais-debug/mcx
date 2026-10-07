@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
@@ -78,9 +79,10 @@ export default async function UserFormPage({ params, searchParams }: PageProps<"
           <h2 className="text-[15px] font-semibold">Lojas atendidas</h2>
           <p className="text-[12.5px] text-muted mt-0.5 mb-3">Vale para promotores: são as lojas que aparecem no app e as únicas em que ele pode registrar visitas.</p>
           <input type="hidden" name="stores_present" value="1" />
+          <ListSearch placeholder="Pesquisar loja, número ou cidade..." className="mb-3" />
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
             {stores.map((st) => (
-              <label key={st.id} className="flex items-start gap-2 rounded-lg border border-line px-3 py-2 text-[13px] hover:bg-navy-50/50 cursor-pointer">
+              <label key={st.id} data-search-item className="flex items-start gap-2 rounded-lg border border-line px-3 py-2 text-[13px] hover:bg-navy-50/50 cursor-pointer">
                 <input type="checkbox" name="stores" value={st.id} defaultChecked={assigned.has(st.id)} className="mt-0.5 size-4 accent-[#0b1236]" />
                 <span>
                   <b>{st.name}</b>

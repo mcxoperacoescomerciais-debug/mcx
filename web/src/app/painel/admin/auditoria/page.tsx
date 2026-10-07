@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import { desc, eq } from "drizzle-orm";
 import { getScope, requireRole } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
@@ -50,6 +51,7 @@ export default async function AuditPage() {
     <>
       <PageHeader title="Auditoria" subtitle="Últimas 300 alterações. Alterações de quantidade, validade e status ficam registradas com o valor anterior e o novo." />
       <Card className="overflow-hidden">
+        <ListSearch placeholder="Pesquisar usuário, item ou alteração..." />
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-muted border-b border-line bg-navy-50/50">

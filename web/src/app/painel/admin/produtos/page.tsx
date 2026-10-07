@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { Plus, Upload } from "lucide-react";
@@ -48,6 +49,7 @@ export default async function ProductsAdminPage({ searchParams }: PageProps<"/pa
         <FormNotice ok={sp.ok as string | undefined} error={sp.erro as string | undefined} />
       </div>
       <Card className="overflow-hidden">
+        <ListSearch placeholder="Pesquisar produto, código ou categoria..." />
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-muted border-b border-line bg-navy-50/50">

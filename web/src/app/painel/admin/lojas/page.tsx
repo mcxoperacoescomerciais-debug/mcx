@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import Link from "next/link";
 import { and, eq, sql } from "drizzle-orm";
 import { Plus } from "lucide-react";
@@ -47,6 +48,7 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/pain
         <FormNotice ok={sp.ok as string | undefined} error={sp.erro as string | undefined} />
       </div>
       <Card className="overflow-hidden">
+        <ListSearch placeholder="Pesquisar loja, número, cidade ou rede..." />
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-muted border-b border-line bg-navy-50/50">

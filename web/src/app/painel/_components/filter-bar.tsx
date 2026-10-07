@@ -11,6 +11,7 @@ import clsx from "clsx";
 import { filtersToQuery, PERIODS, type DashboardFilters, type PeriodKey } from "@/lib/filters";
 import { OCCURRENCE_TYPE_LABEL } from "@/lib/domain";
 import type { FilterOptions } from "@/server/analytics";
+import { SearchSelect } from "./search-select";
 
 type Field = "network" | "store" | "city" | "promoter" | "product" | "category" | "type";
 
@@ -40,14 +41,7 @@ export function FilterBar({
 
   const sel = (field: Field, label: string, value: string | undefined, items: { id: string; name: string }[], key: keyof DashboardFilters) =>
     fields.includes(field) ? (
-      <select key={field} aria-label={label} value={value ?? ""} onChange={(e) => update({ [key]: e.target.value || undefined })} className={clsx(selectClass, value && "border-navy-700 bg-navy-50 font-semibold")}>
-        <option value="">{label}</option>
-        {items.map((i) => (
-          <option key={i.id} value={i.id}>
-            {i.name}
-          </option>
-        ))}
-      </select>
+      <SearchSelect key={field} label={label} value={value} items={items} onChange={(id) => update({ [key]: id })} />
     ) : null;
 
   const active = Boolean(filters.networkId || filters.storeId || filters.city || filters.promoterId || filters.productId || filters.category || filters.type);

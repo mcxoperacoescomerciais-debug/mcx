@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import Link from "next/link";
 import { getScope } from "@/server/auth";
 import { getClientSettings } from "@/server/settings";
@@ -50,6 +51,7 @@ export default async function StoresPage({ searchParams }: PageProps<"/painel/lo
       <FilterBar filters={filters} options={options} fields={["network", "store", "city", "promoter", "product", "category", "type"]} />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
         <Card className="overflow-hidden">
+          <ListSearch placeholder="Pesquisar loja, número ou cidade..." />
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>

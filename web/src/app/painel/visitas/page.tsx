@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/analytics";
 import { listVisits } from "@/server/visit-list";
@@ -22,6 +23,7 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
       <PageHeader title="Visitas" subtitle={`${rows.length} visitas · ${range.label.toLowerCase()}`} />
       <FilterBar filters={filters} options={options} fields={["network", "store", "city", "promoter"]} />
       <Card className="overflow-hidden">
+        <ListSearch placeholder="Pesquisar loja, promotor ou data..." />
         <VisitTable rows={rows} />
       </Card>
     </>

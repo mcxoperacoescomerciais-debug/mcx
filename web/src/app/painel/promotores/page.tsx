@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ListSearch } from "@/app/painel/_components/list-search";
 import { and, eq } from "drizzle-orm";
 import { getScope } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
@@ -32,6 +33,7 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
       <PageHeader title="Promotores" subtitle={`Atividade · ${range.label.toLowerCase()}`} />
       <FilterBar filters={filters} options={options} fields={["network", "city", "promoter"]} />
       <Card className="overflow-hidden">
+        <ListSearch placeholder="Pesquisar promotor..." />
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-muted border-b border-line bg-navy-50/50">
