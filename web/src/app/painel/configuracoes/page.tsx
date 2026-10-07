@@ -4,7 +4,7 @@ import { getClientSettings } from "@/server/settings";
 import { Button, Card, PageHeader } from "@/components/ui";
 import { SEVERITY_COLOR } from "@/lib/domain";
 import { Field, FormNotice, Input } from "../_components/form";
-import { saveSettingsAction } from "../admin/actions";
+import { saveSettingsAction, testWhatsAppAction } from "../admin/actions";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -87,6 +87,45 @@ export default async function SettingsPage({ searchParams }: PageProps<"/painel/
             <Field label="Promotor pode corrigir a visita por" hint="horas após finalizar">
               <Input name="promoterEditHours" type="number" min={0} defaultValue={st.promoterEditHours} />
             </Field>
+          </div>
+        </Section>
+
+        <Section
+          title="Alerta no WhatsApp"
+          subtitle="Quando o promotor finaliza uma visita com validade crítica, chega no WhatsApp: promotor, loja, cidade, os itens e o link do PDF da visita. Uma mensagem por visita."
+        >
+          <p className="text-[13px] font-semibold text-ink mb-2">O que é crítico</p>
+          <ul className="text-[13px] text-ink-2 space-y-1 mb-4 list-disc pl-5">
+            <li>
+              Produto <b>vencido</b> ou que vence em até <b>{st.bands.critical} dias</b> — é a faixa &quot;Crítico até&quot; lá em cima.
+            </li>
+            <li>Produto em <b>grande quantidade</b> vencendo em breve, conforme os campos abaixo:</li>
+          </ul>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Field label="Grande quantidade: vence em até" hint="dias">
+              <Input name="alert_bulkDays" type="number" min={0} defaultValue={st.alerts.bulkDays} />
+            </Field>
+            <Field label="e quantidade acima de" hint="unidades (ou cx/kg informados)">
+              <Input name="alert_bulkMinQty" type="number" min={0} defaultValue={st.alerts.bulkMinQty} />
+            </Field>
+          </div>
+          <p className="text-[13px] font-semibold text-ink mt-5 mb-2">Para onde enviar (CallMeBot)</p>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Field label="Número do WhatsApp" hint="Com DDD. Vários: separe por vírgula.">
+              <Input name="alert_phone" placeholder="37 99999-8888" defaultValue={st.alerts.whatsappPhone} />
+            </Field>
+            <Field
+              label="Chave (apikey) do CallMeBot"
+              hint={st.alerts.whatsappApiKey ? "Chave salva ✓ — deixe vazio para manter; digite apagar para remover." : "A que o CallMeBot enviou no seu WhatsApp. Vários números: chaves na mesma ordem."}
+            >
+              <Input name="alert_apikey" type="password" autoComplete="off" placeholder={st.alerts.whatsappApiKey ? "••••••• (salva)" : "ex.: 1234567"} />
+            </Field>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button type="submit" variant="secondary" formAction={testWhatsAppAction} formNoValidate>
+              Enviar mensagem de teste
+            </Button>
+            <span className="text-[12px] text-muted">Salve antes de testar. Sem número e chave, nenhum alerta é enviado.</span>
           </div>
         </Section>
 

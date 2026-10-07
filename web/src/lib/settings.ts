@@ -25,6 +25,17 @@ export interface ClientSettings {
   staleVisitDays: number;
   /** Janela em que o promotor ainda pode editar a própria visita finalizada. */
   promoterEditHours: number;
+  /** Alerta de WhatsApp ao finalizar visita com validades críticas (ver src/server/whatsapp-alert.ts). */
+  alerts: AlertSettings;
+}
+
+export interface AlertSettings {
+  /** Também avisa itens que vencem em até bulkDays dias com quantidade acima de bulkMinQty. */
+  bulkDays: number;
+  bulkMinQty: number;
+  /** Números (com DDI) e chaves do CallMeBot, separados por vírgula na mesma ordem. */
+  whatsappPhone: string;
+  whatsappApiKey: string;
 }
 
 export const DEFAULT_SETTINGS: ClientSettings = {
@@ -34,6 +45,7 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   checklist: DEFAULT_CHECKLIST,
   staleVisitDays: 7,
   promoterEditHours: 24,
+  alerts: { bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "" },
 };
 
 export function mergeSettings(stored: unknown): ClientSettings {
@@ -45,5 +57,6 @@ export function mergeSettings(stored: unknown): ClientSettings {
     checklist: s.checklist?.length ? s.checklist : DEFAULT_SETTINGS.checklist,
     staleVisitDays: s.staleVisitDays ?? DEFAULT_SETTINGS.staleVisitDays,
     promoterEditHours: s.promoterEditHours ?? DEFAULT_SETTINGS.promoterEditHours,
+    alerts: { ...DEFAULT_SETTINGS.alerts, ...(s.alerts ?? {}) },
   };
 }

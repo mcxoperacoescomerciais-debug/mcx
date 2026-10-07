@@ -19,6 +19,16 @@ const num = (fd: FormData, k: string) => {
   return v === "" ? null : Number(v);
 };
 
+/** "37 99999-8888, +55 31 98888 7777" -> "+5537999998888,+5531988887777" */
+function normalizePhones(raw: string): string {
+  return raw
+    .split(",")
+    .map((p) => p.replace(/\D/g, ""))
+    .filter(Boolean)
+    .map((d) => "+" + (d.startsWith("55") && d.length >= 12 ? d : "55" + d))
+    .join(",");
+}
+
 function back(path: string, r: Result, okMsg: string): never {
   revalidatePath("/painel", "layout");
   const sep = path.includes("?") ? "&" : "?";
@@ -52,8 +62,22 @@ export async function saveSettingsAction(fd: FormData) {
     checklist: checklist.length ? checklist : current.checklist,
     staleVisitDays: n("staleVisitDays", current.staleVisitDays),
     promoterEditHours: n("promoterEditHours", current.promoterEditHours),
+    alerts: {
+      bulkDays: n("alert_bulkDays", current.alerts.bulkDays),
+      bulkMinQty: n("alert_bulkMinQty", current.alerts.bulkMinQty),
+      whatsappPhone: fd.has("alert_phone") ? normalizePhones(str(fd, "alert_phone")) : current.alerts.whatsappPhone,
+      // A chave não volta para a tela: campo vazio mantém a atual; "apagar" remove.
+      whatsappApiKey: str(fd, "alert_apikey") === "apagar" ? "" : str(fd, "alert_apikey") || current.alerts.whatsappApiKey,
+    },
   };
   back("/painel/configuracoes", await saveSettings(scope, next), "Configurações salvas.");
+}
+
+export async function testWhatsAppAction() {
+  await requireRole(STAFF_ROLES);
+  const scope = await getScope();
+  const { sendTestAlert } = await import("@/server/whatsapp-alert");
+  back("/painel/configuracoes", await sendTestAlert(scope), "Mensagem de teste enviada. Confira o seu WhatsApp.");
 }
 
 export async function saveUserAction(fd: FormData) {
