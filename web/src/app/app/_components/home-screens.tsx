@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, FileText, History, Home, LogOut, MapPin, Play, RefreshCw, Search, Store, User, WifiOff } from "lucide-react";
 import clsx from "clsx";
 import { SyncPill, TopBar } from "./primitives";
-import { go, needsFormatChoice, useCatalog, useLocal } from "../_lib/hooks";
+import { go, useCatalog, useLocal } from "../_lib/hooks";
 import { chooseStoreFormat, isVisitFullySynced, pendingCount, refreshHistory, startVisit, syncNow, type LocalVisit } from "../_lib/local-store";
 import { FormatSheet } from "./format-sheet";
 import { STORE_FORMAT_LABEL, type StoreFormat } from "@/lib/domain";
@@ -130,16 +130,11 @@ function StoreRow({ store, ongoing }: { store: BootstrapStore; ongoing?: LocalVi
           <MapPin className="size-3.5" /> {store.city} · {store.network}
           {multiFormat && store.format ? ` ${STORE_FORMAT_LABEL[store.format as StoreFormat] ?? store.format}` : ""}
         </p>
-        {multiFormat ? (
-          <button type="button" onClick={() => setChoosing(true)} className="text-[12px] font-semibold text-navy-700 underline underline-offset-2">
-            {store.format ? "Trocar tipo da loja" : "Definir tipo da loja"}
-          </button>
-        ) : null}
         <p className={clsx("text-[12px] font-semibold mt-0.5", stale ? "text-[#9A4A00]" : "text-[#1D6B3A]")}>{sinceLabel(store.lastVisitDate)}</p>
       </div>
       <button
         type="button"
-        onClick={() => (ongoing ? go(`visita/${ongoing.id}`) : needsFormatChoice(store) ? setChoosing(true) : void begin(store.id))}
+        onClick={() => (ongoing ? go(`visita/${ongoing.id}`) : multiFormat ? setChoosing(true) : void begin(store.id))}
         className={clsx("h-11 px-4 rounded-xl font-semibold text-[14px] shrink-0", ongoing ? "bg-gold-500 text-navy-950" : "bg-navy-900 text-white active:bg-navy-950")}
       >
         {ongoing ? "Continuar" : "Iniciar visita"}
@@ -157,8 +152,7 @@ export function HomeScreen() {
   const pending = pendingCount(state);
   const toVisit = [...stores]
     .filter((s) => !ongoing.some((v) => v.storeId === s.id))
-    .sort((a, b) => (a.lastVisitDate ?? "").localeCompare(b.lastVisitDate ?? ""))
-    .slice(0, 4);
+    .sort((a, b) => (a.lastVisitDate ?? "").localeCompare(b.lastVisitDate ?? ""));
   const firstName = state.bootstrap?.user.name.split(" ")[0] ?? "";
 
   return (
@@ -202,9 +196,9 @@ export function HomeScreen() {
 
         <section>
           <div className="flex items-baseline justify-between mb-2">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-muted">Prioridade de visita</h2>
+            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-muted">Minhas lojas</h2>
             <button type="button" onClick={() => go("lojas")} className="text-[13px] font-semibold text-navy-700">
-              Ver todas
+              Buscar
             </button>
           </div>
           {toVisit.length ? (

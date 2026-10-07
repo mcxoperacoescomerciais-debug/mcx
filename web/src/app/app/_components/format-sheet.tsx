@@ -11,6 +11,8 @@ import { Sheet } from "./primitives";
 import { STORE_FORMAT_LABEL, type StoreFormat } from "@/lib/domain";
 import type { BootstrapStore } from "@/lib/sync-types";
 
+const ORDER: string[] = Object.keys(STORE_FORMAT_LABEL);
+
 const HINT: Record<string, string> = {
   varejo: "Supermercado de bairro",
   plus: "Loja maior, linha completa",
@@ -33,9 +35,9 @@ export function FormatSheet({ store, onClose, onChoose }: { store: BootstrapStor
         </div>
       }
     >
-      <p className="text-[14px] text-ink-2 mb-3">Cada tipo de {store.network} tem uma lista de produtos diferente. Escolha uma vez; dá para trocar depois.</p>
+      <p className="text-[14px] text-ink-2 mb-3">Cada tipo de {store.network} tem uma lista de produtos diferente. Toque no tipo desta loja para iniciar a visita.</p>
       <div className="space-y-2 pb-2">
-        {store.formatOptions.map((f) => (
+        {[...store.formatOptions].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)).map((f) => (
           <button
             key={f}
             type="button"
