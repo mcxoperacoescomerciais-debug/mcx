@@ -40,7 +40,7 @@ async function main() {
       console.log(`Usuário ${username} agora é da equipe ${platform.name} (vê todas as agências).`);
     } else if (!user) {
       const password = process.env.ADMIN_PASSWORD ?? "";
-      if (password.length < 10) throw new Error("Defina ADMIN_PASSWORD (mínimo 10 caracteres) para criar o administrador da plataforma.");
+      if (!password) throw new Error("Defina ADMIN_PASSWORD para criar o administrador da plataforma.");
       await db.insert(s.users).values({
         agencyId: platform.id,
         role: "admin",

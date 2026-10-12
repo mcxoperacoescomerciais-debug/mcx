@@ -182,7 +182,7 @@ function PasswordSheet({ open, onClose }: { open: boolean; onClose: () => void }
         <Button
           size="xl"
           className="w-full"
-          disabled={busy || next.length < 6 || !current}
+          disabled={busy || !next || !current}
           onClick={async () => {
             setBusy(true);
             setError(null);
@@ -205,7 +205,7 @@ function PasswordSheet({ open, onClose }: { open: boolean; onClose: () => void }
         <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className={input} autoComplete="current-password" />
       </label>
       <label className="block mt-3">
-        <span className="block text-[13px] font-semibold text-ink-2 mb-1.5">Nova senha (mínimo 6 caracteres)</span>
+        <span className="block text-[13px] font-semibold text-ink-2 mb-1.5">Nova senha</span>
         <input type="password" value={next} onChange={(e) => setNext(e.target.value)} className={input} autoComplete="new-password" />
       </label>
       {error ? <p className="text-[13px] text-bad mt-3">{error}</p> : null}

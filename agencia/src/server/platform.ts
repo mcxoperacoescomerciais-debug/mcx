@@ -125,7 +125,7 @@ export async function createAgency(user: SessionUser, i: NewAgencyInput): Promis
   if (name.length < 2) return fail("Informe o nome da agência.");
   if (i.adminName.trim().length < 2) return fail("Informe o nome do administrador da agência.");
   if (!/^[a-z0-9._-]{3,40}$/.test(username)) return fail("Usuário do administrador: 3 a 40 caracteres (letras, números, ponto, hífen).");
-  if (i.adminPassword.length < 8) return fail("Senha inicial do administrador: ao menos 8 caracteres.");
+  if (!i.adminPassword) return fail("Defina a senha inicial do administrador.");
   const db = await getDb();
   const [taken] = await db.select({ id: s.users.id }).from(s.users).where(sql`lower(${s.users.username}) = ${username}`);
   if (taken) return fail(`O usuário “${username}” já existe. Escolha outro (ex.: ${slugify(name).split("-")[0]}.${username}).`);

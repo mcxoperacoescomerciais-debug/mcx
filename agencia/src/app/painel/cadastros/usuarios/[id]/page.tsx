@@ -96,7 +96,7 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
               </select>
             </Labeled>
             <Labeled label={user ? "Nova senha (deixe vazio para manter)" : "Senha inicial"}>
-              <input name="password" type="password" minLength={6} required={!user} autoComplete="new-password" className={inputClass} />
+              <input name="password" type="password" required={!user} autoComplete="new-password" className={inputClass} />
             </Labeled>
           </div>
           <label className="inline-flex items-center gap-1.5 text-[13px]">

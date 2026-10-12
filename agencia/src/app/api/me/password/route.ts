@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { current?: string; next?: string };
   const current = String(body.current ?? "");
   const next = String(body.next ?? "");
-  if (next.length < 6 || next.length > 100) return Response.json({ error: "A nova senha precisa ter de 6 a 100 caracteres." }, { status: 400 });
+  if (!next || next.length > 100) return Response.json({ error: "Informe a nova senha (até 100 caracteres)." }, { status: 400 });
   const db = await getDb();
   const [user] = await db.select().from(s.users).where(eq(s.users.id, scope.userId));
   if (!user || !(await verifyPassword(current, user.passwordHash))) return Response.json({ error: "Senha atual incorreta." }, { status: 400 });

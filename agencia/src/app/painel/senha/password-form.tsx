@@ -25,8 +25,8 @@ export function PasswordForm() {
       }}
     >
       <input name="current" type="password" required placeholder="Senha atual" autoComplete="current-password" className={inputClass} />
-      <input name="next" type="password" required minLength={6} placeholder="Nova senha (mín. 6)" autoComplete="new-password" className={inputClass} />
-      <input name="confirm" type="password" required minLength={6} placeholder="Confirme a nova senha" autoComplete="new-password" className={inputClass} />
+      <input name="next" type="password" required placeholder="Nova senha" autoComplete="new-password" className={inputClass} />
+      <input name="confirm" type="password" required placeholder="Confirme a nova senha" autoComplete="new-password" className={inputClass} />
       <button className={buttonClass("primary")} disabled={busy}>
         {busy ? <Loader2 className="size-4 animate-spin" /> : null} Salvar nova senha
       </button>

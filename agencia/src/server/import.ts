@@ -207,8 +207,8 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
         report.errors.push({ line, message: `Usuário “${r.usuario}” já existe e não é promotor.` });
         continue;
       }
-      if (!existing && (r.senha_inicial ?? "").length < 6) {
-        report.errors.push({ line, message: "Senha inicial com ao menos 6 caracteres é obrigatória para novos promotores." });
+      if (!existing && !r.senha_inicial) {
+        report.errors.push({ line, message: "Senha inicial é obrigatória para novos promotores." });
         continue;
       }
       if (dryRun) {

@@ -62,8 +62,8 @@ export default async function AgenciesPage() {
             <Labeled label="Usuário (login)" hint="Único no sistema todo. Sugestão: prefixo da agência, ex.: etros.maria">
               <input name="adminUsername" required minLength={3} autoCapitalize="none" className={inputClass} />
             </Labeled>
-            <Labeled label="Senha inicial" hint="Mínimo 8 caracteres. Ele troca no primeiro acesso.">
-              <input name="adminPassword" type="password" required minLength={8} autoComplete="new-password" className={inputClass} />
+            <Labeled label="Senha inicial" hint="Ele pode trocar no primeiro acesso.">
+              <input name="adminPassword" type="password" required autoComplete="new-password" className={inputClass} />
             </Labeled>
           </ActionForm>
         </SectionCard>

@@ -264,8 +264,7 @@ export async function saveUser(scope: Scope, i: UserInput): Promise<ActionResult
   if (!isAdmin(scope)) return fail("Somente administradores.");
   if (i.name.trim().length < 3) return fail("Informe o nome completo.");
   if (!/^[a-z0-9._-]{3,40}$/i.test(i.username.trim())) return fail("Usuário: 3 a 40 caracteres (letras, números, ponto, hífen).");
-  if (!i.id && (!i.password || i.password.length < 6)) return fail("Defina uma senha inicial com ao menos 6 caracteres.");
-  if (i.password && i.password.length < 6) return fail("A senha precisa ter ao menos 6 caracteres.");
+  if (!i.id && !i.password) return fail("Defina uma senha inicial.");
   if (i.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(i.email)) return fail("E-mail inválido.");
   if (i.id === scope.userId && (i.status !== "active" || i.role !== "admin")) return fail("Você não pode desativar nem rebaixar o próprio acesso.");
   const db = await getDb();
