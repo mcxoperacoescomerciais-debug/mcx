@@ -136,16 +136,33 @@ export function EmptyState({ icon, title, children, className }: { icon?: ReactN
   );
 }
 
-export function BrandMark({ variant = "light", subtitle }: { variant?: "light" | "dark"; subtitle?: string }) {
+/** Identidade de quem usa o sistema: a agência (logo + nome). A MCX aparece só no rodapé. */
+export function BrandMark({ variant = "light", name, logoUrl, subtitle }: { variant?: "light" | "dark"; name: string; logoUrl?: string | null; subtitle?: string }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <span className={clsx("size-9 rounded-[10px] grid place-items-center font-bold text-[15px] tracking-tight", variant === "light" ? "bg-white text-brand-900" : "bg-brand-800 text-white")}>
-        C
-      </span>
-      <div className="leading-tight">
-        <div className={clsx("font-semibold text-[14px]", variant === "light" ? "text-white" : "text-ink")}>MCX Campo</div>
-        <div className={clsx("text-[11px]", variant === "light" ? "text-brand-200" : "text-muted")}>{subtitle ?? "Execução em loja"}</div>
+    <div className="flex items-center gap-2.5 min-w-0">
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logoUrl} alt="" className="size-10 rounded-full object-cover bg-white shrink-0" />
+      ) : (
+        <span className={clsx("size-9 rounded-[10px] grid place-items-center font-bold text-[15px] tracking-tight shrink-0", variant === "light" ? "bg-white text-brand-900" : "bg-brand-800 text-white")}>
+          {name.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      <div className="leading-tight min-w-0">
+        <div className={clsx("font-semibold text-[14px] truncate", variant === "light" ? "text-white" : "text-ink")}>{name}</div>
+        <div className={clsx("text-[11px] truncate", variant === "light" ? "text-brand-200" : "text-muted")}>{subtitle ?? "Execução em loja"}</div>
       </div>
+    </div>
+  );
+}
+
+/** Assinatura discreta da MCX (rodapé do painel, login e app). */
+export function McxFooter({ variant = "light", className }: { variant?: "light" | "dark"; className?: string }) {
+  return (
+    <div className={clsx("flex items-center justify-center gap-1.5 text-[10.5px] tracking-wide", variant === "light" ? "text-brand-200/60" : "text-muted", className)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/mcx_logo.png" alt="" className="size-4 rounded-[3px]" />
+      <span>por MCX Operações Comerciais</span>
     </div>
   );
 }

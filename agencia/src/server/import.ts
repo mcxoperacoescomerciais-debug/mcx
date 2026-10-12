@@ -194,7 +194,15 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
         else report.errors.push({ line, message: found.length ? `Loja “${ref}” é ambígua (${found.length} lojas). Use o nome completo.` : `Loja “${ref}” não encontrada.` });
       }
       if (report.errors.length > errorsBefore) continue;
-      const [existing] = await db.select({ id: s.users.id, role: s.users.role, managerId: s.users.managerId }).from(s.users).where(sql`lower(${s.users.username}) = ${r.usuario.toLowerCase()}`);
+      const [existing] = await db
+        .select({ id: s.users.id, role: s.users.role, managerId: s.users.managerId, agencyId: s.users.agencyId })
+        .from(s.users)
+        .where(sql`lower(${s.users.username}) = ${r.usuario.toLowerCase()}`);
+      // Usuário é único no sistema todo (todas as agências usam o mesmo login).
+      if (existing && existing.agencyId !== scope.agencyId) {
+        report.errors.push({ line, message: `Usuário “${r.usuario}” já está em uso. Escolha outro (ex.: com o prefixo da agência).` });
+        continue;
+      }
       if (existing && existing.role !== "promoter") {
         report.errors.push({ line, message: `Usuário “${r.usuario}” já existe e não é promotor.` });
         continue;

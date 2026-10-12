@@ -2,7 +2,7 @@ import { getApiScope, STAFF, unauthorized } from "@/server/auth";
 import { isUuid } from "@/lib/filters";
 import { getVisitDetail } from "@/server/details";
 import { loadAttendanceBlock, renderAttendancesPdf } from "@/server/pdf/attendance-pdf";
-import { pdfResponse, slug } from "@/server/pdf/kit";
+import { pdfAgency, pdfResponse, slug } from "@/server/pdf/kit";
 import { audit } from "@/server/audit";
 import { fmtDate, fmtTime } from "@/lib/dates";
 import { VISIT_STATUS_LABEL } from "@/lib/domain";
@@ -18,7 +18,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/visi
   const blocks = (await Promise.all(v.attendances.map((a) => loadAttendanceBlock(scope, a.a.id)))).filter((b) => b !== null);
   const pendingBrands = v.planned.filter((p) => !v.attendances.some((a) => a.a.brandId === p.id)).map((p) => p.name);
   const pdf = await renderAttendancesPdf({
-    agency: scope.agencyName,
+    agency: await pdfAgency(scope),
     title: `Relatório da visita · ${v.store.name}`,
     subtitle: `${fmtDate(v.visit.visitDate)} · ${v.promoterName} · ${fmtTime(v.visit.startedAt)}–${v.visit.finishedAt ? fmtTime(v.visit.finishedAt) : "em aberto"} · ${VISIT_STATUS_LABEL[v.visit.status]}`,
     summary: [

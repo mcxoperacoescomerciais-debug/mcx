@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, History, KeyRound, Loader2, LogOut, RefreshCw, WifiOff } from "lucide-react";
-import { Button, StatusBadge } from "@/components/ui";
+import { Button, McxFooter, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, EMPLOYMENT_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE, type AttendanceStatus, type Employment, type VisitStatus } from "@/lib/domain";
 import { fmtAgo, fmtDate, fmtTime } from "@/lib/dates";
 import { pendingCount, refreshAll, refreshHistory } from "../_lib/local-store";
@@ -152,6 +152,7 @@ export function ProfileScreen() {
         </Button>
       </div>
 
+      <McxFooter variant="dark" className="mt-8 mb-2" />
       <PasswordSheet open={pwdOpen} onClose={() => setPwdOpen(false)} />
       <Sheet open={logoutOpen} onClose={() => setLogoutOpen(false)} title="Há registros não enviados">
         <Notice tone="bad" icon={<AlertTriangle className="size-5" />}>

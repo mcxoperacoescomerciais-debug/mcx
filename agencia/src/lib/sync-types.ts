@@ -205,7 +205,7 @@ export interface ServerVisit extends Omit<VisitInput, "attendances"> {
 
 export interface BootstrapPayload {
   user: { id: string; name: string; employment: string | null; mustChangePassword: boolean };
-  agency: { name: string };
+  agency: { name: string; logoUrl: string | null };
   settings: { allowIncompleteVisit: boolean; allowExtraVisits: boolean; captureLocation: boolean; allowExceptions: boolean };
   today: string;
   brands: BootstrapBrand[];

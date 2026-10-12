@@ -424,5 +424,63 @@ export async function seedDemoIfEmpty(db: DB): Promise<void> {
         .where(eq(s.visits.id, visitId));
     }
   }
-  console.log(`[seed] Pronto. Usuários: admin, gestor, bravo, joao, patricia, lucas, ana (senha: ${process.env.DEMO_PASSWORD ? "DEMO_PASSWORD" : DEMO_PASSWORD}).`);
+  await seedPlatformDemo(db, hash, A);
+  console.log(`[seed] Pronto. Usuários: mcx (equipe MCX), admin, gestor, bravo, joao, patricia, lucas, ana (AF), etros, carla (ETROS) — senha: ${process.env.DEMO_PASSWORD ? "DEMO_PASSWORD" : DEMO_PASSWORD}.`);
+}
+
+/**
+ * Camada MCX de demonstração: a plataforma (usuário "mcx") e uma segunda
+ * agência (ETROS) pequena, com cadastros PRÓPRIOS — inclusive uma loja com o
+ * mesmo nome de uma loja da AF, para mostrar que nada se mistura.
+ */
+async function seedPlatformDemo(db: DB, hash: string, afId: string): Promise<void> {
+  const [platform] = await db.insert(s.agencies).values({ name: "MCX", slug: "mcx-plataforma", kind: "platform" }).returning();
+  await db.insert(s.users).values({ agencyId: platform.id, role: "admin", platform: true, name: "Equipe MCX", username: "mcx", passwordHash: hash });
+  try {
+    const { readFileSync } = await import("node:fs");
+    const png = readFileSync(`${process.cwd()}/public/af_logo.png`);
+    await db.update(s.agencies).set({ logo: `data:image/png;base64,${png.toString("base64")}` }).where(eq(s.agencies.id, afId));
+  } catch {
+    // Logo é opcional na demonstração.
+  }
+
+  const [etros] = await db.insert(s.agencies).values({ name: "ETROS", slug: "etros" }).returning();
+  const E = etros.id;
+  const [admin] = await db.insert(s.users).values({ agencyId: E, role: "admin", name: "Administrador ETROS", username: "etros", passwordHash: hash }).returning();
+  const [brand] = await db
+    .insert(s.brands)
+    .values({ agencyId: E, name: "Doce Sabor", code: "DOCE", activities: ["Abastecer gôndola", "Conferir validade"], minBeforePhotos: 1, minAfterPhotos: 1, requireStock: true, createdBy: admin.id })
+    .returning();
+  const products = [
+    ["DS-01", "Doce de Leite Doce Sabor 400g", "Doces"],
+    ["DS-02", "Goiabada Doce Sabor 300g", "Doces"],
+    ["DS-03", "Paçoca Doce Sabor 20un", "Doces"],
+  ];
+  let order = 0;
+  for (const [sku, name, category] of products) {
+    await db.insert(s.products).values({ agencyId: E, brandId: brand.id, sku, name, nameKey: productNameKey(name), category, unit: "un", sortOrder: order++ });
+  }
+  const [chain] = await db.insert(s.chains).values({ agencyId: E, name: STORES[0].chain }).returning();
+  const storeIds: string[] = [];
+  for (const st of STORES.slice(0, 2)) {
+    const [row] = await db.insert(s.stores).values({ agencyId: E, chainId: chain.id, name: st.name, code: `E-${st.code}`, city: st.city, state: "MG", address: st.address, createdBy: admin.id }).returning();
+    storeIds.push(row.id);
+    await db.insert(s.storeBrands).values({ storeId: row.id, brandId: brand.id });
+  }
+  const [carla] = await db
+    .insert(s.users)
+    .values({ agencyId: E, role: "promoter", name: "Carla Mendes", username: "carla", employment: "fixed", region: "BH", passwordHash: hash })
+    .returning();
+  await db.insert(s.userStores).values(storeIds.map((storeId) => ({ userId: carla.id, storeId })));
+  await db.insert(s.userBrands).values({ userId: carla.id, brandId: brand.id });
+  const today = todayIso();
+  if (weekdayOf(today) !== 0) {
+    for (const [seq, storeId] of storeIds.entries()) {
+      const [sch] = await db
+        .insert(s.schedules)
+        .values({ agencyId: E, promoterId: carla.id, storeId, date: today, seq, plannedStart: seq ? "14:00" : "09:00", createdBy: admin.id })
+        .returning({ id: s.schedules.id });
+      await db.insert(s.scheduleBrands).values({ scheduleId: sch.id, brandId: brand.id });
+    }
+  }
 }

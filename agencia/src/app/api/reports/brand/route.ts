@@ -2,7 +2,7 @@ import { unauthorized } from "@/server/auth";
 import { reportContext, logExport } from "@/server/export-helpers";
 import { brandReport, rupturesSheet, stockSheet } from "@/server/reports";
 import { renderBrandPdf } from "@/server/pdf/report-pdfs";
-import { pdfResponse, slug } from "@/server/pdf/kit";
+import { pdfAgency, pdfResponse, slug } from "@/server/pdf/kit";
 import { buildWorkbook, xlsxResponse } from "@/server/xlsx";
 import { canSeeBrand } from "@/server/scope";
 
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   if (!r.brand) return Response.json({ error: "Marca não encontrada." }, { status: 404 });
   await logExport(scope, "brand", f, format);
   const name = `Marca_${slug(r.brand.name)}_${f.from}_a_${f.to}`;
-  if (format === "pdf") return pdfResponse(await renderBrandPdf(scope.agencyName, r, f.from, f.to), `${name}.pdf`);
+  if (format === "pdf") return pdfResponse(await renderBrandPdf(await pdfAgency(scope), r, f.from, f.to), `${name}.pdf`);
   const wb = await buildWorkbook(
     [
       {

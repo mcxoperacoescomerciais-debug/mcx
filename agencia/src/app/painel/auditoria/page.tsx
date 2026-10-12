@@ -36,7 +36,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/painel/aud
   const f = parseFilters(await searchParams, 7);
   const db = await getDb();
   const rows = await db
-    .select({ log: s.auditLogs, userName: s.users.name, total: sql<number>`count(*) over()::int` })
+    .select({ log: s.auditLogs, userName: s.users.name, platform: s.users.platform, total: sql<number>`count(*) over()::int` })
     .from(s.auditLogs)
     .leftJoin(s.users, eq(s.users.id, s.auditLogs.userId))
     .where(
@@ -71,10 +71,10 @@ export default async function AuditPage({ searchParams }: PageProps<"/painel/aud
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ log, userName }) => (
+            {rows.map(({ log, userName, platform }) => (
               <tr key={log.id} className="align-top">
                 <Td className="whitespace-nowrap tnum">{fmtDateTime(log.createdAt)}</Td>
-                <Td>{userName ?? "Sistema"}</Td>
+                <Td>{userName ? (platform ? `${userName} (MCX)` : userName) : "Sistema"}</Td>
                 <Td>
                   {ENTITY_LABEL[log.entity] ?? log.entity}
                   <span className="block text-[11px] text-muted font-mono">{log.entityId.slice(0, 18)}</span>

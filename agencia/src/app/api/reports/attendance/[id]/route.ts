@@ -1,7 +1,7 @@
 import { getApiScope, STAFF, unauthorized } from "@/server/auth";
 import { isUuid } from "@/lib/filters";
 import { loadAttendanceBlock, renderAttendancesPdf } from "@/server/pdf/attendance-pdf";
-import { pdfResponse, slug } from "@/server/pdf/kit";
+import { pdfAgency, pdfResponse, slug } from "@/server/pdf/kit";
 import { audit } from "@/server/audit";
 import { fmtDate } from "@/lib/dates";
 
@@ -14,7 +14,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/atte
   if (!block) return new Response("Atendimento não encontrado", { status: 404 });
   const d = block.d;
   const pdf = await renderAttendancesPdf({
-    agency: scope.agencyName,
+    agency: await pdfAgency(scope),
     title: `Relatório de atendimento · ${d.brand.name}`,
     subtitle: `${d.store.name} · ${fmtDate(d.visit.visitDate)} · ${d.promoterName}`,
     blocks: [block],

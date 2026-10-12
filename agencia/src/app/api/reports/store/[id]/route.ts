@@ -4,7 +4,7 @@ import { getApiScope, STAFF, unauthorized } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { listVisits } from "@/server/history";
 import { loadAttendanceBlock, renderAttendancesPdf } from "@/server/pdf/attendance-pdf";
-import { pdfResponse, slug } from "@/server/pdf/kit";
+import { pdfAgency, pdfResponse, slug } from "@/server/pdf/kit";
 import { audit } from "@/server/audit";
 import { parseFilters } from "@/lib/filters";
 import { fmtDate } from "@/lib/dates";
@@ -27,7 +27,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/stor
   const blocks = (await Promise.all(attIds.slice(0, MAX_ATTENDANCES).map((a) => loadAttendanceBlock(scope, a, 4)))).filter((b) => b !== null);
   const brands = new Set(visits.flatMap((v) => v.attendances.map((a) => a.brandName)));
   const pdf = await renderAttendancesPdf({
-    agency: scope.agencyName,
+    agency: await pdfAgency(scope),
     title: `Relatório da loja · ${store.name}`,
     subtitle: `${store.city}/${store.state} · ${fmtDate(f.from)} a ${fmtDate(f.to)}`,
     summary: [

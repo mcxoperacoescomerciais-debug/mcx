@@ -65,14 +65,31 @@ const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`
 
 // ───────────────────────────── Agência e pessoas ─────────────────────────────
 
-export const agencies = pgTable("agencies", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  /** Parâmetros operacionais (src/lib/settings.ts). */
-  settings: jsonb("settings").notNull().default({}),
-  ...timestamps,
-});
+/**
+ * Agência cliente (AF, ETROS…) ou a plataforma (MCX). Usuários da plataforma
+ * (`users.platform`) moram na agência "platform" e entram em qualquer agência
+ * cliente pelo seletor do painel; os dados de cada agência nunca se misturam.
+ */
+export const agencies = pgTable(
+  "agencies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    kind: text("kind").$type<"client" | "platform">().notNull().default("client"),
+    /** Suspensa: ninguém da agência entra (a plataforma continua vendo). */
+    status: text("status").$type<"active" | "suspended">().notNull().default("active"),
+    /** Logo como data URL (PNG/JPEG/WebP pequeno), exibido no painel, app e PDFs. */
+    logo: text("logo"),
+    /** Parâmetros operacionais (src/lib/settings.ts). */
+    settings: jsonb("settings").notNull().default({}),
+    ...timestamps,
+  },
+  (t) => [
+    check("agencies_kind_ck", sql`${t.kind} in ('client','platform')`),
+    check("agencies_status_ck", sql`${t.status} in ('active','suspended')`),
+  ],
+);
 
 export const users = pgTable(
   "users",
@@ -93,6 +110,8 @@ export const users = pgTable(
     allBrands: boolean("all_brands").notNull().default(true),
     /** Gestor: só os promotores sob sua responsabilidade (`manager_id`)? */
     teamOnly: boolean("team_only").notNull().default(false),
+    /** Equipe MCX: administra todas as agências (nunca definido pela tela da agência). */
+    platform: boolean("platform").notNull().default(false),
     status: text("status").$type<"active" | "inactive">().notNull().default("active"),
     passwordHash: text("password_hash").notNull(),
     mustChangePassword: boolean("must_change_password").notNull().default(false),

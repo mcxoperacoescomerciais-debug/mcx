@@ -7,7 +7,7 @@ import { Document, Image, Page, Text, View, renderToBuffer } from "@react-pdf/re
 import type { Scope } from "../auth";
 import { getAttendanceDetail } from "../details";
 import { storage } from "../storage";
-import { C, Footer, H2, Header, InfoGrid, Pill, PdfTable, StatBoxes, base, type PdfTone } from "./kit";
+import { C, Footer, H2, Header, InfoGrid, Pill, PdfTable, StatBoxes, base, type PdfAgency, type PdfTone } from "./kit";
 import {
   ATTENDANCE_STATUS_LABEL,
   ATTENDANCE_STATUS_TONE,
@@ -193,10 +193,10 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
   );
 }
 
-export async function renderAttendancesPdf(opts: { agency: string; title: string; subtitle: string; blocks: AttendanceBlockData[]; summary?: { label: string; value: string | number; tone?: PdfTone }[]; footer: string; intro?: string }) {
+export async function renderAttendancesPdf(opts: { agency: PdfAgency; title: string; subtitle: string; blocks: AttendanceBlockData[]; summary?: { label: string; value: string | number; tone?: PdfTone }[]; footer: string; intro?: string }) {
   const generated = fmtDateTime(new Date());
   return renderToBuffer(
-    <Document title={opts.title} author={opts.agency} creator="MCX Campo">
+    <Document title={opts.title} author={opts.agency.name} creator="MCX">
       <Page size="A4" style={base.page}>
         <Header agency={opts.agency} title={opts.title} subtitle={opts.subtitle} right={`Gerado em ${generated}`} />
         <View style={base.body}>

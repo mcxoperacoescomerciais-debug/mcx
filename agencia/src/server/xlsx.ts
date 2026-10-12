@@ -15,7 +15,7 @@ export interface SheetSpec {
 
 export async function buildWorkbook(sheets: SheetSpec[], meta: { agency: string; title: string }): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = `${meta.agency} · MCX Campo`;
+  wb.creator = `${meta.agency} · MCX`;
   wb.created = new Date();
   for (const spec of sheets) {
     const ws = wb.addWorksheet(spec.name.slice(0, 31), { views: [{ state: "frozen", ySplit: 1 }] });

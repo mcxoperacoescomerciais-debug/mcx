@@ -281,7 +281,7 @@ describe("fluxos críticos", () => {
       assert.ok(b!.d.stockRows.every((r) => r.product.brandId === b!.d.brand.id), "estoque de outra marca não aparece");
       assert.ok(b!.d.ruptures.every((r) => r.rupture.attendanceId === b!.d.attendance.id));
     }
-    const out = await pdf.renderAttendancesPdf({ agency: "Teste", title: "Loja", subtitle: "", blocks: blocks.filter((b) => b !== null), footer: "" });
+    const out = await pdf.renderAttendancesPdf({ agency: { name: "Teste", logo: null }, title: "Loja", subtitle: "", blocks: blocks.filter((b) => b !== null), footer: "" });
     assert.ok(out.byteLength > 1000);
     assert.equal(Buffer.from(out).subarray(0, 4).toString(), "%PDF");
   });

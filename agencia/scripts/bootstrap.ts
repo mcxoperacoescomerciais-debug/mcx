@@ -1,36 +1,65 @@
 /**
- * Implantação inicial em produção (idempotente): cria a agência e o primeiro
- * administrador se ainda não existirem. Nenhum dado de demonstração.
+ * Implantação em produção (idempotente, roda a cada deploy):
+ *  1. garante a agência interna da plataforma (MCX);
+ *  2. garante o administrador da plataforma (ADMIN_USERNAME): se o usuário já
+ *     existe em uma agência cliente (instalações anteriores), ele é movido para
+ *     a MCX — os registros que ele fez continuam na agência onde foram feitos;
+ *  3. se AGENCY_NAME vier definido e não houver nenhuma agência cliente, cria-a
+ *     (as demais agências são criadas pela tela MCX → Agências).
+ * Nenhum dado de demonstração.
  *
- *   DATABASE_URL=postgres://... AGENCY_NAME="AF Merchandising" \
- *   ADMIN_USERNAME=admin ADMIN_NAME="Nome" ADMIN_PASSWORD='senha-forte' npm run db:bootstrap
+ *   DATABASE_URL=postgres://... ADMIN_USERNAME=admin ADMIN_NAME="Nome" ADMIN_PASSWORD='senha-forte' npm run db:bootstrap
  */
 import postgres from "postgres";
 import bcrypt from "bcryptjs";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as s from "../src/server/db/schema";
+
+const PLATFORM_NAME = process.env.PLATFORM_NAME?.trim() || "MCX";
 
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url?.startsWith("postgres")) throw new Error("Defina DATABASE_URL (postgres://...).");
   const client = postgres(url, { max: 1, prepare: false });
   const db = drizzle(client, { schema: s });
-  let [agency] = await db.select().from(s.agencies).limit(1);
-  if (!agency) {
-    const name = process.env.AGENCY_NAME?.trim() || "Agência";
-    [agency] = await db.insert(s.agencies).values({ name, slug: name.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agencia" }).returning();
-    console.log(`Agência criada: ${agency.name}`);
+
+  let [platform] = await db.select().from(s.agencies).where(eq(s.agencies.kind, "platform")).limit(1);
+  if (!platform) {
+    [platform] = await db.insert(s.agencies).values({ name: PLATFORM_NAME, slug: "mcx-plataforma", kind: "platform" }).returning();
+    console.log(`Plataforma criada: ${platform.name}`);
   }
-  const [admin] = await db.select().from(s.users).where(eq(s.users.role, "admin")).limit(1);
-  if (!admin) {
-    const username = process.env.ADMIN_USERNAME?.trim();
-    const password = process.env.ADMIN_PASSWORD ?? "";
-    if (!username || password.length < 10) throw new Error("Defina ADMIN_USERNAME e ADMIN_PASSWORD (mínimo 10 caracteres) para criar o primeiro administrador.");
-    await db.insert(s.users).values({ agencyId: agency.id, role: "admin", name: process.env.ADMIN_NAME?.trim() || "Administrador", username, passwordHash: await bcrypt.hash(password, 12), mustChangePassword: true });
-    console.log(`Administrador criado: ${username} (troca de senha exigida no primeiro acesso).`);
-  } else {
-    console.log("Administrador já existe — nada a fazer.");
+
+  const username = process.env.ADMIN_USERNAME?.trim().toLowerCase();
+  if (username) {
+    const [user] = await db.select().from(s.users).where(sql`lower(${s.users.username}) = ${username}`);
+    if (user && (!user.platform || user.agencyId !== platform.id)) {
+      await db.update(s.users).set({ platform: true, role: "admin", agencyId: platform.id, managerId: null, updatedAt: new Date() }).where(eq(s.users.id, user.id));
+      await db.delete(s.userBrands).where(eq(s.userBrands.userId, user.id));
+      await db.delete(s.userStores).where(eq(s.userStores.userId, user.id));
+      console.log(`Usuário ${username} agora é da equipe ${platform.name} (vê todas as agências).`);
+    } else if (!user) {
+      const password = process.env.ADMIN_PASSWORD ?? "";
+      if (password.length < 10) throw new Error("Defina ADMIN_PASSWORD (mínimo 10 caracteres) para criar o administrador da plataforma.");
+      await db.insert(s.users).values({
+        agencyId: platform.id,
+        role: "admin",
+        platform: true,
+        name: process.env.ADMIN_NAME?.trim() || "Administrador",
+        username,
+        passwordHash: await bcrypt.hash(password, 12),
+        mustChangePassword: true,
+      });
+      console.log(`Administrador da plataforma criado: ${username} (troca de senha exigida no primeiro acesso).`);
+    }
+  }
+
+  const [client1] = await db.select({ id: s.agencies.id }).from(s.agencies).where(and(eq(s.agencies.kind, "client"))).limit(1);
+  const agencyName = process.env.AGENCY_NAME?.trim();
+  if (!client1 && agencyName) {
+    const slug = agencyName.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agencia";
+    await db.insert(s.agencies).values({ name: agencyName, slug, kind: "client" });
+    console.log(`Agência criada: ${agencyName}`);
   }
   await client.end();
 }

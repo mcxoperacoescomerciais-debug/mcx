@@ -15,7 +15,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   if (!username || !password) return { error: "Informe usuário e senha.", username };
   const result = await login(username, password);
   if (!result.ok) return { error: result.error, username };
-  redirect(homeForRole(result.role));
+  redirect(result.platform ? "/painel/mcx" : homeForRole(result.role));
 }
 
 export async function logoutAction(): Promise<void> {

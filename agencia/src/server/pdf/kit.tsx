@@ -4,7 +4,22 @@
  */
 import "server-only";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Image, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { eq } from "drizzle-orm";
+import { getDb, schema as s } from "../db";
+
+/** Identidade da agência no PDF (logo só PNG/JPEG — o renderizador não lê WebP). */
+export interface PdfAgency {
+  name: string;
+  logo: string | null;
+}
+
+export async function pdfAgency(scope: { agencyId: string; agencyName: string }): Promise<PdfAgency> {
+  const db = await getDb();
+  const [a] = await db.select({ logo: s.agencies.logo }).from(s.agencies).where(eq(s.agencies.id, scope.agencyId));
+  const logo = a?.logo && /^data:image\/(png|jpeg);/.test(a.logo) ? a.logo : null;
+  return { name: scope.agencyName, logo };
+}
 
 export const C = {
   brand: "#0C323A",
@@ -51,14 +66,18 @@ export const base = StyleSheet.create({
   footer: { position: "absolute", bottom: 16, left: 30, right: 30, flexDirection: "row", justifyContent: "space-between", fontSize: 7, color: C.muted, borderTopWidth: 0.5, borderTopColor: C.line, paddingTop: 5 },
 });
 
-export function Header({ agency, title, subtitle, right }: { agency: string; title: string; subtitle?: string; right?: string }) {
+export function Header({ agency, title, subtitle, right }: { agency: PdfAgency; title: string; subtitle?: string; right?: string }) {
   return (
     <View style={{ backgroundColor: C.brand, paddingHorizontal: 30, paddingTop: 22, paddingBottom: 16, marginBottom: 6 }} fixed>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-        <View style={{ maxWidth: "75%" }}>
-          <Text style={{ color: "#BCDADF", fontSize: 8, letterSpacing: 1, textTransform: "uppercase" }}>{agency}</Text>
+        <View style={{ maxWidth: "75%", flexDirection: "row", alignItems: "center" }}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- Image do PDF não tem alt */}
+          {agency.logo ? <Image src={agency.logo} style={{ width: 38, height: 38, borderRadius: 19, marginRight: 10, backgroundColor: "#FFFFFF" }} /> : null}
+          <View>
+          <Text style={{ color: "#BCDADF", fontSize: 8, letterSpacing: 1, textTransform: "uppercase" }}>{agency.name}</Text>
           <Text style={{ color: "#FFFFFF", fontSize: 15, fontFamily: "Helvetica-Bold", marginTop: 3 }}>{title}</Text>
           {subtitle ? <Text style={{ color: "#DCECEE", fontSize: 9, marginTop: 3 }}>{subtitle}</Text> : null}
+          </View>
         </View>
         {right ? <Text style={{ color: "#BCDADF", fontSize: 8, textAlign: "right" }}>{right}</Text> : null}
       </View>
@@ -70,6 +89,7 @@ export function Footer({ left }: { left: string }) {
   return (
     <View style={base.footer} fixed>
       <Text>{left}</Text>
+      <Text>por MCX Operações Comerciais</Text>
       <Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
     </View>
   );

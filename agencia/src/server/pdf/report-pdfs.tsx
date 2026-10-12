@@ -1,7 +1,7 @@
 /** PDFs consolidados: relatório diário da operação e relatório por marca. */
 import "server-only";
 import { Document, Page, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import { C, Footer, H2, Header, Pill, PdfTable, StatBoxes, base, type PdfTone } from "./kit";
+import { C, Footer, H2, Header, Pill, PdfTable, StatBoxes, base, type PdfAgency, type PdfTone } from "./kit";
 import type { DailyReport } from "../reports";
 import type { brandReport } from "../reports";
 import { PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TONE } from "../operations";
@@ -9,12 +9,12 @@ import { ISSUE_KIND_LABEL, OCCURRENCE_CATEGORY_LABEL, RUPTURE_SITUATION_LABEL, R
 import { fmtDate, fmtDateTime, fmtLongDate, fmtTime } from "@/lib/dates";
 import { pct } from "@/lib/rules";
 
-export async function renderDailyPdf(agency: string, r: DailyReport, filtersNote: string) {
+export async function renderDailyPdf(agency: PdfAgency, r: DailyReport, filtersNote: string) {
   const k = r.board.kpis;
   const generated = fmtDateTime(new Date());
   type Stop = DailyReport["board"]["stops"][number];
   return renderToBuffer(
-    <Document title={`Relatório diário ${r.board.date}`} author={agency} creator="MCX Campo">
+    <Document title={`Relatório diário ${r.board.date}`} author={agency.name} creator="MCX">
       <Page size="A4" orientation="landscape" style={base.page}>
         <Header agency={agency} title="Relatório diário da operação" subtitle={`${fmtLongDate(r.board.date)}${filtersNote ? ` · ${filtersNote}` : ""}`} right={`Gerado em ${generated}`} />
         <View style={base.body}>
@@ -135,7 +135,7 @@ export async function renderDailyPdf(agency: string, r: DailyReport, filtersNote
             empty="Nenhuma ocorrência registrada."
           />
         </View>
-        <Footer left={`${agency} · relatório diário ${fmtDate(r.board.date)}`} />
+        <Footer left={`${agency.name} · relatório diário ${fmtDate(r.board.date)}`} />
       </Page>
     </Document>,
   );
@@ -143,11 +143,11 @@ export async function renderDailyPdf(agency: string, r: DailyReport, filtersNote
 
 type BrandData = Awaited<ReturnType<typeof brandReport>>;
 
-export async function renderBrandPdf(agency: string, r: BrandData, from: string, to: string) {
+export async function renderBrandPdf(agency: PdfAgency, r: BrandData, from: string, to: string) {
   const generated = fmtDateTime(new Date());
   const completed = r.attendances.filter((a) => a.status === "completed").length;
   return renderToBuffer(
-    <Document title={`Relatório ${r.brand.name}`} author={agency} creator="MCX Campo">
+    <Document title={`Relatório ${r.brand.name}`} author={agency.name} creator="MCX">
       <Page size="A4" style={base.page}>
         <Header agency={agency} title={`Relatório da marca · ${r.brand.name}`} subtitle={`${fmtDate(from)} a ${fmtDate(to)}`} right={`Gerado em ${generated}`} />
         <View style={base.body}>
@@ -202,7 +202,7 @@ export async function renderBrandPdf(agency: string, r: BrandData, from: string,
             empty="Nenhuma ruptura no período."
           />
         </View>
-        <Footer left={`${agency} · ${r.brand.name}`} />
+        <Footer left={`${agency.name} · ${r.brand.name}`} />
       </Page>
     </Document>,
   );

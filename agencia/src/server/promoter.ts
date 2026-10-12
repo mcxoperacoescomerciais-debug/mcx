@@ -153,7 +153,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
 
   return {
     user: { id: user.id, name: user.name, employment: user.employment, mustChangePassword: user.mustChangePassword },
-    agency: { name: scope.agencyName },
+    agency: { name: scope.agencyName, logoUrl: scope.agencyLogoUrl },
     settings: {
       allowIncompleteVisit: scope.settings.allowIncompleteVisit,
       allowExtraVisits: scope.settings.allowExtraVisits,

@@ -30,6 +30,8 @@ export interface SessionUser {
   id: string;
   agencyId: string;
   role: Role;
+  /** Equipe MCX: entra em qualquer agência pelo seletor do painel. */
+  platform: boolean;
   name: string;
   username: string;
   mustChangePassword: boolean;
@@ -47,6 +49,17 @@ export interface Scope {
   promoterIds: string[] | null;
   settings: AgencySettings;
   agencyName: string;
+  /** URL do logo da agência (null = sem logo). */
+  agencyLogoUrl: string | null;
+  /** Usuário da equipe MCX atuando dentro da agência. */
+  platform: boolean;
+}
+
+/** Agência que o usuário da equipe MCX escolheu no seletor do painel. */
+export const ACTIVE_AGENCY_COOKIE = "campo_agencia";
+
+export function agencyLogoUrl(agency: { id: string; logo: string | null; updatedAt: Date }): string | null {
+  return agency.logo ? `/api/logo/${agency.id}?v=${agency.updatedAt.getTime()}` : null;
 }
 
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
@@ -62,16 +75,22 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
       name: s.users.name,
       username: s.users.username,
       status: s.users.status,
+      platform: s.users.platform,
+      agencyStatus: s.agencies.status,
       sessionVersion: s.users.sessionVersion,
       mustChangePassword: s.users.mustChangePassword,
     })
     .from(s.users)
+    .innerJoin(s.agencies, eq(s.agencies.id, s.users.agencyId))
     .where(eq(s.users.id, payload.uid));
   if (!user || user.status !== "active" || user.sessionVersion !== payload.sv) return null;
+  // Agência suspensa derruba quem já estava logado (a equipe MCX não é afetada).
+  if (!user.platform && user.agencyStatus !== "active") return null;
   return {
     id: user.id,
     agencyId: user.agencyId,
     role: user.role,
+    platform: user.platform,
     name: user.name,
     username: user.username,
     mustChangePassword: user.mustChangePassword,
@@ -92,15 +111,42 @@ export async function requireRole(roles: Role[]): Promise<SessionUser> {
   return user;
 }
 
-/** Monta o escopo a partir do usuário (usado por páginas, rotas e testes). */
-export async function scopeForUser(user: Pick<SessionUser, "id" | "agencyId" | "role">): Promise<Scope> {
+export async function requirePlatform(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!user.platform) redirect(homeForRole(user.role));
+  return user;
+}
+
+/**
+ * Agência em que o usuário atua: a própria ou, para a equipe MCX, a escolhida
+ * no seletor (null = nenhuma escolhida ainda → visão MCX).
+ */
+export async function activeAgencyId(user: Pick<SessionUser, "agencyId" | "platform">): Promise<string | null> {
+  if (!user.platform) return user.agencyId;
+  const id = (await cookies()).get(ACTIVE_AGENCY_COOKIE)?.value;
+  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return null;
   const db = await getDb();
-  const [row] = await db
-    .select({ allBrands: s.users.allBrands, teamOnly: s.users.teamOnly, settings: s.agencies.settings, agencyName: s.agencies.name })
-    .from(s.users)
-    .innerJoin(s.agencies, eq(s.agencies.id, s.users.agencyId))
-    .where(eq(s.users.id, user.id));
-  if (!row) throw new Error("Usuário não encontrado.");
+  const [row] = await db.select({ id: s.agencies.id }).from(s.agencies).where(and(eq(s.agencies.id, id), eq(s.agencies.kind, "client")));
+  return row?.id ?? null;
+}
+
+/**
+ * Monta o escopo a partir do usuário (usado por páginas, rotas e testes).
+ * `agencyId` só pode diferir da agência do usuário para a equipe MCX.
+ */
+export async function scopeForUser(
+  user: Pick<SessionUser, "id" | "agencyId" | "role"> & { platform?: boolean },
+  agencyId: string = user.agencyId,
+): Promise<Scope> {
+  const db = await getDb();
+  const platform = Boolean(user.platform);
+  if (agencyId !== user.agencyId && !platform) throw new Error("Agência fora do escopo do usuário.");
+  const [[u], [agency]] = await Promise.all([
+    db.select({ allBrands: s.users.allBrands, teamOnly: s.users.teamOnly }).from(s.users).where(eq(s.users.id, user.id)),
+    db.select().from(s.agencies).where(eq(s.agencies.id, agencyId)),
+  ]);
+  if (!u || !agency) throw new Error("Usuário não encontrado.");
+  const row = { ...u, settings: agency.settings, agencyName: agency.name };
 
   let brandIds: string[] | null = null;
   let promoterIds: string[] | null = null;
@@ -117,12 +163,12 @@ export async function scopeForUser(user: Pick<SessionUser, "id" | "agencyId" | "
       const rows = await db
         .select({ id: s.users.id })
         .from(s.users)
-        .where(and(eq(s.users.agencyId, user.agencyId), eq(s.users.managerId, user.id), eq(s.users.role, "promoter")));
+        .where(and(eq(s.users.agencyId, agencyId), eq(s.users.managerId, user.id), eq(s.users.role, "promoter")));
       promoterIds = rows.map((r) => r.id);
     }
   }
   return {
-    agencyId: user.agencyId,
+    agencyId,
     userId: user.id,
     role: user.role,
     promoterId: user.role === "promoter" ? user.id : null,
@@ -130,16 +176,25 @@ export async function scopeForUser(user: Pick<SessionUser, "id" | "agencyId" | "
     promoterIds,
     settings: mergeSettings(row.settings),
     agencyName: row.agencyName,
+    agencyLogoUrl: agencyLogoUrl(agency),
+    platform,
   };
 }
 
-export const getScope = cache(async (): Promise<Scope> => scopeForUser(await requireUser()));
+/** Escopo da página. Equipe MCX sem agência escolhida vai para a visão MCX. */
+export const getScope = cache(async (): Promise<Scope> => {
+  const user = await requireUser();
+  const agencyId = await activeAgencyId(user);
+  if (!agencyId) redirect("/painel/mcx");
+  return scopeForUser(user, agencyId);
+});
 
 /** Para rotas de API: null em vez de redirecionar (o app trata 401/403). */
 export async function getApiScope(roles?: Role[]): Promise<Scope | null> {
   const user = await getSessionUser();
   if (!user || (roles && !roles.includes(user.role))) return null;
-  return scopeForUser(user);
+  const agencyId = await activeAgencyId(user);
+  return agencyId ? scopeForUser(user, agencyId) : null;
 }
 
 export function unauthorized(): Response {
@@ -150,7 +205,7 @@ export function forbidden(message = "Sem permissão para este registro."): Respo
   return Response.json({ error: message }, { status: 403 });
 }
 
-export type LoginResult = { ok: true; role: Role } | { ok: false; error: string };
+export type LoginResult = { ok: true; role: Role; platform: boolean } | { ok: false; error: string };
 
 export async function login(username: string, password: string): Promise<LoginResult> {
   const db = await getDb();
@@ -162,6 +217,13 @@ export async function login(username: string, password: string): Promise<LoginRe
   if (!user || user.status !== "active") {
     await bcrypt.compare(password, DUMMY_HASH);
     return generic;
+  }
+  if (!user.platform) {
+    const [agency] = await db.select({ status: s.agencies.status }).from(s.agencies).where(eq(s.agencies.id, user.agencyId));
+    if (agency?.status !== "active") {
+      await bcrypt.compare(password, DUMMY_HASH);
+      return { ok: false, error: "O acesso desta agência está suspenso. Fale com a MCX." };
+    }
   }
   if (user.lockedUntil && user.lockedUntil > new Date()) {
     return { ok: false, error: "Acesso bloqueado por tentativas incorretas. Tente novamente em alguns minutos." };
@@ -185,12 +247,16 @@ export async function login(username: string, password: string): Promise<LoginRe
     path: "/",
     maxAge: SESSION_DAYS * 86_400,
   });
+  // Equipe MCX começa sempre pela visão geral, sem agência escolhida.
+  if (user.platform) (await cookies()).delete(ACTIVE_AGENCY_COOKIE);
   await audit({ agencyId: user.agencyId, userId: user.id }, "user", user.id, "login");
-  return { ok: true, role: user.role };
+  return { ok: true, role: user.role, platform: user.platform };
 }
 
 export async function logout(): Promise<void> {
-  (await cookies()).delete(SESSION_COOKIE);
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
+  jar.delete(ACTIVE_AGENCY_COOKIE);
 }
 
 export async function hashPassword(password: string): Promise<string> {

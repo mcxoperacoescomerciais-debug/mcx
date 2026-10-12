@@ -41,6 +41,11 @@ Decisões:
 - **Autorização em 3 camadas**: `proxy.ts` → `requireRole`/`getApiScope` em cada
   página/rota → **escopo em toda consulta** (`src/server/scope.ts`): agência +
   promotores visíveis + marcas visíveis. Lista vazia = nada (nunca "tudo").
+- **Multiagência**: toda tabela operacional tem `agency_id`; o escopo sai da agência
+  do usuário. A equipe MCX escolhe a agência ativa (cookie `campo_agencia`, validado no
+  servidor a cada requisição) e recebe um escopo de administrador **daquela** agência —
+  nunca um escopo que cruze agências. A visão macro calcula cada agência separadamente
+  (mesmo `getDayBoard`) e só soma os números. Agência suspensa derruba as sessões dela.
 - **RLS** habilitado em todas as tabelas sem políticas para `anon`/`authenticated`:
   a API REST do Supabase não devolve linhas nem se a chave pública vazar. A chave
   de serviço só existe no servidor.
@@ -50,6 +55,8 @@ Decisões:
 ## 2. Hierarquia e modelo de dados
 
 ```
+MCX (plataforma, users.platform) ─┬─ AF Merchandising ─ admin · gestores · promotores
+                                  └─ ETROS            ─ admin · gestores · promotores
 agência → promotor → programação (roteiro do dia)
   → VISITA (uma loja, um promotor, um dia)
     → ATENDIMENTO por marca (um por marca na visita)
@@ -58,8 +65,8 @@ agência → promotor → programação (roteiro do dia)
 
 | Tabela | Papel |
 |---|---|
-| `agencies` | Agência e parâmetros operacionais (`settings` JSON) |
-| `users` | Admin, gestor (com escopo de marcas/equipe) e promotor (fixo/freelancer, gestor responsável) |
+| `agencies` | Agência cliente ou plataforma (`kind`), status (ativa/suspensa), logo e parâmetros (`settings`) |
+| `users` | Admin, gestor (escopo de marcas/equipe) e promotor; `platform` = equipe MCX (mora na agência da plataforma) |
 | `brands` | Marca + regras: fotos mínimas antes/depois, estoque obrigatório, foto na ruptura, galeria, atividades |
 | `chains`, `stores` | Redes e lojas (código, CNPJ, endereço, regras) |
 | `store_brands` | Marcas autorizadas em cada loja |

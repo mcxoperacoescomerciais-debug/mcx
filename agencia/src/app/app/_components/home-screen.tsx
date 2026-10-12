@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { AlertOctagon, ArrowRight, KeyRound, CalendarClock, ChevronRight, Clock, MapPin, PencilLine, PlayCircle, RotateCcw, Store } from "lucide-react";
 import clsx from "clsx";
-import { Button, Progress, StatusBadge } from "@/components/ui";
+import { Button, McxFooter, Progress, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtLongDate, fmtTime } from "@/lib/dates";
 import { pendingCount } from "../_lib/local-store";
@@ -75,8 +75,14 @@ export function HomeScreen() {
     <Screen>
       <header className="bg-brand-900 text-white">
         <div className="max-w-[560px] mx-auto px-4 pt-4 pb-6">
-          <div className="flex items-center justify-between">
-            <p className="text-[13px] text-brand-200 first-letter:uppercase">{fmtLongDate(today)}</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {local.bootstrap!.agency.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={local.bootstrap!.agency.logoUrl} alt={local.bootstrap!.agency.name} className="size-9 rounded-full object-cover bg-white shrink-0" />
+              ) : null}
+              <p className="text-[13px] text-brand-200 first-letter:uppercase truncate">{fmtLongDate(today)}</p>
+            </div>
             <SyncPill />
           </div>
           <h1 className="text-[24px] font-semibold mt-2 leading-tight">
@@ -203,6 +209,7 @@ export function HomeScreen() {
         </>
       ) : null}
 
+      <McxFooter variant="dark" className="mt-8 mb-2" />
       {sheets}
       <BottomTabs active="hoje" />
     </Screen>

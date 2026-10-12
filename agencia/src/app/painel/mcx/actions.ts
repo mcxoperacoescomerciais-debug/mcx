@@ -1,0 +1,67 @@
+"use server";
+
+import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { ACTIVE_AGENCY_COOKIE, requirePlatform } from "@/server/auth";
+import { audit } from "@/server/audit";
+import * as platform from "@/server/platform";
+import type { FormState } from "../actions";
+
+const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
+
+/** Entra no painel de uma agência (tudo o que for visto/feito é dela). */
+export async function enterAgencyAction(fd: FormData): Promise<void> {
+  const user = await requirePlatform();
+  const id = str(fd, "agencyId");
+  const agency = /^[0-9a-f-]{36}$/i.test(id) ? await platform.getClientAgency(id) : null;
+  if (!agency) redirect("/painel/mcx");
+  (await cookies()).set(ACTIVE_AGENCY_COOKIE, agency.id, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 12 * 3600,
+  });
+  await audit({ agencyId: agency.id, userId: user.id }, "agency", agency.id, "platform_enter");
+  redirect(str(fd, "next").startsWith("/painel") ? str(fd, "next") : "/painel");
+}
+
+/** Sai da agência e volta para a visão MCX (macro). */
+export async function leaveAgencyAction(): Promise<void> {
+  await requirePlatform();
+  (await cookies()).delete(ACTIVE_AGENCY_COOKIE);
+  redirect("/painel/mcx");
+}
+
+export async function createAgencyAction(_: FormState, fd: FormData): Promise<FormState> {
+  const r = await platform.createAgency(await requirePlatform(), {
+    name: str(fd, "name"),
+    adminName: str(fd, "adminName"),
+    adminUsername: str(fd, "adminUsername"),
+    adminPassword: String(fd.get("adminPassword") ?? ""),
+  });
+  if (r.ok) {
+    revalidatePath("/painel", "layout");
+    redirect(`/painel/mcx/agencias/${r.id}`);
+  }
+  return r;
+}
+
+export async function updateAgencyAction(_: FormState, fd: FormData): Promise<FormState> {
+  const r = await platform.updateAgency(await requirePlatform(), str(fd, "id"), {
+    name: str(fd, "name"),
+    status: str(fd, "status") === "suspended" ? "suspended" : "active",
+  });
+  if (r.ok) revalidatePath("/painel", "layout");
+  return r;
+}
+
+export async function agencyLogoAction(_: FormState, fd: FormData): Promise<FormState> {
+  const file = fd.get("logo");
+  const remove = fd.get("remove") === "1";
+  if (!remove && !(file instanceof File && file.size)) return { ok: false, error: "Escolha a imagem do logo." };
+  const r = await platform.setAgencyLogo(await requirePlatform(), str(fd, "id"), remove ? null : file instanceof File ? file : null);
+  if (r.ok) revalidatePath("/painel", "layout");
+  return r;
+}
