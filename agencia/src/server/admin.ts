@@ -295,7 +295,7 @@ export async function saveUser(scope: Scope, i: UserInput): Promise<ActionResult
             ...values,
             updatedAt: new Date(),
             updatedBy: scope.userId,
-            ...(i.password ? { passwordHash: await hashPassword(i.password), mustChangePassword: true } : {}),
+            ...(i.password ? { passwordHash: await hashPassword(i.password), mustChangePassword: i.role !== "promoter" } : {}),
             // Desativar ou trocar senha derruba as sessões abertas. Registros históricos permanecem.
             ...(deactivating || i.password ? { sessionVersion: before.sessionVersion + 1 } : {}),
             ...(deactivating ? { deactivatedAt: new Date() } : i.status === "active" ? { deactivatedAt: null } : {}),
@@ -307,7 +307,7 @@ export async function saveUser(scope: Scope, i: UserInput): Promise<ActionResult
       } else {
         const [row] = await tx
           .insert(s.users)
-          .values({ ...values, agencyId: scope.agencyId, passwordHash: await hashPassword(i.password!), mustChangePassword: true, createdBy: scope.userId })
+          .values({ ...values, agencyId: scope.agencyId, passwordHash: await hashPassword(i.password!), mustChangePassword: i.role !== "promoter", createdBy: scope.userId })
           .returning({ id: s.users.id });
         id = row.id;
         await audit(actor(scope), "user", id, "created", { after: values }, tx);

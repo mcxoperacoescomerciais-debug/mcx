@@ -7,6 +7,8 @@ import { audit } from "@/server/audit";
 export async function POST(request: Request) {
   const scope = await getApiScope();
   if (!scope) return unauthorized();
+  // Promotor não troca a própria senha: o acesso é definido pela agência.
+  if (scope.role === "promoter") return Response.json({ error: "A senha do promotor é definida pela agência." }, { status: 403 });
   const body = (await request.json().catch(() => ({}))) as { current?: string; next?: string };
   const current = String(body.current ?? "");
   const next = String(body.next ?? "");

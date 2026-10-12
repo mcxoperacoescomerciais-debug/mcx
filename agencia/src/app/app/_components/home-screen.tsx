@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { AlertOctagon, ArrowRight, KeyRound, CalendarClock, ChevronRight, Clock, MapPin, PencilLine, PlayCircle, RotateCcw, Store } from "lucide-react";
+import { AlertOctagon, ArrowRight, CalendarClock, ChevronRight, Clock, MapPin, PencilLine, PlayCircle, RotateCcw, Store } from "lucide-react";
 import clsx from "clsx";
 import { Button, McxFooter, Progress, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
@@ -119,11 +119,6 @@ export function HomeScreen() {
       </header>
 
       <div className="px-4 space-y-3 mt-4">
-        {user.mustChangePassword ? (
-          <Notice tone="warn" icon={<KeyRound className="size-5" />} action={<button type="button" onClick={() => go("perfil")} className="font-semibold underline shrink-0">Trocar</button>}>
-            Você ainda usa a senha inicial. Troque por uma senha pessoal.
-          </Notice>
-        ) : null}
         {unsynced > 0 && !local.sync.online ? (
           <Notice tone="warn" icon={<Clock className="size-5" />}>
             {unsynced} {unsynced === 1 ? "registro está" : "registros estão"} salvos só neste celular. Serão enviados quando houver sinal — não desinstale o app.

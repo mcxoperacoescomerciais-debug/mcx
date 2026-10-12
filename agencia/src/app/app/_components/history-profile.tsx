@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronRight, History, KeyRound, Loader2, LogOut, RefreshCw, WifiOff } from "lucide-react";
+import { AlertTriangle, ChevronRight, History, Loader2, LogOut, RefreshCw, WifiOff } from "lucide-react";
 import { Button, McxFooter, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, EMPLOYMENT_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE, type AttendanceStatus, type Employment, type VisitStatus } from "@/lib/domain";
 import { fmtAgo, fmtDate, fmtTime } from "@/lib/dates";
@@ -90,7 +90,6 @@ export function ProfileScreen() {
   const local = useLocal();
   const user = local.bootstrap!.user;
   const pending = pendingCount(local);
-  const [pwdOpen, setPwdOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   return (
@@ -144,16 +143,12 @@ export function ProfileScreen() {
           </Button>
         </section>
 
-        <Button variant="secondary" size="lg" className="w-full" onClick={() => setPwdOpen(true)}>
-          <KeyRound className="size-5" /> Trocar senha
-        </Button>
         <Button variant="ghost" size="lg" className="w-full text-bad" onClick={() => (pending ? setLogoutOpen(true) : leave())}>
           <LogOut className="size-5" /> Sair
         </Button>
       </div>
 
       <McxFooter variant="dark" className="mt-8 mb-2" />
-      <PasswordSheet open={pwdOpen} onClose={() => setPwdOpen(false)} />
       <Sheet open={logoutOpen} onClose={() => setLogoutOpen(false)} title="Há registros não enviados">
         <Notice tone="bad" icon={<AlertTriangle className="size-5" />}>
           {pending} {pending === 1 ? "registro ainda está" : "registros ainda estão"} só neste celular. Conecte-se à internet e sincronize antes de sair.
@@ -164,51 +159,5 @@ export function ProfileScreen() {
       </Sheet>
       <BottomTabs active="perfil" />
     </Screen>
-  );
-}
-
-function PasswordSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const input = "w-full h-12 rounded-xl border border-line-strong px-3.5 text-[15px] focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-100";
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title="Trocar senha"
-      footer={
-        <Button
-          size="xl"
-          className="w-full"
-          disabled={busy || !next || !current}
-          onClick={async () => {
-            setBusy(true);
-            setError(null);
-            const res = await fetch("/api/me/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ current, next }) }).catch(() => null);
-            setBusy(false);
-            if (!res) return setError("Sem conexão. Tente quando houver sinal.");
-            const body = (await res.json().catch(() => ({}))) as { error?: string };
-            if (!res.ok) return setError(body.error ?? "Não foi possível trocar a senha.");
-            toast("Senha alterada. Entre novamente.");
-            // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- rota de API/route handler, exige navegação completa
-            setTimeout(() => (window.location.href = "/sair"), 900);
-          }}
-        >
-          {busy ? <Loader2 className="size-5 animate-spin" /> : <CheckCircle2 className="size-5" />} Salvar nova senha
-        </Button>
-      }
-    >
-      <label className="block">
-        <span className="block text-[13px] font-semibold text-ink-2 mb-1.5">Senha atual</span>
-        <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className={input} autoComplete="current-password" />
-      </label>
-      <label className="block mt-3">
-        <span className="block text-[13px] font-semibold text-ink-2 mb-1.5">Nova senha</span>
-        <input type="password" value={next} onChange={(e) => setNext(e.target.value)} className={input} autoComplete="new-password" />
-      </label>
-      {error ? <p className="text-[13px] text-bad mt-3">{error}</p> : null}
-    </Sheet>
   );
 }
