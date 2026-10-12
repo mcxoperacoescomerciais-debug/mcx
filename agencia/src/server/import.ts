@@ -11,19 +11,19 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { saveChain, saveProduct, saveStore, saveUser, validateProduct } from "./admin";
-import { productNameKey } from "@/lib/rules";
+import { parseCoords, productNameKey } from "@/lib/rules";
 import { UNITS, type Unit } from "@/lib/domain";
 
 export const TEMPLATES = {
   produtos: ["marca", "nome", "sku", "ean", "categoria", "variante", "embalagem", "unidade", "status"],
-  lojas: ["rede", "nome", "codigo", "cnpj", "endereco", "bairro", "cidade", "uf", "marcas"],
+  lojas: ["rede", "nome", "codigo", "cnpj", "endereco", "bairro", "cidade", "uf", "marcas", "latitude", "longitude"],
   promotores: ["nome", "usuario", "senha_inicial", "vinculo", "regiao", "codigo_interno", "email", "telefone", "marcas", "lojas"],
 } as const;
 export type ImportKind = keyof typeof TEMPLATES;
 
 export const TEMPLATE_HELP: Record<ImportKind, string> = {
   produtos: "marca = identificador da marca (ex.: BRAVO). unidade: un, pct, cx, fd, kg ou dp. status: ativo/inativo (padrão ativo). Produtos são localizados pelo SKU dentro da marca; nomes com grafia diferente do mesmo produto são recusados como duplicados.",
-  lojas: "marcas = identificadores separados por vírgula (ex.: BRAVO, SUINCO). A loja é localizada por rede + código (ou rede + nome, se não houver código).",
+  lojas: "marcas = identificadores separados por vírgula (ex.: BRAVO, SUINCO). A loja é localizada por rede + código (ou rede + nome, se não houver código). latitude/longitude (opcionais) posicionam a loja no mapa operacional.",
   promotores: "vinculo: fixo ou freelancer. marcas = identificadores separados por vírgula. lojas = códigos ou nomes das lojas separados por “;”. A senha inicial deve ser trocada no primeiro acesso.",
 };
 
@@ -171,13 +171,19 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
         .select({ id: s.stores.id })
         .from(s.stores)
         .where(and(eq(s.stores.agencyId, scope.agencyId), chainId ? eq(s.stores.chainId, chainId) : sql`${s.stores.chainId} is null`, r.codigo ? eq(s.stores.code, r.codigo) : sql`lower(${s.stores.name}) = ${r.nome.toLowerCase()}`));
+      // Coordenadas opcionais: vazias não apagam as que já existem.
+      const coords = r.latitude || r.longitude ? parseCoords(r.latitude ?? "", r.longitude ?? "") : undefined;
+      if (coords === "invalid") {
+        report.errors.push({ line, message: "Latitude/longitude inválidas (ex.: -19.9245 e -43.9352)." });
+        continue;
+      }
       if (dryRun) {
         if (r.cnpj && r.cnpj.replace(/\D/g, "").length !== 14) report.errors.push({ line, message: "CNPJ deve ter 14 dígitos." });
         else if (existing) report.updated++;
         else report.created++;
         continue;
       }
-      const res = await saveStore(scope, { id: existing?.id ?? null, chainId, name: r.nome, code: r.codigo || null, cnpj: r.cnpj || null, address: r.endereco || null, district: r.bairro || null, city: r.cidade, state: r.uf || "MG", status: "active", brandIds, rules: null, notes: null });
+      const res = await saveStore(scope, { id: existing?.id ?? null, chainId, name: r.nome, code: r.codigo || null, cnpj: r.cnpj || null, address: r.endereco || null, district: r.bairro || null, city: r.cidade, state: r.uf || "MG", status: "active", brandIds, rules: null, notes: null, coords: coords ?? undefined });
       if (!res.ok) report.errors.push({ line, message: res.error });
       else if (existing) report.updated++;
       else report.created++;

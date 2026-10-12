@@ -1,38 +1,57 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Camera, CheckCircle2, ClipboardCheck, FileDown, PackageX, PlayCircle, Store, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Camera,
+  CheckCircle2,
+  FileDown,
+  Map as MapIcon,
+  PackageSearch,
+  PlayCircle,
+  ShieldAlert,
+  Store,
+  Tags,
+  Users,
+} from "lucide-react";
 import { getScope } from "@/server/auth";
-import { filterOptions, getDayBoard, PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TONE, summarizePromoters } from "@/server/operations";
+import { getDayBoard } from "@/server/operations";
 import { listIssues } from "@/server/issues";
 import { parseFilters, withParams } from "@/lib/filters";
 import { fmtAgo, fmtLongDate, fmtTime, todayIso } from "@/lib/dates";
 import { pct } from "@/lib/rules";
-import { ISSUE_KIND_LABEL, STOP_BUCKET_LABEL, STOP_BUCKET_TONE } from "@/lib/domain";
-import { Badge, LinkButton, PageHeader, StatusBadge, EmptyState } from "@/components/ui";
+import { ISSUE_KIND_LABEL } from "@/lib/domain";
+import { Badge, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { FilterBar } from "./_components/filter-bar";
-import { DayProgress, KpiCard, SectionCard, Table, Td, Th } from "./_components/widgets";
+import { KpiCard, SectionCard } from "./_components/widgets";
 
-export const metadata: Metadata = { title: "Painel do dia" };
+export const metadata: Metadata = { title: "Visão geral" };
 
-export default async function DashboardPage({ searchParams }: PageProps<"/painel">) {
+/** Relatórios independentes — cada um abre a própria página, com os próprios filtros. */
+const REPORTS = [
+  { href: "/painel/mapa", label: "Mapa operacional", text: "Lojas no mapa com a situação do dia", icon: MapIcon },
+  { href: "/painel/visitas", label: "Visitas", text: "Lojas programadas, horários e situação", icon: Store },
+  { href: "/painel/marcas", label: "Atendimentos por marca", text: "Execução de cada marca no período", icon: Tags },
+  { href: "/painel/fotos", label: "Relatório fotográfico", text: "Antes e depois de cada atendimento", icon: Camera },
+  { href: "/painel/estoque", label: "Estoque e ruptura", text: "Estoque, ruptura, validade e avaria", icon: PackageSearch },
+  { href: "/painel/promotores", label: "Promotores", text: "Roteiro e histórico de cada profissional", icon: Users },
+  { href: "/painel/pendencias", label: "Central de pendências", text: "O que exige ação, por prioridade", icon: ShieldAlert },
+] as const;
+
+export default async function OverviewPage({ searchParams }: PageProps<"/painel">) {
   const scope = await getScope();
   const f = parseFilters(await searchParams);
-  const [board, options, issues] = await Promise.all([
-    getDayBoard(scope, f),
-    filterOptions(scope),
-    listIssues(scope, { ...f, from: f.date, to: f.date }),
-  ]);
-  const promoters = summarizePromoters(board);
+  const day = { ...f, brand: null, chain: null, store: null, promoter: null, city: null };
+  const [board, issues] = await Promise.all([getDayBoard(scope, day), listIssues(scope, { ...day, from: f.date, to: f.date })]);
   const k = board.kpis;
-  const keep = { date: f.date === todayIso() ? null : f.date, brand: f.brand, chain: f.chain, promoter: f.promoter, city: f.city, store: f.store };
-  const dayQs = (extra: Record<string, string | null> = {}) => withParams(keep, extra);
-  const attention = board.stops.filter((st) => st.bucket === "late" || st.bucket === "exception" || st.bucket === "missed" || st.issues > 0).slice(0, 8);
+  const dateQs = (extra: Record<string, string | null> = {}) => withParams({ date: f.date === todayIso() ? null : f.date }, extra);
+  const unreviewed = issues.filter((i) => !i.review).length;
 
   return (
     <>
       <PageHeader
         eyebrow={scope.agencyName}
-        title="Painel do dia"
+        title="Visão geral"
         subtitle={
           <>
             <span className="first-letter:uppercase inline-block">{fmtLongDate(f.date)}</span> · dados de {fmtTime(board.generatedAt)}
@@ -41,62 +60,64 @@ export default async function DashboardPage({ searchParams }: PageProps<"/painel
         }
         actions={
           <>
-            <LinkButton variant="secondary" href={`/api/reports/daily${dayQs({ date: f.date, format: "pdf" })}`} prefetch={false}>
+            <LinkButton variant="secondary" href={`/api/reports/daily${withParams({ date: f.date, format: "pdf" })}`} prefetch={false}>
               <FileDown className="size-4" /> Relatório do dia (PDF)
             </LinkButton>
-            <LinkButton variant="secondary" href={`/api/reports/daily${dayQs({ date: f.date, format: "xlsx" })}`} prefetch={false}>
+            <LinkButton variant="secondary" href={`/api/reports/daily${withParams({ date: f.date, format: "xlsx" })}`} prefetch={false}>
               <FileDown className="size-4" /> Excel
             </LinkButton>
           </>
         }
       />
-      <FilterBar fields={["date", "brand", "chain", "promoter", "city"]} options={options} />
+      <FilterBar fields={["date"]} options={{}} />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <KpiCard label="Promotores programados" value={k.promotersScheduled} sub={`${k.promotersActive} com atividade registrada`} href={`/painel/promotores${dayQs()}`} icon={<Users className="size-4" />} />
-        <KpiCard label="Lojas programadas" value={k.storesScheduled} sub={k.extraVisits ? `+${k.extraVisits} visita(s) extraordinária(s)` : "Sem visitas extraordinárias"} href={`/painel/lojas${dayQs()}`} icon={<Store className="size-4" />} />
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
           label="Lojas concluídas"
-          value={k.storesCompleted}
+          value={
+            <>
+              {k.storesCompleted}
+              <span className="text-[16px] font-medium text-muted"> de {k.storesScheduled}</span>
+            </>
+          }
           tone="success"
-          sub={`${pct(k.storesCompleted, k.storesScheduled) ?? "—"}% de ${k.storesScheduled} · ${k.storesWithException} com exceção`}
-          href={`/painel/lojas${dayQs({ status: "completed" })}`}
+          sub={`${pct(k.storesCompleted, k.storesScheduled) ?? "—"}% do programado${k.storesWithException ? ` · ${k.storesWithException} com exceção` : ""}`}
+          href={`/painel/visitas${dateQs({ status: "completed" })}`}
           icon={<CheckCircle2 className="size-4" />}
         />
-        <KpiCard label="Visitas em andamento" value={k.visitsInProgress} tone="info" sub="Iniciadas e não encerradas" href={`/painel/lojas${dayQs({ status: "in_progress" })}`} icon={<PlayCircle className="size-4" />} />
+        <KpiCard label="Em andamento" value={k.visitsInProgress} tone="info" sub="Visitas iniciadas e não encerradas" href={`/painel/visitas${dateQs({ status: "in_progress" })}`} icon={<PlayCircle className="size-4" />} />
         <KpiCard
           label="Pendentes ou atrasadas"
           value={k.storesPendingOrLate}
           tone={k.storesLate + k.storesMissed ? "danger" : "neutral"}
           sub={`${k.storesLate} atrasada(s) · ${k.storesMissed} não realizada(s)`}
-          href={`/painel/lojas${dayQs({ status: "open" })}`}
+          href={`/painel/visitas${dateQs({ status: "open" })}`}
           icon={<AlertTriangle className="size-4" />}
         />
-        <KpiCard label="Atendimentos de marca concluídos" value={k.attendancesCompleted} sub={`de ${k.attendancesPlanned} marca(s) previstas`} href={`/painel/lojas${dayQs()}`} icon={<ClipboardCheck className="size-4" />} />
-        <KpiCard label="Atendimentos com pendência" value={k.attendancesWithIssues} tone={k.attendancesWithIssues ? "warning" : "neutral"} sub="Correção, exceção, reprovação ou foto não sincronizada" href={`/painel/pendencias${withParams(keep, { from: f.date, to: f.date })}`} icon={<AlertTriangle className="size-4" />} />
-        <KpiCard label="Registros com fotos incompletas" value={k.photosIncomplete} tone={k.photosIncomplete ? "warning" : "neutral"} sub="Sem antes/depois ou aguardando envio" href={`/painel/fotos${withParams(keep, { from: f.date, to: f.date, status: "incomplete" })}`} icon={<Camera className="size-4" />} />
-        <KpiCard label="Produtos com ruptura" value={k.ruptureProducts} tone={k.ruptureProducts ? "danger" : "neutral"} sub={`${k.ruptureCount} registro(s) de ruptura no dia`} href={`/painel/rupturas${withParams(keep, { from: f.date, to: f.date })}`} icon={<PackageX className="size-4" />} />
-        <KpiCard label="Pendências abertas" value={issues.length} tone={issues.length ? "danger" : "success"} sub={`${issues.filter((i) => !i.review).length} ainda não analisada(s)`} href={`/painel/pendencias${withParams(keep, { from: f.date, to: f.date })}`} icon={<AlertTriangle className="size-4" />} />
+        <KpiCard
+          label="Pendências abertas"
+          value={issues.length}
+          tone={issues.length ? "warning" : "success"}
+          sub={issues.length ? `${unreviewed} ainda não analisada(s)` : "Nada exige ação"}
+          href={`/painel/pendencias${withParams({ from: f.date, to: f.date })}`}
+          icon={<ShieldAlert className="size-4" />}
+        />
       </div>
-
-      <SectionCard className="mt-6" title="Progresso da operação" subtitle={`${board.stops.length} loja(s) no dia — cada uma contada em um único grupo`} bodyClass="px-5 pb-5">
-        <DayProgress buckets={board.buckets} total={board.stops.length} hrefFor={(b) => `/painel/lojas${dayQs({ status: b })}`} />
-      </SectionCard>
 
       <div className="grid xl:grid-cols-5 gap-6 mt-6">
         <SectionCard
           className="xl:col-span-3"
-          title="O que precisa ser resolvido"
-          subtitle="Pendências do dia, por prioridade"
+          title="Pendências prioritárias"
+          subtitle="As mais urgentes do dia"
           action={
-            <Link href={`/painel/pendencias${withParams(keep, { from: f.date, to: f.date })}`} className="text-[13px] font-semibold text-brand-700 inline-flex items-center gap-1">
-              Central de pendências <ArrowRight className="size-3.5" />
+            <Link href={`/painel/pendencias${withParams({ from: f.date, to: f.date })}`} className="text-[13px] font-semibold text-brand-700 inline-flex items-center gap-1">
+              Ver todas <ArrowRight className="size-3.5" />
             </Link>
           }
         >
           {issues.length ? (
             <ul className="divide-y divide-line border-t border-line">
-              {issues.slice(0, 8).map((i) => (
+              {issues.slice(0, 5).map((i) => (
                 <li key={i.key}>
                   <Link href={i.href} className="flex items-start gap-3 px-5 py-3 hover:bg-subtle">
                     <Badge tone={i.priority <= 2 ? "danger" : i.priority <= 4 ? "warning" : "neutral"} className="mt-0.5 shrink-0">
@@ -109,119 +130,37 @@ export default async function DashboardPage({ searchParams }: PageProps<"/painel
                         {i.brandName ? ` · ${i.brandName}` : ""} · {i.promoterName}
                       </p>
                     </div>
-                    {i.review ? <StatusBadge tone="info" size="sm">Analisada</StatusBadge> : null}
                   </Link>
                 </li>
               ))}
             </ul>
           ) : (
-            <EmptyState icon={<CheckCircle2 className="size-8 text-ok" />} title="Nenhuma pendência nesta data">
-              Fotos, estoque, correções e visitas estão em dia para os filtros escolhidos.
-            </EmptyState>
+            <EmptyState icon={<CheckCircle2 className="size-8 text-ok" />} title="Nenhuma pendência nesta data" />
           )}
         </SectionCard>
 
-        <SectionCard
-          className="xl:col-span-2"
-          title="Promotores"
-          subtitle="Situação a partir da programação e dos registros recebidos"
-          action={
-            <Link href={`/painel/promotores${dayQs()}`} className="text-[13px] font-semibold text-brand-700 inline-flex items-center gap-1">
-              Ver todos <ArrowRight className="size-3.5" />
-            </Link>
-          }
-        >
-          {promoters.length ? (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Promotor</Th>
-                  <Th align="right">Lojas</Th>
-                  <Th>Situação</Th>
-                  <Th>Último registro</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {promoters.map((p) => (
-                  <tr key={p.promoterId} className="hover:bg-subtle">
-                    <Td>
-                      <Link href={`/painel/promotores/${p.promoterId}${dayQs()}`} className="font-semibold hover:underline">
-                        {p.name}
-                      </Link>
-                    </Td>
-                    <Td align="right">
-                      {p.completed}/{p.scheduled}
-                    </Td>
-                    <Td>
-                      <StatusBadge tone={PROMOTER_STATUS_TONE[p.status]} size="sm">
-                        {PROMOTER_STATUS_LABEL[p.status]}
-                      </StatusBadge>
-                    </Td>
-                    <Td className="text-muted whitespace-nowrap">{p.lastActivity ? fmtAgo(p.lastActivity) : "—"}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          ) : (
-            <EmptyState title="Nenhuma programação nesta data">Cadastre a programação em Operação › Programação.</EmptyState>
-          )}
+        <SectionCard className="xl:col-span-2" title="Relatórios" subtitle="Escolha o que deseja analisar" bodyClass="px-3 pb-3">
+          <ul className="grid gap-1">
+            {REPORTS.map((r) => {
+              const Icon = r.icon;
+              return (
+                <li key={r.href}>
+                  <Link href={`${r.href}${r.href === "/painel/pendencias" ? withParams({ from: f.date, to: f.date }) : dateQs()}`} className="flex items-center gap-3 px-2.5 py-2.5 rounded-xl hover:bg-subtle">
+                    <span className="size-9 rounded-lg bg-brand-50 text-brand-800 grid place-items-center shrink-0">
+                      <Icon className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13.5px] font-semibold">{r.label}</span>
+                      <span className="block text-[12px] text-muted truncate">{r.text}</span>
+                    </span>
+                    <ArrowRight className="size-4 text-muted shrink-0" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </SectionCard>
       </div>
-
-      <SectionCard
-        className="mt-6"
-        title="Lojas que exigem atenção"
-        subtitle="Atrasadas, não realizadas, com exceção ou com pendência de registro"
-        action={
-          <Link href={`/painel/lojas${dayQs()}`} className="text-[13px] font-semibold text-brand-700 inline-flex items-center gap-1">
-            Monitor de lojas <ArrowRight className="size-3.5" />
-          </Link>
-        }
-      >
-        {attention.length ? (
-          <Table>
-            <thead>
-              <tr>
-                <Th>Loja</Th>
-                <Th>Promotor</Th>
-                <Th>Previsto</Th>
-                <Th>Marcas</Th>
-                <Th>Situação</Th>
-                <Th align="right">Pendências</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {attention.map((st) => (
-                <tr key={st.key} className="hover:bg-subtle">
-                  <Td>
-                    {st.visit ? (
-                      <Link href={`/painel/visitas/${st.visit.id}`} className="font-semibold hover:underline">
-                        {st.storeName}
-                      </Link>
-                    ) : (
-                      <span className="font-semibold">{st.storeName}</span>
-                    )}
-                    <span className="block text-[12px] text-muted">{[st.chainName, st.city].filter(Boolean).join(" · ")}</span>
-                  </Td>
-                  <Td>{st.promoterName}</Td>
-                  <Td className="tnum">{st.plannedStart ?? "—"}</Td>
-                  <Td className="tnum">
-                    {st.brandsDone}/{st.brandsTotal}
-                  </Td>
-                  <Td>
-                    <StatusBadge tone={STOP_BUCKET_TONE[st.bucket]} size="sm">
-                      {STOP_BUCKET_LABEL[st.bucket]}
-                    </StatusBadge>
-                  </Td>
-                  <Td align="right">{st.issues || "—"}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        ) : (
-          <EmptyState icon={<CheckCircle2 className="size-8 text-ok" />} title="Nenhuma loja exige atenção agora" />
-        )}
-      </SectionCard>
     </>
   );
 }

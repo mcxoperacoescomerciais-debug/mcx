@@ -14,6 +14,16 @@ import { reviewIssueAction } from "../actions";
 
 export const metadata: Metadata = { title: "Central de pendências" };
 
+/** Cada tipo pertence a UM grupo — o total é a soma dos grupos, sem duplicar. */
+const GROUPS: { id: string; title: string; text: string; kinds: IssueKind[] }[] = [
+  { id: "analise", title: "Atendimentos aguardando análise", text: "Exceções justificadas pelo promotor", kinds: ["exception"] },
+  { id: "devolvidos", title: "Atendimentos devolvidos", text: "Correção pedida, aguardando o promotor", kinds: ["correction_pending"] },
+  { id: "incompletos", title: "Registros incompletos", text: "Fotos, estoque, envio ou visita sem finalizar", kinds: ["missing_before", "missing_after", "stock_incomplete", "photo_unsynced", "visit_open"] },
+  { id: "atrasadas", title: "Visitas atrasadas", text: "Hoje, passou do horário e não iniciou", kinds: ["visit_late"] },
+  { id: "nao-realizadas", title: "Visitas não realizadas", text: "Programadas e não iniciadas", kinds: ["visit_missed"] },
+  { id: "ocorrencias", title: "Ocorrências em acompanhamento", text: "Registradas em loja e ainda não tratadas", kinds: ["occurrence_open"] },
+];
+
 export default async function IssuesPage({ searchParams }: PageProps<"/painel/pendencias">) {
   const scope = await getScope();
   const f = parseFilters(await searchParams, 14);
@@ -48,12 +58,16 @@ export default async function IssuesPage({ searchParams }: PageProps<"/painel/pe
         statusLabel="Não analisadas"
       />
 
-      <div className="flex flex-wrap gap-2 mb-5">
-        {ISSUE_KINDS.filter((k) => counts.get(k)).map((k) => (
-          <Link key={k} href={`?${new URLSearchParams({ from: f.from, to: f.to, kind: k, status: "pending" })}`} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-[12.5px] hover:border-brand-200">
-            {ISSUE_KIND_LABEL[k]} <strong className="tnum">{counts.get(k)}</strong>
-          </Link>
-        ))}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 mb-6">
+        {GROUPS.map((g) => {
+          const n = g.kinds.reduce((sum, k) => sum + (counts.get(k) ?? 0), 0);
+          return (
+            <a key={g.id} href={`#${g.id}`} className={`rounded-xl border bg-surface px-3.5 py-3 hover:border-brand-200 ${n ? "border-line" : "border-line opacity-60"}`}>
+              <span className={`block text-[22px] font-bold tnum ${n ? "text-ink" : "text-muted"}`}>{n}</span>
+              <span className="block text-[12.5px] font-semibold leading-snug">{g.title}</span>
+            </a>
+          );
+        })}
       </div>
 
       {issues.length === 0 ? (
@@ -63,52 +77,66 @@ export default async function IssuesPage({ searchParams }: PageProps<"/painel/pe
           </EmptyState>
         </div>
       ) : (
-        <ul className="space-y-2.5">
-          {issues.map((i) => (
-            <li key={i.key} className="bg-surface border border-line rounded-[var(--radius-card)] p-4">
-              <div className="flex flex-wrap items-start gap-3">
-                <Badge tone={i.priority <= 2 ? "danger" : i.priority <= 4 ? "warning" : "neutral"} className="mt-0.5">
-                  P{i.priority} · {ISSUE_KIND_LABEL[i.kind]}
-                </Badge>
-                <div className="flex-1 min-w-[240px]">
-                  <Link href={i.href} className="font-semibold text-[14.5px] hover:underline inline-flex items-center gap-1">
-                    {i.title} <ArrowUpRight className="size-3.5 text-muted" />
-                  </Link>
-                  <p className="text-[13px] text-ink-2 mt-0.5">{i.detail}</p>
-                  <p className="text-[12.5px] text-muted mt-1">
-                    {i.storeName}
-                    {i.brandName ? ` · ${i.brandName}` : ""} · {i.promoterName} · {fmtDate(i.date)}
-                    {i.at ? ` ${fmtDateTime(i.at).slice(11)}` : ""}
-                  </p>
-                </div>
-                <StatusBadge tone={i.review?.status === "concluded" ? "success" : i.review ? "info" : "neutral"} size="sm">
-                  {ISSUE_REVIEW_LABEL[i.review?.status ?? "open"]}
-                </StatusBadge>
-              </div>
-              {i.review ? (
-                <p className="text-[12.5px] text-ink-2 mt-2 ml-1 border-l-2 border-brand-200 pl-3">
-                  {i.review.userName} em {fmtDateTime(i.review.at)}: “{i.review.action}”
-                </p>
-              ) : null}
-              {i.review?.status !== "concluded" ? (
-                <div className="mt-3">
-                  <Disclosure label={i.review ? "Atualizar acompanhamento" : "Analisar / registrar ação"}>
-                    <ActionForm action={reviewIssueAction} hidden={{ key: i.key }} submitLabel="Salvar">
-                      <div className="flex flex-wrap gap-2">
-                        <select name="status" defaultValue="analyzed" className={inputClass + " w-auto"} aria-label="Situação">
-                          <option value="analyzed">Analisada — continuo acompanhando</option>
-                          <option value="concluded">Concluir acompanhamento</option>
-                        </select>
-                        <input name="action" required minLength={5} placeholder="Ação tomada (ex.: liguei para o promotor)" className={inputClass + " flex-1 min-w-[240px]"} />
+        <div className="space-y-8">
+          {GROUPS.map((g) => {
+            const list = issues.filter((i) => g.kinds.includes(i.kind));
+            if (!list.length) return null;
+            return (
+              <section key={g.id} id={g.id} className="scroll-mt-20">
+                <h2 className="text-[15px] font-semibold">
+                  {g.title} <span className="text-muted tnum font-medium">· {list.length}</span>
+                </h2>
+                <p className="text-[12.5px] text-muted mb-2.5">{g.text}</p>
+                <ul className="space-y-2.5">
+                  {list.map((i) => (
+                  <li key={i.key} className="bg-surface border border-line rounded-[var(--radius-card)] p-4">
+                    <div className="flex flex-wrap items-start gap-3">
+                      <Badge tone={i.priority <= 2 ? "danger" : i.priority <= 4 ? "warning" : "neutral"} className="mt-0.5">
+                        P{i.priority} · {ISSUE_KIND_LABEL[i.kind]}
+                      </Badge>
+                      <div className="flex-1 min-w-[240px]">
+                        <Link href={i.href} className="font-semibold text-[14.5px] hover:underline inline-flex items-center gap-1">
+                          {i.title} <ArrowUpRight className="size-3.5 text-muted" />
+                        </Link>
+                        <p className="text-[13px] text-ink-2 mt-0.5">{i.detail}</p>
+                        <p className="text-[12.5px] text-muted mt-1">
+                          {i.storeName}
+                          {i.brandName ? ` · ${i.brandName}` : ""} · {i.promoterName} · {fmtDate(i.date)}
+                          {i.at ? ` ${fmtDateTime(i.at).slice(11)}` : ""}
+                        </p>
                       </div>
-                      <p className="text-[12px] text-muted">Analisar não resolve a pendência: ela some sozinha quando a causa for corrigida (foto enviada, correção feita…).</p>
-                    </ActionForm>
-                  </Disclosure>
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+                      <StatusBadge tone={i.review?.status === "concluded" ? "success" : i.review ? "info" : "neutral"} size="sm">
+                        {ISSUE_REVIEW_LABEL[i.review?.status ?? "open"]}
+                      </StatusBadge>
+                    </div>
+                    {i.review ? (
+                      <p className="text-[12.5px] text-ink-2 mt-2 ml-1 border-l-2 border-brand-200 pl-3">
+                        {i.review.userName} em {fmtDateTime(i.review.at)}: “{i.review.action}”
+                      </p>
+                    ) : null}
+                    {i.review?.status !== "concluded" ? (
+                      <div className="mt-3">
+                        <Disclosure label={i.review ? "Atualizar acompanhamento" : "Analisar / registrar ação"}>
+                          <ActionForm action={reviewIssueAction} hidden={{ key: i.key }} submitLabel="Salvar">
+                            <div className="flex flex-wrap gap-2">
+                              <select name="status" defaultValue="analyzed" className={inputClass + " w-auto"} aria-label="Situação">
+                                <option value="analyzed">Analisada — continuo acompanhando</option>
+                                <option value="concluded">Concluir acompanhamento</option>
+                              </select>
+                              <input name="action" required minLength={5} placeholder="Ação tomada (ex.: liguei para o promotor)" className={inputClass + " flex-1 min-w-[240px]"} />
+                            </div>
+                            <p className="text-[12px] text-muted">Analisar não resolve a pendência: ela some sozinha quando a causa for corrigida (foto enviada, correção feita…).</p>
+                          </ActionForm>
+                        </Disclosure>
+                      </div>
+                    ) : null}
+                  </li>
+                        ))}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       )}
     </>
   );

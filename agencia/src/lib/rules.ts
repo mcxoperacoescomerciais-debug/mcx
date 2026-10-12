@@ -75,6 +75,31 @@ export function suggestsRupture(state: StockState | undefined): boolean {
 }
 
 /** Variação relevante entre dois levantamentos sucessivos do mesmo produto na mesma loja. */
+/**
+ * Coordenadas digitadas ("-19.93, -43.94", como o Google Maps copia) ou em duas
+ * colunas. Vazio = null; inválido = "invalid".
+ */
+export function parseCoords(lat: string, lng?: string): { lat: number; lng: number } | null | "invalid" {
+  const raw = lng === undefined ? lat : `${lat};${lng}`;
+  if (!raw.replace(/[;,\s]/g, "")) return null;
+  // "-19.93, -43.94", "-19,93; -43,94" ou duas colunas.
+  const nums = raw.match(/-?\d+(?:[.,]\d+)?/g)?.map((n) => Number(n.replace(",", ".")));
+  if (!nums || nums.length !== 2) return "invalid";
+  const [a, b] = nums;
+  if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a) > 90 || Math.abs(b) > 180 || (a === 0 && b === 0)) return "invalid";
+  return { lat: a, lng: b };
+}
+
+/** Distância em metros (haversine). */
+export function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6_371_000;
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
+
 export function isRelevantDivergence(previous: number | null, current: number | null, pct: number): boolean {
   if (previous === null || current === null) return false;
   if (previous === 0) return current >= 10;

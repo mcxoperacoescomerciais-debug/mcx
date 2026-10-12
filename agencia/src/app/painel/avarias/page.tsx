@@ -9,6 +9,7 @@ import { DAMAGE_KIND_LABEL, DAMAGE_KINDS } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { formatIsoBr } from "@/lib/validity";
 import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
+import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
 import { KpiCard, Pagination, SectionCard, Table, Td, Th } from "../_components/widgets";
 
@@ -22,6 +23,7 @@ export default async function DamagesPage({ searchParams }: PageProps<"/painel/a
 
   return (
     <>
+      <ProductTabs />
       <PageHeader
         title="Avarias"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos danificados ou impróprios registrados com foto`}

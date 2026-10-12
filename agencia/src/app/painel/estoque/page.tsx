@@ -8,6 +8,7 @@ import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
 import { STOCK_STATE_LABEL, STOCK_STATE_TONE, STOCK_STATES } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
+import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
 import { KpiCard, Pagination, RankBar, SectionCard, Table, Td, Th } from "../_components/widgets";
 
@@ -23,8 +24,9 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
 
   return (
     <>
+      <ProductTabs />
       <PageHeader
-        title="Painel de estoque"
+        title="Estoque"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · quantidades levantadas pelos promotores — não é o saldo oficial do supermercado`}
         actions={
           <LinkButton variant="secondary" href={`/api/export/stock${withParams(keep)}`} prefetch={false}>

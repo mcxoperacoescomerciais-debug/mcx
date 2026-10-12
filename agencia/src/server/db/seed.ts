@@ -76,17 +76,17 @@ const BRANDS = [
 ] as const;
 
 const STORES = [
-  { chain: "Super ABC", name: "Super ABC Formiga 63", code: "63", city: "Formiga", address: "Av. Antônio Olímpio de Morais, 1200", brands: ["BRAVO", "FOFINHO", "SUINCO"] },
-  { chain: "Super ABC", name: "Super ABC Formiga 08", code: "08", city: "Formiga", address: "Rua Silviano Brandão, 455", brands: ["BRAVO", "SUINCO"] },
-  { chain: "Super BH", name: "Super BH Formiga", code: null, city: "Formiga", address: "Av. Brasil, 2300", brands: ["BRAVO", "FOFINHO", "SUINCO", "DONACLARA"] },
-  { chain: "Super ABC", name: "Hiper ABC Arcos 30", code: "30", city: "Arcos", address: "Av. Magalhães Pinto, 980", brands: ["BRAVO", "FOFINHO", "SUINCO"] },
-  { chain: "Super BH", name: "Super BH Arcos", code: null, city: "Arcos", address: "Rua Getúlio Vargas, 150", brands: ["FOFINHO", "SUINCO"] },
-  { chain: "Super ABC", name: "Super ABC Lagoa da Prata 20", code: "20", city: "Lagoa da Prata", address: "Av. Brasil, 1501", brands: ["BRAVO", "FOFINHO", "SUINCO"] },
-  { chain: "Super BH", name: "Super BH Lagoa da Prata 113", code: "113", city: "Lagoa da Prata", address: "Rua Pará, 300", brands: ["BRAVO", "SUINCO", "DONACLARA"] },
-  { chain: "Super BH", name: "Super BH Pio XII", code: "616", city: "Itaúna", address: "Av. Pio XII, 2001", brands: ["BRAVO", "FOFINHO", "SUINCO"] },
-  { chain: "Super ABC", name: "Super ABC Praça", code: null, city: "Itaúna", address: "Praça Dr. Augusto Gonçalves, 55", brands: ["BRAVO", "FOFINHO", "SUINCO", "DONACLARA"] },
-  { chain: "Epa", name: "Epa Plus Prado", code: "214", city: "Belo Horizonte", address: "Rua Platina, 1460 — Prado", brands: ["BRAVO", "FOFINHO", "DONACLARA"] },
-  { chain: "Verdemar", name: "Verdemar Sion", code: "05", city: "Belo Horizonte", address: "Av. Uruguai, 330 — Sion", brands: ["BRAVO", "FOFINHO"] },
+  { chain: "Super ABC", name: "Super ABC Formiga 63", code: "63", city: "Formiga", address: "Av. Antônio Olímpio de Morais, 1200", brands: ["BRAVO", "FOFINHO", "SUINCO"], lat: -20.4628, lng: -45.4291 },
+  { chain: "Super ABC", name: "Super ABC Formiga 08", code: "08", city: "Formiga", address: "Rua Silviano Brandão, 455", brands: ["BRAVO", "SUINCO"], lat: -20.4661, lng: -45.4254 },
+  { chain: "Super BH", name: "Super BH Formiga", code: null, city: "Formiga", address: "Av. Brasil, 2300", brands: ["BRAVO", "FOFINHO", "SUINCO", "DONACLARA"], lat: -20.4597, lng: -45.4222 },
+  { chain: "Super ABC", name: "Hiper ABC Arcos 30", code: "30", city: "Arcos", address: "Av. Magalhães Pinto, 980", brands: ["BRAVO", "FOFINHO", "SUINCO"], lat: -20.2836, lng: -45.5402 },
+  { chain: "Super BH", name: "Super BH Arcos", code: null, city: "Arcos", address: "Rua Getúlio Vargas, 150", brands: ["FOFINHO", "SUINCO"], lat: -20.2811, lng: -45.5361 },
+  { chain: "Super ABC", name: "Super ABC Lagoa da Prata 20", code: "20", city: "Lagoa da Prata", address: "Av. Brasil, 1501", brands: ["BRAVO", "FOFINHO", "SUINCO"], lat: -20.0219, lng: -45.5447 },
+  { chain: "Super BH", name: "Super BH Lagoa da Prata 113", code: "113", city: "Lagoa da Prata", address: "Rua Pará, 300", brands: ["BRAVO", "SUINCO", "DONACLARA"], lat: -20.0247, lng: -45.5408 },
+  { chain: "Super BH", name: "Super BH Pio XII", code: "616", city: "Itaúna", address: "Av. Pio XII, 2001", brands: ["BRAVO", "FOFINHO", "SUINCO"], lat: -20.0789, lng: -44.5803 },
+  { chain: "Super ABC", name: "Super ABC Praça", code: null, city: "Itaúna", address: "Praça Dr. Augusto Gonçalves, 55", brands: ["BRAVO", "FOFINHO", "SUINCO", "DONACLARA"], lat: -20.0742, lng: -44.5751 },
+  { chain: "Epa", name: "Epa Plus Prado", code: "214", city: "Belo Horizonte", address: "Rua Platina, 1460 — Prado", brands: ["BRAVO", "FOFINHO", "DONACLARA"], lat: -19.9283, lng: -43.9636 },
+  { chain: "Verdemar", name: "Verdemar Sion", code: "05", city: "Belo Horizonte", address: "Av. Uruguai, 330 — Sion", brands: ["BRAVO", "FOFINHO"], lat: -19.953, lng: -43.93 },
   { chain: "Epa", name: "Epa Santa Efigênia", code: "118", city: "Belo Horizonte", address: "Av. Brasil, 1650 — Santa Efigênia", brands: ["BRAVO", "DONACLARA"] },
 ];
 
@@ -164,7 +164,7 @@ export async function seedDemoIfEmpty(db: DB): Promise<void> {
   for (const st of STORES) {
     const [row] = await db
       .insert(s.stores)
-      .values({ agencyId: A, chainId: chainId[st.chain], name: st.name, code: st.code, city: st.city, state: "MG", address: st.address, createdBy: admin.id })
+      .values({ agencyId: A, chainId: chainId[st.chain], name: st.name, code: st.code, city: st.city, state: "MG", address: st.address, lat: "lat" in st ? st.lat : null, lng: "lng" in st ? st.lng : null, createdBy: admin.id })
       .returning();
     storeIds.push(row.id);
     await db.insert(s.storeBrands).values(st.brands.map((b) => ({ storeId: row.id, brandId: brandId[b] })));
@@ -289,8 +289,9 @@ export async function seedDemoIfEmpty(db: DB): Promise<void> {
       startedAt,
       syncedAt: startedAt,
       geoStatus: "captured",
-      lat: -20.46 + rand() * 0.01,
-      lng: -45.43 + rand() * 0.01,
+      // Localização registrada perto da loja (Santa Efigênia fica sem coordenadas de propósito).
+      lat: ("lat" in STORES[sc.storeIdx] ? (STORES[sc.storeIdx] as { lat: number }).lat : -19.92) + (rand() - 0.5) * 0.002,
+      lng: ("lng" in STORES[sc.storeIdx] ? (STORES[sc.storeIdx] as { lng: number }).lng : -43.93) + (rand() - 0.5) * 0.002,
       accuracyM: 12 + Math.round(rand() * 30),
       createdBy: sc.promoterId,
     });

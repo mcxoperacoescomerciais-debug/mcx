@@ -302,6 +302,7 @@ export const ISSUE_KINDS = [
   "exception",
   "occurrence_open",
   "visit_late",
+  "visit_missed",
 ] as const;
 export type IssueKind = (typeof ISSUE_KINDS)[number];
 export const ISSUE_KIND_LABEL: Record<IssueKind, string> = {
@@ -314,10 +315,12 @@ export const ISSUE_KIND_LABEL: Record<IssueKind, string> = {
   exception: "Exceção operacional",
   occurrence_open: "Ocorrência não tratada",
   visit_late: "Visita atrasada",
+  visit_missed: "Visita não realizada",
 };
 /** Prioridade padrão (1 = mais urgente). Configurável em Configurações. */
 export const DEFAULT_ISSUE_PRIORITY: Record<IssueKind, number> = {
   visit_late: 1,
+  visit_missed: 2,
   missing_after: 2,
   missing_before: 2,
   exception: 3,

@@ -8,6 +8,7 @@ import { readTable, runImport, type ImportKind, type ImportReport } from "@/serv
 import type { FormState } from "../actions";
 import type { Employment, Role, Unit } from "@/lib/domain";
 import { mergeSettings } from "@/lib/settings";
+import { parseCoords } from "@/lib/rules";
 import { ISSUE_KINDS } from "@/lib/domain";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
@@ -42,7 +43,10 @@ export async function saveChainAction(_: FormState, fd: FormData): Promise<FormS
 }
 
 export async function saveStoreAction(_: FormState, fd: FormData): Promise<FormState> {
+  const coords = parseCoords(str(fd, "coords"));
+  if (coords === "invalid") return { ok: false, error: "Localização inválida. Use latitude, longitude (ex.: -19.9245, -43.9352)." };
   const r = await admin.saveStore(await getScope(), {
+    coords,
     id: str(fd, "id") || null,
     chainId: str(fd, "chainId") || null,
     name: str(fd, "name"),

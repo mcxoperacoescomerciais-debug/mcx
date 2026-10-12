@@ -5,30 +5,32 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
-  BarChart3,
-  Building,
-  ChevronDown,
-  Globe2,
   Boxes,
+  Building,
   Building2,
   CalendarRange,
-  ClipboardCheck,
+  Camera,
+  ChevronDown,
   FileText,
+  Globe2,
   History,
   KeyRound,
-  Images,
+  LayoutDashboard,
   LogOut,
+  Map as MapIcon,
   Menu,
   PackageSearch,
   Route,
   Settings,
   ShieldAlert,
+  SlidersHorizontal,
   Store,
   Tags,
   Upload,
   Users,
   X,
-  type LucideIcon, CalendarClock, ShieldX } from "lucide-react";
+  type LucideIcon,
+} from "lucide-react";
 import clsx from "clsx";
 import { BrandMark, McxFooter } from "@/components/ui";
 import { ROLE_LABEL, type Role } from "@/lib/domain";
@@ -39,90 +41,104 @@ interface NavItem {
   icon: LucideIcon;
   roles?: Role[];
   fullScope?: boolean;
+  /** Outras rotas que pertencem a este item (detalhes, abas). */
+  also?: string[];
 }
 
-const NAV: { title: string; items: NavItem[] }[] = [
-  {
-    title: "Operação",
-    items: [
-      { href: "/painel", label: "Painel do dia", icon: BarChart3 },
-      { href: "/painel/pendencias", label: "Central de pendências", icon: ShieldAlert },
-      { href: "/painel/promotores", label: "Promotores", icon: Users },
-      { href: "/painel/lojas", label: "Lojas", icon: Store },
-      { href: "/painel/programacao", label: "Programação", icon: CalendarRange, fullScope: true },
-      { href: "/painel/roteiros", label: "Roteiros", icon: Route, fullScope: true },
-    ],
-  },
-  {
-    title: "Análise",
-    items: [
-      { href: "/painel/estoque", label: "Estoque", icon: PackageSearch },
-      { href: "/painel/validades", label: "Validades", icon: CalendarClock },
-      { href: "/painel/rupturas", label: "Rupturas", icon: ClipboardCheck },
-      { href: "/painel/avarias", label: "Avarias", icon: ShieldX },
-      { href: "/painel/fotos", label: "Relatório fotográfico", icon: Images },
-      { href: "/painel/relatorios", label: "Relatórios e exportação", icon: FileText },
-    ],
-  },
-  {
-    title: "Cadastros",
-    items: [
-      { href: "/painel/cadastros/marcas", label: "Marcas", icon: Tags, roles: ["admin"] },
-      { href: "/painel/cadastros/lojas", label: "Redes e lojas", icon: Building2, roles: ["admin"] },
-      { href: "/painel/cadastros/produtos", label: "Produtos", icon: Boxes, roles: ["admin"] },
-      { href: "/painel/cadastros/usuarios", label: "Usuários", icon: Users, roles: ["admin"] },
-      { href: "/painel/cadastros/importar", label: "Importar planilha", icon: Upload, roles: ["admin"] },
-      { href: "/painel/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
-      { href: "/painel/auditoria", label: "Auditoria", icon: History, roles: ["admin"] },
-    ],
-  },
+/** Um assunto por página: o gestor escolhe o que quer analisar. */
+const MAIN: NavItem[] = [
+  { href: "/painel", label: "Visão geral", icon: LayoutDashboard },
+  { href: "/painel/mapa", label: "Mapa operacional", icon: MapIcon },
+  { href: "/painel/visitas", label: "Visitas", icon: Store, also: ["/painel/lojas"] },
+  { href: "/painel/marcas", label: "Atendimentos por marca", icon: Tags, also: ["/painel/atendimentos"] },
+  { href: "/painel/fotos", label: "Relatório fotográfico", icon: Camera },
+  { href: "/painel/estoque", label: "Estoque e ruptura", icon: PackageSearch, also: ["/painel/rupturas", "/painel/validades", "/painel/avarias"] },
+  { href: "/painel/promotores", label: "Promotores", icon: Users },
+  { href: "/painel/pendencias", label: "Central de pendências", icon: ShieldAlert },
 ];
 
-const MCX_NAV: { title: string; items: NavItem[] }[] = [
-  {
-    title: "MCX",
-    items: [
-      { href: "/painel/mcx", label: "Visão geral (todas)", icon: Globe2 },
-      { href: "/painel/mcx/agencias", label: "Agências", icon: Building },
-    ],
-  },
+const SETTINGS: NavItem[] = [
+  { href: "/painel/programacao", label: "Programação", icon: CalendarRange, fullScope: true },
+  { href: "/painel/roteiros", label: "Roteiros", icon: Route, fullScope: true },
+  { href: "/painel/cadastros/marcas", label: "Marcas", icon: Tags, roles: ["admin"] },
+  { href: "/painel/cadastros/lojas", label: "Redes e lojas", icon: Building2, roles: ["admin"] },
+  { href: "/painel/cadastros/produtos", label: "Produtos", icon: Boxes, roles: ["admin"] },
+  { href: "/painel/cadastros/usuarios", label: "Usuários", icon: Users, roles: ["admin"] },
+  { href: "/painel/cadastros/importar", label: "Importar planilha", icon: Upload, roles: ["admin"] },
+  { href: "/painel/relatorios", label: "Exportações", icon: FileText },
+  { href: "/painel/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
+  { href: "/painel/auditoria", label: "Auditoria", icon: History, roles: ["admin"] },
 ];
+
+const MCX_NAV: NavItem[] = [
+  { href: "/painel/mcx", label: "Visão geral (todas)", icon: Globe2 },
+  { href: "/painel/mcx/agencias", label: "Agências", icon: Building },
+];
+
+function isActive(pathname: string, item: NavItem) {
+  if (item.href === "/painel" || item.href === "/painel/mcx") return pathname === item.href;
+  return [item.href, ...(item.also ?? [])].some((h) => pathname === h || pathname.startsWith(`${h}/`));
+}
+
+function NavItemLink({ item, active, onNavigate, compact }: { item: NavItem; active: boolean; onNavigate?: () => void; compact?: boolean }) {
+  const Icon = item.icon;
+  return (
+    <li>
+      <Link
+        href={item.href}
+        onClick={onNavigate}
+        aria-current={active ? "page" : undefined}
+        className={clsx(
+          "flex items-center gap-2.5 px-3 rounded-lg font-medium transition-colors",
+          compact ? "h-8 text-[13px]" : "h-9 text-[13.5px]",
+          active ? "bg-white/12 text-white" : "text-brand-100/80 hover:bg-white/6 hover:text-white",
+        )}
+      >
+        <Icon className="size-4 shrink-0" />
+        {item.label}
+      </Link>
+    </li>
+  );
+}
 
 function NavLinks({ role, fullScope, mcx, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const allowed = (i: NavItem) => (!i.roles || i.roles.includes(role)) && (!i.fullScope || fullScope);
+  if (mcx) {
+    return (
+      <nav>
+        <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-200/60">MCX</p>
+        <ul className="space-y-0.5">
+          {MCX_NAV.map((item) => (
+            <NavItemLink key={item.href} item={item} active={isActive(pathname, item)} onNavigate={onNavigate} />
+          ))}
+        </ul>
+      </nav>
+    );
+  }
+  const settings = SETTINGS.filter(allowed);
+  const settingsActive = settings.some((i) => isActive(pathname, i));
   return (
-    <nav className="space-y-6">
-      {(mcx ? MCX_NAV : NAV).map((group) => {
-        const items = group.items.filter((i) => (!i.roles || i.roles.includes(role)) && (!i.fullScope || fullScope));
-        if (!items.length) return null;
-        return (
-          <div key={group.title}>
-            <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-200/60">{group.title}</p>
-            <ul className="space-y-0.5">
-              {items.map((item) => {
-                const active = item.href === "/painel" || item.href === "/painel/mcx" ? pathname === item.href : pathname.startsWith(item.href);
-                const Icon = item.icon;
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      onClick={onNavigate}
-                      aria-current={active ? "page" : undefined}
-                      className={clsx(
-                        "flex items-center gap-2.5 h-9 px-3 rounded-lg text-[13.5px] font-medium transition-colors",
-                        active ? "bg-white/12 text-white" : "text-brand-100/80 hover:bg-white/6 hover:text-white",
-                      )}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      {item.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        );
-      })}
+    <nav className="space-y-4">
+      <ul className="space-y-0.5">
+        {MAIN.filter(allowed).map((item) => (
+          <NavItemLink key={item.href} item={item} active={isActive(pathname, item)} onNavigate={onNavigate} />
+        ))}
+      </ul>
+      {settings.length ? (
+        <details open={settingsActive} className="group">
+          <summary className="list-none cursor-pointer flex items-center gap-2.5 h-9 px-3 rounded-lg text-[13.5px] font-medium text-brand-100/80 hover:bg-white/6 hover:text-white [&::-webkit-details-marker]:hidden">
+            <SlidersHorizontal className="size-4 shrink-0" />
+            <span className="flex-1">Cadastros e configurações</span>
+            <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+          </summary>
+          <ul className="mt-0.5 ml-3 pl-2 border-l border-white/10 space-y-0.5">
+            {settings.map((item) => (
+              <NavItemLink key={item.href} item={item} active={isActive(pathname, item)} onNavigate={onNavigate} compact />
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </nav>
   );
 }

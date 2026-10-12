@@ -111,6 +111,8 @@ export interface StoreInput {
   brandIds: string[];
   rules: string | null;
   notes: string | null;
+  /** Localização da loja no mapa; undefined = não alterar. */
+  coords?: { lat: number; lng: number } | null;
 }
 
 export async function saveStore(scope: Scope, i: StoreInput): Promise<ActionResult & { id?: string }> {
@@ -131,6 +133,7 @@ export async function saveStore(scope: Scope, i: StoreInput): Promise<ActionResu
     status: i.status,
     rules: clean(i.rules),
     notes: clean(i.notes),
+    ...(i.coords !== undefined ? { lat: i.coords?.lat ?? null, lng: i.coords?.lng ?? null } : {}),
   };
   let id = i.id;
   try {
@@ -160,6 +163,17 @@ export async function saveStore(scope: Scope, i: StoreInput): Promise<ActionResu
     throw err;
   }
   return { ok: true, message: "Loja salva.", id: id! };
+}
+
+/** Grava a localização da loja no mapa (ex.: a registrada pelo promotor numa visita). */
+export async function setStoreCoords(scope: Scope, storeId: string, coords: { lat: number; lng: number }, source: string): Promise<ActionResult> {
+  if (!isAdmin(scope)) return fail("Somente administradores.");
+  const db = await getDb();
+  const [before] = await db.select({ lat: s.stores.lat, lng: s.stores.lng }).from(s.stores).where(and(eq(s.stores.id, storeId), eq(s.stores.agencyId, scope.agencyId)));
+  if (!before) return fail("Loja não encontrada.");
+  await db.update(s.stores).set({ lat: coords.lat, lng: coords.lng, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.stores.id, storeId));
+  await audit(actor(scope), "store", storeId, "location_set", { before, after: coords, reason: source });
+  return { ok: true, message: "Localização da loja gravada." };
 }
 
 /** Produtos acompanhados na loja para uma marca (vazio = todos os ativos da marca). */

@@ -26,6 +26,15 @@ export function StoreForm({ store, brandIds, chains, brands }: { store: Store | 
           <input name="city" required defaultValue={store?.city} placeholder="Cidade" className={inputClass} />
           <input name="state" defaultValue={store?.state ?? "MG"} maxLength={2} className={inputClass} aria-label="UF" />
         </div>
+        <label className="sm:col-span-2 block">
+          <input
+            name="coords"
+            defaultValue={store?.lat != null && store?.lng != null ? `${store.lat}, ${store.lng}` : ""}
+            placeholder="Localização no mapa: latitude, longitude (ex.: -19.9245, -43.9352)"
+            className={inputClass}
+          />
+          <span className="block text-[11.5px] text-muted mt-1">No Google Maps, clique com o botão direito sobre a loja e copie os números. Sem localização, a loja aparece na lista “sem localização” do mapa.</span>
+        </label>
       </div>
       <fieldset>
         <legend className="text-[12.5px] font-semibold text-ink-2 mb-1.5">Marcas autorizadas nesta loja</legend>

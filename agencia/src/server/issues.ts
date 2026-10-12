@@ -14,7 +14,7 @@ import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
 import { getDayBoard } from "./operations";
 import { EXCEPTION_ITEM_LABEL, OCCURRENCE_CATEGORY_LABEL, type ExceptionItem, type IssueKind, type IssueReviewStatus } from "@/lib/domain";
-import { todayIso } from "@/lib/dates";
+import { addDays, todayIso } from "@/lib/dates";
 import type { PanelFilters } from "@/lib/filters";
 
 export interface Issue {
@@ -33,6 +33,23 @@ export interface Issue {
 }
 
 type F = Pick<PanelFilters, "from" | "to" | "brand" | "store" | "promoter" | "chain" | "city">;
+
+function missedIssue(scheduleId: string, date: string, plannedStart: string | null, storeName: string, brands: string | null, promoterId: string, promoterName: string, priority: number): Issue {
+  return {
+    key: `visit_missed:${scheduleId}`,
+    kind: "visit_missed",
+    priority,
+    title: "Visita não realizada",
+    detail: `Programada para ${plannedStart ?? "o dia"} e não iniciada.`,
+    date,
+    at: null,
+    storeName,
+    brandName: brands || null,
+    promoterName,
+    href: `/painel/promotores/${promoterId}?date=${date}`,
+    review: null,
+  };
+}
 
 export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: boolean } = {}): Promise<Issue[]> {
   const db = await getDb();
@@ -157,6 +174,49 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
     for (const st of board.stops.filter((x) => x.bucket === "late")) {
       issues.push({ key: `visit_late:${st.scheduleId}`, kind: "visit_late", priority: pr.visit_late, title: "Visita atrasada", detail: `Previsto ${st.plannedStart ?? "—"}, ainda não iniciada (tolerância ${scope.settings.lateToleranceMin} min).`, date: st.date, at: null, storeName: st.storeName, brandName: st.plannedBrands.map((b) => b.name).join(", "), promoterName: st.promoterName, href: `/painel/promotores/${st.promoterId}?date=${st.date}`, review: null });
     }
+    // Hoje, depois do fim do dia operacional, as não iniciadas viram "não realizadas".
+    for (const st of board.stops.filter((x) => x.bucket === "missed" && x.scheduleId)) {
+      issues.push(missedIssue(st.scheduleId!, st.date, st.plannedStart, st.storeName, st.plannedBrands.map((b) => b.name).join(", "), st.promoterId, st.promoterName, pr.visit_missed));
+    }
+  }
+  // Dias anteriores do período: programação ativa sem visita válida.
+  if (f.from < today) {
+    const until = f.to < today ? f.to : addDays(today, -1);
+    const missed = await db
+      .select({
+        id: s.schedules.id,
+        date: s.schedules.date,
+        plannedStart: s.schedules.plannedStart,
+        storeName: s.stores.name,
+        promoterId: s.users.id,
+        promoterName: s.users.name,
+        brands: sql<string>`(select string_agg(b.name, ', ' order by b.name) from ${s.scheduleBrands} sb join ${s.brands} b on b.id = sb.brand_id where sb.schedule_id = ${s.schedules.id})`,
+      })
+      .from(s.schedules)
+      .innerJoin(s.stores, eq(s.stores.id, s.schedules.storeId))
+      .innerJoin(s.users, eq(s.users.id, s.schedules.promoterId))
+      .where(
+        and(
+          eq(s.schedules.agencyId, scope.agencyId),
+          eq(s.schedules.status, "active"),
+          gte(s.schedules.date, f.from),
+          lte(s.schedules.date, until),
+          promoterFilter(scope, s.schedules.promoterId),
+          f.promoter ? eq(s.schedules.promoterId, f.promoter) : undefined,
+          f.store ? eq(s.schedules.storeId, f.store) : undefined,
+          f.chain ? eq(s.stores.chainId, f.chain) : undefined,
+          f.city ? eq(s.stores.city, f.city) : undefined,
+          f.brand ? sql`exists (select 1 from ${s.scheduleBrands} sb where sb.schedule_id = ${s.schedules.id} and sb.brand_id = ${f.brand})` : undefined,
+          // Gestor restrito a marcas: só programações com alguma marca dele.
+          scope.brandIds
+            ? scope.brandIds.length
+              ? sql`exists (select 1 from ${s.scheduleBrands} sb where sb.schedule_id = ${s.schedules.id} and sb.brand_id in (${sql.join(scope.brandIds.map((b) => sql`${b}`), sql`, `)}))`
+              : sql`false`
+            : undefined,
+          sql`not exists (select 1 from ${s.visits} v where v.schedule_id = ${s.schedules.id} and v.status <> 'cancelled')`,
+        ),
+      );
+    for (const m of missed) issues.push(missedIssue(m.id, m.date, m.plannedStart, m.storeName, m.brands, m.promoterId, m.promoterName, pr.visit_missed));
   }
 
   // Análises registradas pelo gestor.

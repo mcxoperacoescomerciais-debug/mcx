@@ -10,6 +10,7 @@ import { fmtDate } from "@/lib/dates";
 import { describeDays, formatIsoBr, SEVERITIES, SEVERITY_COLOR, SEVERITY_LABEL } from "@/lib/validity";
 import { EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { SeverityBadge } from "@/components/severity";
+import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
 import { Pagination, SectionCard, Table, Td, Th } from "../_components/widgets";
 
@@ -32,6 +33,7 @@ export default async function ValiditiesPage({ searchParams }: PageProps<"/paine
 
   return (
     <>
+      <ProductTabs />
       <PageHeader
         title="Validades"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos com validade registrados pelos promotores (classificação na data da visita)`}
