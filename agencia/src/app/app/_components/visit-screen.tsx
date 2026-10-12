@@ -141,8 +141,11 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
               </div>
               {a && (a.status === "completed" || a.status === "cancelled") ? (
                 <p className="text-[12px] text-muted mt-2 tnum">
-                  {fmtTime(a.startedAt)}–{fmtTime(a.finishedAt)} · {Object.keys(a.ruptures).length} ruptura(s) · {a.photos.length} foto(s)
+                  {fmtTime(a.startedAt)}–{fmtTime(a.finishedAt)} · {Object.keys(a.validities ?? {}).length} validade(s) · {Object.keys(a.ruptures).length} ruptura(s) · {Object.keys(a.damages ?? {}).length} avaria(s)
                 </p>
+              ) : null}
+              {a && a.status === "completed" ? (
+                <p className="mt-2 text-[13px] font-bold text-ok">Toque para enviar o PDF no WhatsApp</p>
               ) : null}
             </button>
           );

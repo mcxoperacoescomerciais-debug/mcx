@@ -21,6 +21,7 @@ import {
   check,
   date,
   doublePrecision,
+  numeric,
   index,
   integer,
   jsonb,
@@ -31,8 +32,10 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { Severity } from "../../lib/validity";
 import type {
   AttendanceStatus,
+  DamageKind,
   CorrectionStatus,
   Employment,
   ExceptionItem,
@@ -48,6 +51,7 @@ import type {
   RuptureStatus,
   StockState,
   Unit,
+  ValidityLocation,
   VisitOrigin,
   VisitStatus,
 } from "../../lib/domain";
@@ -437,6 +441,8 @@ export const photos = pgTable(
     kind: text("kind").$type<PhotoKind>().notNull(),
     ruptureId: uuid("rupture_id"),
     occurrenceId: uuid("occurrence_id"),
+    validityId: uuid("validity_id"),
+    damageId: uuid("damage_id"),
     source: text("source").$type<PhotoSource>().notNull().default("camera"),
     /** Momento da captura no aparelho. */
     takenAt: ts("taken_at").notNull(),
@@ -457,7 +463,7 @@ export const photos = pgTable(
   (t) => [
     index("photos_attendance_idx").on(t.attendanceId, t.kind),
     index("photos_agency_created_idx").on(t.agencyId, t.createdAt),
-    check("photos_kind_ck", sql`${t.kind} in ('before','after','rupture','occurrence')`),
+    check("photos_kind_ck", sql`${t.kind} in ('before','after','rupture','occurrence','validity','damage')`),
     check("photos_upload_ck", sql`${t.uploadedAt} is null or ${t.storageKey} is not null`),
   ],
 );
@@ -513,7 +519,7 @@ export const ruptures = pgTable(
     agencyId: uuid("agency_id").notNull().references(() => agencies.id),
     attendanceId: uuid("attendance_id").notNull().references(() => attendances.id),
     productId: uuid("product_id").notNull().references(() => products.id),
-    situation: text("situation").$type<RuptureSituation>().notNull(),
+    situation: text("situation").$type<RuptureSituation>().notNull().default("total"),
     knownStock: integer("known_stock"),
     note: text("note"),
     /** Criada a partir da sugestão "estoque zero → ruptura?" (validada pelo promotor). */
@@ -533,7 +539,7 @@ export const ruptures = pgTable(
     index("ruptures_product_idx").on(t.productId),
     check(
       "ruptures_situation_ck",
-      sql`${t.situation} in (${inList(["shelf_empty", "backroom_empty", "missing_display", "registered_not_found", "unavailable_other", "unconfirmed"])})`,
+      sql`${t.situation} in (${inList(["total", "shelf_empty", "backroom_empty", "missing_display", "registered_not_found", "unavailable_other", "unconfirmed"])})`,
     ),
     check("ruptures_status_ck", sql`${t.status} in (${inList(["new", "analysis", "treatment", "resolved", "not_confirmed", "closed"])})`),
     check("ruptures_known_stock_ck", sql`${t.knownStock} is null or ${t.knownStock} >= 0`),
@@ -573,6 +579,89 @@ export const occurrences = pgTable(
     createdBy: uuid("created_by"),
   },
   (t) => [index("occurrences_attendance_idx").on(t.attendanceId), index("occurrences_agency_status_idx").on(t.agencyId, t.status)],
+);
+
+/**
+ * Validade (modo SUINCO): produto com data de vencimento encontrado na área de
+ * vendas ou no estoque. Dias para vencer e severidade são calculados no
+ * servidor a partir da DATA DA VISITA e das faixas da agência no momento do
+ * registro (o histórico guarda a classificação do dia).
+ */
+export const validities = pgTable(
+  "validities",
+  {
+    id: uuid("id").primaryKey(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    attendanceId: uuid("attendance_id").notNull().references(() => attendances.id),
+    productId: uuid("product_id").notNull().references(() => products.id),
+    location: text("location").$type<ValidityLocation>().notNull().default("sales_floor"),
+    quantity: integer("quantity").notNull(),
+    unit: text("unit").$type<Unit>().notNull().default("un"),
+    expiryDate: date("expiry_date").notNull(),
+    daysToExpiry: integer("days_to_expiry").notNull(),
+    severity: text("severity").$type<Severity>().notNull(),
+    lot: text("lot"),
+    price: numeric("price", { precision: 10, scale: 2 }),
+    note: text("note"),
+    recordedAt: ts("recorded_at").notNull(),
+    deletedAt: ts("deleted_at"),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [
+    index("validities_attendance_idx").on(t.attendanceId),
+    index("validities_agency_severity_idx").on(t.agencyId, t.severity),
+    index("validities_product_idx").on(t.productId),
+    check("validities_location_ck", sql`${t.location} in ('sales_floor','stock')`),
+    check("validities_quantity_ck", sql`${t.quantity} > 0`),
+    check("validities_severity_ck", sql`${t.severity} in ('expired','critical','high','attention','monitor','normal')`),
+  ],
+);
+
+/** Avaria (modo SUINCO): tipo, quantidade, validade e lote opcionais; foto obrigatória. */
+export const damages = pgTable(
+  "damages",
+  {
+    id: uuid("id").primaryKey(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    attendanceId: uuid("attendance_id").notNull().references(() => attendances.id),
+    productId: uuid("product_id").notNull().references(() => products.id),
+    kind: text("kind").$type<DamageKind>().notNull(),
+    quantity: integer("quantity").notNull(),
+    unit: text("unit").$type<Unit>().notNull().default("un"),
+    expiryDate: date("expiry_date"),
+    lot: text("lot"),
+    note: text("note"),
+    recordedAt: ts("recorded_at").notNull(),
+    deletedAt: ts("deleted_at"),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [
+    index("damages_attendance_idx").on(t.attendanceId),
+    index("damages_agency_idx").on(t.agencyId, t.createdAt),
+    check("damages_quantity_ck", sql`${t.quantity} > 0`),
+    check("damages_kind_ck", sql`${t.kind} in ('damaged_package','violated','no_vacuum','strange_color','liquid','unfit','other')`),
+  ],
+);
+
+/**
+ * Alerta de validade crítica enviado no WhatsApp (um por atendimento). O id
+ * aleatório é também o link curto do PDF (/r/<id>), que abre sem login por
+ * um tempo limitado.
+ */
+export const whatsappAlerts = pgTable(
+  "whatsapp_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    attendanceId: uuid("attendance_id").notNull().references(() => attendances.id),
+    items: integer("items").notNull(),
+    sentAt: ts("sent_at"),
+    error: text("error"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("whatsapp_alerts_attendance_uq").on(t.attendanceId)],
 );
 
 // ───────────────────────────── Acompanhamento ─────────────────────────────

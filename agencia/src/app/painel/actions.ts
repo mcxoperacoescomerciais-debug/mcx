@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getScope } from "@/server/auth";
 import * as m from "@/server/manager";
 import type { ActionResult } from "@/server/manager";
-import type { IssueReviewStatus, RuptureStatus } from "@/lib/domain";
+import type { IssueReviewStatus } from "@/lib/domain";
 
 export type FormState = ActionResult | null;
 
@@ -26,10 +26,6 @@ export async function cancelCorrectionAction(_: FormState, fd: FormData): Promis
 export async function reviewAttendanceAction(_: FormState, fd: FormData): Promise<FormState> {
   const decision = str(fd, "decision") === "rejected" ? "rejected" : "approved";
   return done(await m.reviewAttendance(await getScope(), str(fd, "id"), decision, str(fd, "note")));
-}
-
-export async function ruptureStatusAction(_: FormState, fd: FormData): Promise<FormState> {
-  return done(await m.updateRuptureStatus(await getScope(), str(fd, "id"), str(fd, "status") as RuptureStatus, str(fd, "action"), str(fd, "resolvedAt") || null));
 }
 
 export async function reviewIssueAction(_: FormState, fd: FormData): Promise<FormState> {

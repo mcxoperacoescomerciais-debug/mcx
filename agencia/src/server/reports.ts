@@ -19,7 +19,6 @@ import {
   OCCURRENCE_CATEGORY_LABEL,
   OCCURRENCE_STATUS_LABEL,
   RUPTURE_SITUATION_LABEL,
-  RUPTURE_STATUS_LABEL,
   STOCK_STATE_LABEL,
   STOP_BUCKET_LABEL,
   VISIT_STATUS_LABEL,
@@ -239,12 +238,7 @@ export function rupturesSheet(rows: Awaited<ReturnType<typeof ruptureList>>["row
       { header: "Produto", key: "product", width: 36 },
       { header: "SKU", key: "sku" },
       { header: "Situação", key: "situation", width: 30 },
-      { header: "Estoque conhecido", key: "known" },
-      { header: "Fotos", key: "photos" },
       { header: "Promotor", key: "promoter", width: 22 },
-      { header: "Status", key: "status", width: 22 },
-      { header: "Ação / resolução", key: "action", width: 40 },
-      { header: "Resolvida em", key: "resolved", width: 18 },
     ],
     rows: rows.map((r) => ({
       at: fmtDateTime(r.recordedAt),
@@ -255,12 +249,7 @@ export function rupturesSheet(rows: Awaited<ReturnType<typeof ruptureList>>["row
       product: r.productName,
       sku: r.sku,
       situation: RUPTURE_SITUATION_LABEL[r.situation],
-      known: r.knownStock,
-      photos: r.photos,
       promoter: r.promoterName,
-      status: RUPTURE_STATUS_LABEL[r.status],
-      action: r.resolutionAction,
-      resolved: r.resolvedAt ? fmtDateTime(r.resolvedAt) : "",
     })),
   };
 }

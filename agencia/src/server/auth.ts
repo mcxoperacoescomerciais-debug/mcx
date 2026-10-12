@@ -266,3 +266,25 @@ export async function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
+
+/**
+ * Escopo "da agência inteira", sem usuário logado — só para leituras do
+ * próprio sistema (ex.: o link do PDF enviado no alerta de WhatsApp).
+ */
+export async function agencySystemScope(agencyId: string): Promise<Scope | null> {
+  const db = await getDb();
+  const [agency] = await db.select().from(s.agencies).where(eq(s.agencies.id, agencyId));
+  if (!agency) return null;
+  return {
+    agencyId,
+    userId: "00000000-0000-0000-0000-000000000000",
+    role: "admin",
+    promoterId: null,
+    brandIds: null,
+    promoterIds: null,
+    settings: mergeSettings(agency.settings),
+    agencyName: agency.name,
+    agencyLogoUrl: agencyLogoUrl(agency),
+    platform: false,
+  };
+}

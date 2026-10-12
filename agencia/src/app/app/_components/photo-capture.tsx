@@ -5,7 +5,7 @@ import { Camera, CheckCircle2, CloudUpload, Expand, ImagePlus, Loader2, RefreshC
 import clsx from "clsx";
 import type { PhotoKind } from "@/lib/domain";
 import { fmtTime } from "@/lib/dates";
-import { addPhoto, getPhotoBlob, removePhoto, type LocalPhoto } from "../_lib/local-store";
+import { addPhoto, getPhotoBlob, removePhoto, type LocalPhoto, type PhotoLink } from "../_lib/local-store";
 import { haptic, useObjectUrl } from "../_lib/hooks";
 import { preparePhoto } from "../_lib/photo";
 import { Sheet, toast } from "./primitives";
@@ -58,7 +58,7 @@ interface CaptureProps {
   editable: boolean;
   title: string;
   cta: string;
-  link?: { ruptureId?: string; occurrenceId?: string };
+  link?: PhotoLink;
   compact?: boolean;
 }
 

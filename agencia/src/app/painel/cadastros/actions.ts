@@ -126,9 +126,40 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         dayEndsAt: str(fd, "dayEndsAt"),
         stockDivergencePct: Number(str(fd, "stockDivergencePct")),
         issuePriority: priority as never,
+        validityBands: {
+          critical: Number(str(fd, "band_critical")),
+          high: Number(str(fd, "band_high")),
+          attention: Number(str(fd, "band_attention")),
+          monitor: Number(str(fd, "band_monitor")),
+        },
+        alerts: {
+          bulkDays: Number(str(fd, "alert_bulkDays")),
+          bulkMinQty: Number(str(fd, "alert_bulkMinQty")),
+          whatsappPhone: normalizePhones(str(fd, "alert_phone")),
+          // A chave nunca volta para a tela: vazio mantém a atual; "apagar" remove.
+          whatsappApiKey: str(fd, "alert_apikey").toLowerCase() === "apagar" ? "" : str(fd, "alert_apikey") || scope.settings.alerts.whatsappApiKey,
+        },
       }),
     ),
   );
+}
+
+/** "37 99999-8888, +55 31 98888 7777" → "+5537999998888,+5531988887777" */
+function normalizePhones(raw: string): string {
+  return raw
+    .split(",")
+    .map((p) => p.replace(/\D/g, ""))
+    .filter(Boolean)
+    .map((d) => "+" + (d.startsWith("55") && d.length >= 12 ? d : "55" + d))
+    .join(",");
+}
+
+export async function testWhatsAppAction(_: FormState, _fd: FormData): Promise<FormState> {
+  void _fd;
+  const scope = await getScope();
+  if (scope.role !== "admin") return done({ ok: false, error: "Somente administradores." });
+  const { sendTestAlert } = await import("@/server/whatsapp-alert");
+  return done(await sendTestAlert(scope));
 }
 
 export type ImportState = { report?: ImportReport; error?: string } | null;

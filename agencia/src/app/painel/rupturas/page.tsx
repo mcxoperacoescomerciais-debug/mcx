@@ -5,9 +5,9 @@ import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { ruptureList, ruptureSummary } from "@/server/analytics";
 import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
-import { RUPTURE_SITUATION_LABEL, RUPTURE_SITUATIONS, RUPTURE_STATUS_LABEL, RUPTURE_STATUS_TONE, RUPTURE_STATUSES } from "@/lib/domain";
+import { RUPTURE_SITUATION_LABEL } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
-import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
+import { EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
 import { KpiCard, Pagination, RankBar, SectionCard, Table, Td, Th } from "../_components/widgets";
 import { DailyBars } from "../_components/daily-bars";
@@ -19,14 +19,13 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
   const f = parseFilters(await searchParams, 30);
   const [sum, list, options] = await Promise.all([ruptureSummary(scope, f), ruptureList(scope, f), filterOptions(scope)]);
   const t = sum.totals;
-  const keep = { from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, city: f.city, status: f.status, kind: f.kind, q: f.q || null };
-  const open = t.new + t.analysis + t.treatment;
+  const keep = { from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, city: f.city, q: f.q || null };
 
   return (
     <>
       <PageHeader
         title="Painel de ruptura"
-        subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · ocorrências registradas pelos promotores e seu tratamento`}
+        subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos marcados pelos promotores como “Ruptura total”`}
         actions={
           <LinkButton variant="secondary" href={`/api/export/ruptures${withParams(keep)}`} prefetch={false}>
             <FileDown className="size-4" /> Exportar (Excel)
@@ -35,27 +34,16 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}
-        fields={["period", "brand", "chain", "store", "promoter", "status", "kind", "q"]}
-        options={{
-          ...options,
-          statuses: [{ id: "open", name: "Em aberto (nova, análise, tratativa)" }, ...RUPTURE_STATUSES.map((s) => ({ id: s, name: RUPTURE_STATUS_LABEL[s] }))],
-          kinds: RUPTURE_SITUATIONS.map((s) => ({ id: s, name: RUPTURE_SITUATION_LABEL[s] })),
-        }}
-        kindLabel="Todas as situações"
+        fields={["period", "brand", "chain", "store", "promoter", "q"]}
+        options={options}
         qPlaceholder="Produto ou SKU"
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard label="Ocorrências no período" value={t.total} sub={`${t.unconfirmedSituation} ainda não confirmada(s) em campo`} />
-        <KpiCard label="Novas" value={t.new} tone={t.new ? "danger" : "neutral"} sub="Aguardando análise" href={`?${new URLSearchParams({ from: f.from, to: f.to, status: "new" })}`} />
-        <KpiCard label="Em análise / tratativa" value={t.analysis + t.treatment} tone="warning" sub={`${t.analysis} em análise · ${t.treatment} em tratativa`} href={`?${new URLSearchParams({ from: f.from, to: f.to, status: "open" })}`} />
-        <KpiCard label="Resolvidas" value={t.resolved} tone="success" sub={t.total ? `${Math.round((t.resolved / t.total) * 100)}% de ${t.total}` : "—"} href={`?${new URLSearchParams({ from: f.from, to: f.to, status: "resolved" })}`} />
-        <KpiCard label="Não confirmadas / encerradas" value={t.notConfirmed + t.closed} sub="Com justificativa registrada" />
-        <KpiCard
-          label="Tempo médio de resolução"
-          value={t.resolvedWithTime >= 3 && t.avgHours !== null ? (t.avgHours >= 48 ? `${(t.avgHours / 24).toFixed(1)} d` : `${Math.round(t.avgHours)} h`) : "—"}
-          sub={t.resolvedWithTime >= 3 ? `Base: ${t.resolvedWithTime} resolvidas com data` : `Amostra insuficiente (${t.resolvedWithTime} de 3 mínimas)`}
-        />
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <KpiCard label="Rupturas no período" value={t.total} tone={t.total ? "danger" : "neutral"} sub={`em ${t.visits} visita(s)`} />
+        <KpiCard label="Lojas com ruptura" value={t.stores} />
+        <KpiCard label="Produtos diferentes" value={t.products} />
+        <KpiCard label="Recorrentes" value={sum.recurrent.length} tone={sum.recurrent.length ? "warning" : "neutral"} sub="Mesmo produto e loja em 2+ visitas" />
       </div>
 
       <div className="grid xl:grid-cols-3 gap-6 mt-6">
@@ -95,7 +83,7 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
         </SectionCard>
       </div>
 
-      <SectionCard className="mt-6" title="Ocorrências" subtitle={`${list.total} registro(s) · ${open} em aberto no período`}>
+      <SectionCard className="mt-6" title="Rupturas registradas" subtitle={`${list.total} registro(s) no período`}>
         {list.rows.length ? (
           <>
             <Table>
@@ -107,8 +95,6 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
                   <Th>Marca</Th>
                   <Th>Promotor</Th>
                   <Th>Situação</Th>
-                  <Th>Evidência</Th>
-                  <Th>Status</Th>
                 </tr>
               </thead>
               <tbody>
@@ -116,7 +102,7 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
                   <tr key={r.id} className="hover:bg-subtle">
                     <Td className="tnum whitespace-nowrap">{fmtDateTime(r.recordedAt).slice(0, 16)}</Td>
                     <Td>
-                      <Link href={`/painel/rupturas/${r.id}`} className="font-semibold hover:underline">
+                      <Link href={`/painel/atendimentos/${r.attendanceId}`} className="font-semibold hover:underline">
                         {r.productName}
                       </Link>
                       <span className="block text-[11.5px] text-muted">SKU {r.sku}</span>
@@ -128,12 +114,6 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
                     <Td>{r.brandName}</Td>
                     <Td>{r.promoterName}</Td>
                     <Td className="text-[12.5px]">{RUPTURE_SITUATION_LABEL[r.situation]}</Td>
-                    <Td>{r.photos ? `${r.photos} foto(s)` : <span className="text-muted">—</span>}</Td>
-                    <Td>
-                      <StatusBadge tone={RUPTURE_STATUS_TONE[r.status]} size="sm">
-                        {RUPTURE_STATUS_LABEL[r.status]}
-                      </StatusBadge>
-                    </Td>
                   </tr>
                 ))}
               </tbody>

@@ -56,7 +56,7 @@ export default async function McxOverviewPage({ searchParams }: PageProps<"/pain
             <KpiCard label="Lojas concluídas" value={t.storesCompleted} tone="success" sub={`${pct(t.storesCompleted, t.storesScheduled) ?? "—"}% do programado`} icon={<CheckCircle2 className="size-4" />} />
             <KpiCard label="Pendentes ou atrasadas" value={t.pendingOrLate} tone={t.late ? "danger" : "neutral"} sub={`${t.late} atrasada(s) ou não realizada(s)`} icon={<AlertTriangle className="size-4" />} />
             <KpiCard label="Pendências abertas" value={t.issues} tone={t.issues ? "warning" : "success"} sub="Na data selecionada" icon={<ShieldAlert className="size-4" />} />
-            <KpiCard label="Rupturas em aberto" value={t.ruptures} tone={t.ruptures ? "danger" : "neutral"} sub="Ainda em tratamento" icon={<PackageX className="size-4" />} />
+            <KpiCard label="Rupturas no dia" value={t.ruptures} tone={t.ruptures ? "danger" : "neutral"} sub="Marcadas pelos promotores" icon={<PackageX className="size-4" />} />
           </div>
 
           <SectionCard title="Por agência" subtitle="Entre no painel de uma agência para ver e tratar os detalhes dela." className="mt-5" bodyClass="pb-1">

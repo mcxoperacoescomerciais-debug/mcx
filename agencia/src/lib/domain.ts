@@ -93,13 +93,15 @@ export const EXCEPTION_REASON_LABEL: Record<ExceptionReason, string> = {
 
 // ───────────────────────────── Fotos ─────────────────────────────
 
-export const PHOTO_KINDS = ["before", "after", "rupture", "occurrence"] as const;
+export const PHOTO_KINDS = ["before", "after", "rupture", "occurrence", "validity", "damage"] as const;
 export type PhotoKind = (typeof PHOTO_KINDS)[number];
 export const PHOTO_KIND_LABEL: Record<PhotoKind, string> = {
   before: "Antes",
   after: "Depois",
   rupture: "Evidência de ruptura",
   occurrence: "Ocorrência",
+  validity: "Validade",
+  damage: "Avaria",
 };
 
 export const PHOTO_SOURCES = ["camera", "gallery"] as const;
@@ -152,7 +154,13 @@ export const UNIT_LABEL: Record<Unit, string> = {
 
 // ───────────────────────────── Ruptura ─────────────────────────────
 
+/**
+ * Ruptura no modo SUINCO: o promotor só marca "Ruptura total" na lista de
+ * produtos (um toque). As demais situações existem apenas para registros
+ * antigos continuarem legíveis.
+ */
 export const RUPTURE_SITUATIONS = [
+  "total",
   "shelf_empty",
   "backroom_empty",
   "missing_display",
@@ -162,6 +170,7 @@ export const RUPTURE_SITUATIONS = [
 ] as const;
 export type RuptureSituation = (typeof RUPTURE_SITUATIONS)[number];
 export const RUPTURE_SITUATION_LABEL: Record<RuptureSituation, string> = {
+  total: "Ruptura total",
   shelf_empty: "Sem estoque na área de venda",
   backroom_empty: "Sem estoque no depósito (verificado)",
   missing_display: "Ausente da exposição",
@@ -191,6 +200,28 @@ export const RUPTURE_STATUS_TONE: Record<RuptureStatus, Tone> = {
 export const RUPTURE_OPEN_STATUSES: RuptureStatus[] = ["new", "analysis", "treatment"];
 /** Estados finais exigem a ação tomada (texto) — ver regra 8.4. */
 export const RUPTURE_FINAL_STATUSES: RuptureStatus[] = ["resolved", "not_confirmed", "closed"];
+
+// ───────────────────────────── Validade e avaria (modo SUINCO) ─────────────────────────────
+
+export const VALIDITY_LOCATIONS = ["sales_floor", "stock"] as const;
+export type ValidityLocation = (typeof VALIDITY_LOCATIONS)[number];
+export const VALIDITY_LOCATION_LABEL: Record<ValidityLocation, string> = { sales_floor: "Área de vendas", stock: "Estoque" };
+
+export const DAMAGE_KINDS = ["damaged_package", "violated", "no_vacuum", "strange_color", "liquid", "unfit", "other"] as const;
+export type DamageKind = (typeof DAMAGE_KINDS)[number];
+export const DAMAGE_KIND_LABEL: Record<DamageKind, string> = {
+  damaged_package: "Embalagem danificada",
+  violated: "Embalagem violada",
+  no_vacuum: "Sem vácuo",
+  strange_color: "Coloração estranha",
+  liquid: "Líquido",
+  unfit: "Produto impróprio",
+  other: "Outro",
+};
+
+/** Unidades oferecidas na validade/avaria: un e cx; kg só para produto fracionado (unidade kg). */
+export const ITEM_UNITS = ["un", "cx", "kg"] as const;
+export type ItemUnit = (typeof ITEM_UNITS)[number];
 
 // ───────────────────────────── Ocorrências ─────────────────────────────
 
@@ -263,7 +294,6 @@ export const ISSUE_KINDS = [
   "missing_before",
   "missing_after",
   "stock_incomplete",
-  "rupture_open",
   "visit_open",
   "correction_pending",
   "photo_unsynced",
@@ -276,7 +306,6 @@ export const ISSUE_KIND_LABEL: Record<IssueKind, string> = {
   missing_before: "Sem foto do antes",
   missing_after: "Sem foto do depois",
   stock_incomplete: "Estoque incompleto",
-  rupture_open: "Ruptura registrada",
   visit_open: "Visita não finalizada",
   correction_pending: "Aguardando correção",
   photo_unsynced: "Foto aguardando sincronização",
@@ -289,7 +318,6 @@ export const DEFAULT_ISSUE_PRIORITY: Record<IssueKind, number> = {
   visit_late: 1,
   missing_after: 2,
   missing_before: 2,
-  rupture_open: 3,
   exception: 3,
   correction_pending: 4,
   visit_open: 4,

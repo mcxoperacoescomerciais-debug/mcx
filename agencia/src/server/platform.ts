@@ -5,13 +5,12 @@
  * calculados agência por agência com o mesmo motor do painel do dia.
  */
 import "server-only";
-import { and, asc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import { agencyLogoUrl, hashPassword, scopeForUser, type Scope, type SessionUser } from "./auth";
 import { audit } from "./audit";
 import { getDayBoard, type DayBoard } from "./operations";
 import { listIssues } from "./issues";
-import { RUPTURE_FINAL_STATUSES } from "@/lib/domain";
 
 export type PlatformResult = { ok: true; message?: string; id?: string } | { ok: false; error: string };
 const fail = (error: string): PlatformResult => ({ ok: false, error });
@@ -93,7 +92,9 @@ export async function macroOverview(user: SessionUser, date: string): Promise<Ma
         db
           .select({ n: sql<number>`count(*)::int` })
           .from(s.ruptures)
-          .where(and(eq(s.ruptures.agencyId, agency.id), isNull(s.ruptures.deletedAt), notInArray(s.ruptures.status, RUPTURE_FINAL_STATUSES))),
+          .innerJoin(s.attendances, eq(s.attendances.id, s.ruptures.attendanceId))
+          .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+          .where(and(eq(s.ruptures.agencyId, agency.id), isNull(s.ruptures.deletedAt), eq(s.visits.visitDate, date))),
       ]);
       return { agency, kpis: board.kpis, openIssues: issues.length, openRuptures: rup?.n ?? 0, lastSyncAt: board.lastSyncAt };
     }),

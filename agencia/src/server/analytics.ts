@@ -10,7 +10,7 @@ import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
 import { rowsOf } from "./promoter";
 import { PAGE_SIZE, type PanelFilters } from "@/lib/filters";
-import type { RuptureSituation, RuptureStatus, StockState, Unit } from "@/lib/domain";
+import type { RuptureSituation, StockState, Unit } from "@/lib/domain";
 
 type F = PanelFilters;
 
@@ -171,7 +171,6 @@ export async function ruptureList(scope: Scope, f: F, opts: { page?: number; pag
     isNull(s.ruptures.deletedAt),
     gte(s.visits.visitDate, f.from),
     lte(s.visits.visitDate, f.to),
-    f.status === "open" ? sql`${s.ruptures.status} in ('new','analysis','treatment')` : f.status ? eq(s.ruptures.status, f.status as RuptureStatus) : undefined,
     f.kind ? eq(s.ruptures.situation, f.kind as RuptureSituation) : undefined,
     f.q ? sql`(lower(${s.products.name}) like ${`%${f.q.toLowerCase()}%`} or lower(${s.products.sku}) like ${`%${f.q.toLowerCase()}%`})` : undefined,
     ...commonConds(scope, f),
@@ -225,27 +224,10 @@ export async function ruptureSummary(scope: Scope, f: F) {
 
   const [totals] = (await sel({
     total: sql<number>`count(*)::int`,
-    new: sql<number>`count(*) filter (where ${s.ruptures.status} = 'new')::int`,
-    analysis: sql<number>`count(*) filter (where ${s.ruptures.status} = 'analysis')::int`,
-    treatment: sql<number>`count(*) filter (where ${s.ruptures.status} = 'treatment')::int`,
-    resolved: sql<number>`count(*) filter (where ${s.ruptures.status} = 'resolved')::int`,
-    notConfirmed: sql<number>`count(*) filter (where ${s.ruptures.status} = 'not_confirmed')::int`,
-    closed: sql<number>`count(*) filter (where ${s.ruptures.status} = 'closed')::int`,
-    unconfirmedSituation: sql<number>`count(*) filter (where ${s.ruptures.situation} = 'unconfirmed')::int`,
-    resolvedWithTime: sql<number>`count(*) filter (where ${s.ruptures.status} = 'resolved' and ${s.ruptures.resolvedAt} is not null)::int`,
-    avgHours: sql<number | null>`avg(extract(epoch from (${s.ruptures.resolvedAt} - ${s.ruptures.recordedAt})) / 3600) filter (where ${s.ruptures.status} = 'resolved' and ${s.ruptures.resolvedAt} is not null)`,
-  }).where(base)) as unknown as {
-    total: number;
-    new: number;
-    analysis: number;
-    treatment: number;
-    resolved: number;
-    notConfirmed: number;
-    closed: number;
-    unconfirmedSituation: number;
-    resolvedWithTime: number;
-    avgHours: number | null;
-  }[];
+    stores: sql<number>`count(distinct ${s.visits.storeId})::int`,
+    products: sql<number>`count(distinct ${s.ruptures.productId})::int`,
+    visits: sql<number>`count(distinct ${s.visits.id})::int`,
+  }).where(base)) as unknown as { total: number; stores: number; products: number; visits: number }[];
 
   const ranking = async (col: SQL, name: SQL) =>
     (await sel({ id: col, name, n: sql<number>`count(*)::int`, stores: sql<number>`count(distinct ${s.visits.storeId})::int` })

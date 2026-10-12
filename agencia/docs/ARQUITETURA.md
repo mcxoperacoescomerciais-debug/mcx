@@ -146,13 +146,13 @@ total programado):
    informação de estoque (configurável por marca). A mensagem diz exatamente o que falta.
 5. Exceção exige itens + motivo + justificativa e fica visível ao gestor.
 6. Estoque vazio = pendente, nunca zero.
-7. Ruptura sempre com produto, loja, marca e atendimento; "Ainda não confirmada" existe.
-8. Estoque zero/não encontrado **sugere** ruptura; só vira registro quando o promotor confirma.
+7. Ruptura (modo SUINCO): o promotor toca no produto e marca "Ruptura total"; sem tratamento no painel.
+8. Estoque zero/não encontrado **sugere** ruptura (destaque na lista); só vira registro com o toque do promotor.
 9. Encerrar a visita não altera horários dos atendimentos; horário de início é imutável.
 10. Correção preserva o original (snapshot) e registra quem pediu e quem corrigiu.
 11. Desativar usuário mantém o histórico e derruba sessões.
 12. Status relevantes, exportações e alterações de cadastro vão para a auditoria.
-13. Visualizar não resolve: ruptura em status final exige ação; pendência
+13. Visualizar não resolve: pendência
     "analisada" continua aberta até a causa sumir ou o gestor concluir.
 
 ## 6. Campo e conectividade (offline)
@@ -187,9 +187,32 @@ telefone opcionais); localização só com permissão do promotor e só no iníc
 visita. Backups: usar o backup diário do Supabase (PITR no plano pago) e exportar
 o bucket periodicamente.
 
-## 9. Fases seguintes (não implementadas de propósito)
+## 9. Validade, avaria e alerta (modo SUINCO)
+
+Trazidos do sistema SUINCO (`web/`) para cada atendimento de marca:
+
+- **Validade** (`validities`): produto, área de vendas/estoque, validade digitada
+  (0510 → 05/10), quantidade, preço, lote, foto opcional. Dias para vencer e
+  severidade (Vencido, Crítico, Alto, Atenção, Monitoramento, Normal) são
+  calculados no servidor sobre a data da visita e as faixas da agência
+  (Configurações) — src/lib/validity.ts.
+- **Avaria** (`damages`): tipo, quantidade, validade e lote opcionais, **foto obrigatória**
+  (regra de finalização `damage_photo`).
+- **Alerta no WhatsApp** (src/server/whatsapp-alert.ts, CallMeBot): ao finalizar o
+  atendimento com validade crítica — vencido/até "Crítico até" dias, ou grande
+  quantidade (até N dias e acima de Q unidades) — a agência recebe nome da
+  agência, marca, promotor, loja, cidade, itens e o link curto do PDF
+  (`/r/<id>`, sem login, 30 dias). Um alerta por atendimento (`whatsapp_alerts`).
+  Número e chave por agência em Configurações; a chave nunca volta para a tela
+  nem vai para a auditoria.
+- **PDF para o promotor**: "Enviar PDF no WhatsApp" na Revisão do atendimento
+  concluído; o PDF é baixado antes do toque (o compartilhar do celular exige o
+  gesto recente).
+- Painel: Validades, Avarias e Rupturas (lista + Excel), seções no atendimento e no PDF.
+
+## 10. Fases seguintes (não implementadas de propósito)
 
 Leitura de código de barras · reconhecimento de produto/IA assistida para fotos
-(sempre como apoio, nunca como veredito) · alertas automáticos (WhatsApp/e-mail/push)
+(sempre como apoio, nunca como veredito) · alertas automáticos por e-mail/push
 · relatórios agendados · integrações com clientes · ordem de etapas configurável por
 marca · app nativo, se o PWA não bastar.

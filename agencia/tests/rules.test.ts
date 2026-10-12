@@ -45,7 +45,7 @@ const base = {
   afterPhotos: 1,
   trackedProductIds: ["p1", "p2"],
   stock: { p1: "quantity" as const, p2: "zero" as const },
-  ruptures: [],
+  damages: [],
   exceptionItems: [],
   exceptionReason: null,
   exceptionNote: null,
@@ -74,10 +74,12 @@ test("estoque pendente bloqueia; exceção justificada libera e fica registrada"
   assert.ok(disabled.some((x) => x.kind === "after_photo"));
 });
 
-test("ruptura com foto obrigatória", () => {
-  const m = attendanceMissing({ ...base, brand: { ...brand, rupturePhotoRequired: true }, ruptures: [{ productId: "p2", photos: 0 }] });
-  assert.equal(m[0].kind, "rupture_photo");
+test("modo SUINCO: ruptura não exige foto; avaria sempre exige (sem exceção)", () => {
+  assert.deepEqual(attendanceMissing({ ...base, brand: { ...brand, rupturePhotoRequired: true } }), []);
+  const m = attendanceMissing({ ...base, damages: [{ productId: "p2", photos: 0 }] });
+  assert.equal(m[0].kind, "damage_photo");
   assert.equal(m[0].excusable, false);
+  assert.deepEqual(attendanceMissing({ ...base, damages: [{ productId: "p2", photos: 1 }] }), []);
 });
 
 test("encerramento da visita: marcas pendentes e atendimentos abertos", () => {
@@ -126,4 +128,24 @@ test("datas no fuso de São Paulo e filtros da URL", () => {
   assert.equal(f.from, "2026-10-01");
   assert.equal(f.brand, null);
   assert.equal(f.page, 1);
+});
+
+// ───────────────────────────── Validade (modo SUINCO) ─────────────────────────────
+
+test("validade: digitação 0510, faixas e alerta (crítico ou grande quantidade)", async () => {
+  const { parseExpiryDigits, classify, isAlertItem, DEFAULT_BANDS, plausibilityWarning } = await import("../src/lib/validity");
+  assert.deepEqual(parseExpiryDigits("0510", "2026-10-01"), { ok: true, iso: "2026-10-05", inferredYear: true });
+  assert.deepEqual(parseExpiryDigits("0501", "2026-12-20"), { ok: true, iso: "2027-01-05", inferredYear: true });
+  assert.equal(parseExpiryDigits("3102", "2026-10-01").ok, false);
+  assert.equal(classify(-1), "expired");
+  assert.equal(classify(3), "critical");
+  assert.equal(classify(7), "high");
+  assert.equal(classify(31), "normal");
+  assert.ok(plausibilityWarning("2016-12-07", "2026-10-01"));
+  const rule = { bands: DEFAULT_BANDS, bulkDays: 15, bulkMinQty: 15 };
+  assert.ok(isAlertItem(2, 1, rule), "crítico entra");
+  assert.ok(isAlertItem(-3, 1, rule), "vencido entra");
+  assert.ok(isAlertItem(10, 20, rule), "grande quantidade entra");
+  assert.ok(!isAlertItem(10, 15, rule), "15 unidades não é 'acima de 15'");
+  assert.ok(!isAlertItem(20, 100, rule), "fora do prazo de grande quantidade");
 });

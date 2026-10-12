@@ -65,7 +65,7 @@ export default async function BrandsPage() {
                   <Td className="text-[12.5px] text-ink-2">
                     Antes ≥ {b.minBeforePhotos} · Depois ≥ {b.minAfterPhotos}
                     <br />
-                    {b.requireStock ? "Estoque obrigatório" : "Estoque opcional"} · {b.rupturePhotoRequired ? "Foto na ruptura" : "Ruptura sem foto obrigatória"}
+                    {b.requireStock ? "Estoque obrigatório" : "Estoque opcional"}
                     <br />
                     {b.allowGallery ? "Permite galeria" : "Só câmera"} · {b.activities.length} atividade(s)
                   </Td>
@@ -114,9 +114,6 @@ function BrandForm({ brand }: { brand: Brand | null }) {
       <div className="flex flex-wrap gap-4 text-[13px]">
         <label className="inline-flex items-center gap-1.5">
           <input type="checkbox" name="requireStock" defaultChecked={brand?.requireStock ?? true} /> Estoque obrigatório
-        </label>
-        <label className="inline-flex items-center gap-1.5">
-          <input type="checkbox" name="rupturePhotoRequired" defaultChecked={brand?.rupturePhotoRequired ?? false} /> Foto obrigatória na ruptura
         </label>
         <label className="inline-flex items-center gap-1.5">
           <input type="checkbox" name="allowGallery" defaultChecked={brand?.allowGallery ?? true} /> Permitir foto da galeria

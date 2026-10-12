@@ -16,14 +16,26 @@ import {
   OCCURRENCE_CATEGORY_LABEL,
   OCCURRENCE_STATUS_LABEL,
   REVIEW_STATUS_LABEL,
-  RUPTURE_SITUATION_LABEL,
-  RUPTURE_STATUS_LABEL,
-  RUPTURE_STATUS_TONE,
+  DAMAGE_KIND_LABEL,
+  VALIDITY_LOCATION_LABEL,
   STOCK_STATE_LABEL,
   STOCK_STATE_TONE,
   type StockDisplayState,
 } from "@/lib/domain";
 import { fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates";
+import { describeDays, formatIsoBr, SEVERITY_COLOR, SEVERITY_LABEL, type Severity } from "@/lib/validity";
+
+/** Selo de severidade no PDF (mesmas cores do app e do painel). */
+function SeverityTag({ severity }: { severity: Severity }) {
+  const c = SEVERITY_COLOR[severity];
+  return (
+    <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: c.fg, backgroundColor: c.bg, paddingVertical: 1.5, paddingHorizontal: 4, borderRadius: 6, alignSelf: "flex-start" }}>
+      {SEVERITY_LABEL[severity]}
+    </Text>
+  );
+}
+
+const money = (v: string | null) => (v === null ? "—" : `R$ ${Number(v).toFixed(2).replace(".", ",")}`);
 
 type Detail = NonNullable<Awaited<ReturnType<typeof getAttendanceDetail>>>;
 type Img = { data: Buffer; format: "png" | "jpg" };
@@ -44,7 +56,12 @@ export async function loadAttendanceBlock(scope: Scope, attendanceId: string, ma
   const d = await getAttendanceDetail(scope, attendanceId);
   if (!d) return null;
   const images = new Map<string, Img>();
-  const wanted = [...d.photos.filter((p) => p.kind === "before").slice(0, 2), ...d.photos.filter((p) => p.kind === "after").slice(0, 2), ...d.photos.filter((p) => p.kind === "rupture").slice(0, maxPhotos - 4)];
+  const wanted = [
+    ...d.photos.filter((p) => p.kind === "before").slice(0, 2),
+    ...d.photos.filter((p) => p.kind === "after").slice(0, 2),
+    ...d.photos.filter((p) => p.kind === "validity").slice(0, maxPhotos),
+    ...d.photos.filter((p) => p.kind === "damage").slice(0, maxPhotos),
+  ];
   await Promise.all(
     wanted.map(async (p) => {
       if (!p.uploadedAt) return;
@@ -53,6 +70,22 @@ export async function loadAttendanceBlock(scope: Scope, attendanceId: string, ma
     }),
   );
   return { d, images };
+}
+
+/** Fotos separadas por origem (Validade / Avaria), com o produto embaixo. */
+function PhotoStrip({ title, photos, images }: { title: string; photos: Detail["photos"]; images: Map<string, Img> }) {
+  if (!photos.length) return null;
+  return (
+    <View style={{ marginTop: 5 }} wrap={false}>
+      <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.muted, textTransform: "uppercase", marginBottom: 3 }}>{title}</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+        {photos.slice(0, 8).map((p) => (
+          // eslint-disable-next-line jsx-a11y/alt-text
+          <Image key={p.id} src={images.get(p.id)!} style={{ width: 118, height: 88, objectFit: "cover", borderRadius: 3 }} />
+        ))}
+      </View>
+    </View>
+  );
 }
 
 function PhotoBox({ label, photo, img }: { label: string; photo: Detail["photos"][number] | undefined; img: Img | undefined }) {
@@ -85,7 +118,9 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
   if (d.photos.some((p) => !p.uploadedAt)) pendencies.push("Foto(s) aguardando sincronização");
   if (informed < d.stockRows.length) pendencies.push(`${d.stockRows.length - informed} produto(s) sem informação de estoque`);
   if (a.status === "correction_requested") pendencies.push("Correção solicitada ao promotor");
-  const ruptureImgs = d.photos.filter((p) => p.kind === "rupture" && images.has(p.id));
+  const validityImgs = d.photos.filter((p) => p.kind === "validity" && images.has(p.id));
+  const damageImgs = d.photos.filter((p) => p.kind === "damage" && images.has(p.id));
+  const urgent = d.validities.filter((x) => x.v.severity === "expired" || x.v.severity === "critical").length;
 
   return (
     <View break={breakBefore}>
@@ -110,7 +145,9 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
             ["Finalização", a.finishedAt ? fmtTime(a.finishedAt) : "—"],
             ["Duração", a.finishedAt ? fmtDuration(a.startedAt, a.finishedAt) : "—"],
             ["Estoque informado", `${informed}/${d.stockRows.length}`],
+            ["Validades", `${d.validities.length}${urgent ? ` (${urgent} crítica/vencida)` : ""}`],
             ["Rupturas", String(d.ruptures.length)],
+            ["Avarias", String(d.damages.length)],
             ["Ocorrências", String(d.occurrences.length)],
           ]}
         />
@@ -149,25 +186,41 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
       <Text style={{ fontSize: 7, color: C.muted, marginTop: 2 }}>Quantidades levantadas pelo promotor; não representam o saldo oficial da loja.</Text>
       {d.unregistered.length ? <Text style={{ fontSize: 8, marginTop: 3 }}>Fora do cadastro: {d.unregistered.map((u) => `${u.description}${u.quantity !== null ? ` (${u.quantity})` : ""}`).join("; ")}</Text> : null}
 
-      <Text style={base.h3}>Produtos com ruptura</Text>
+      <Text style={base.h3}>Validades {urgent ? `· ${urgent} vencida(s) ou crítica(s)` : ""}</Text>
       <PdfTable
         cols={[
-          { label: "Produto", width: "38%", render: (r: Detail["ruptures"][number]) => `${r.productName} (SKU ${r.sku})` },
-          { label: "Situação", width: "30%", render: (r) => RUPTURE_SITUATION_LABEL[r.rupture.situation] },
-          { label: "Estoque", width: "10%", align: "right", render: (r) => (r.rupture.knownStock ?? "—") as number | string },
-          { label: "Status", width: "22%", render: (r) => <Pill tone={RUPTURE_STATUS_TONE[r.rupture.status] as PdfTone}>{RUPTURE_STATUS_LABEL[r.rupture.status]}</Pill> },
+          { label: "Produto", width: "32%", render: (r: Detail["validities"][number]) => `${r.productName}${r.v.lot ? ` · lote ${r.v.lot}` : ""}` },
+          { label: "Local", width: "13%", render: (r) => VALIDITY_LOCATION_LABEL[r.v.location] },
+          { label: "Validade", width: "17%", render: (r) => `${formatIsoBr(r.v.expiryDate)} · ${describeDays(r.v.daysToExpiry)}` },
+          { label: "Situação", width: "14%", render: (r) => <SeverityTag severity={r.v.severity} /> },
+          { label: "Qtd.", width: "11%", align: "right", render: (r) => `${r.v.quantity} ${r.v.unit}` },
+          { label: "Preço", width: "13%", align: "right", render: (r) => money(r.v.price) },
         ]}
-        rows={d.ruptures}
-        empty="Nenhuma ruptura registrada."
+        rows={d.validities}
+        empty="Nenhuma validade registrada."
       />
-      {ruptureImgs.length ? (
-        <View style={{ flexDirection: "row", gap: 6, marginTop: 5 }} wrap={false}>
-          {ruptureImgs.slice(0, 4).map((p) => (
-            // eslint-disable-next-line jsx-a11y/alt-text
-            <Image key={p.id} src={images.get(p.id)!} style={{ width: 110, height: 82, objectFit: "cover", borderRadius: 3 }} />
-          ))}
-        </View>
-      ) : null}
+      <PhotoStrip title="Fotos · Validade" photos={validityImgs} images={images} />
+
+      <Text style={base.h3}>Ruptura total</Text>
+      {d.ruptures.length ? (
+        <Text style={{ fontSize: 8.5, color: C.ink2 }}>{d.ruptures.map((r) => r.productName).join("  ·  ")}</Text>
+      ) : (
+        <Text style={base.empty}>Nenhuma ruptura registrada.</Text>
+      )}
+
+      <Text style={base.h3}>Avarias</Text>
+      <PdfTable
+        cols={[
+          { label: "Produto", width: "34%", render: (r: Detail["damages"][number]) => `${r.productName}${r.d.note ? ` — “${r.d.note}”` : ""}` },
+          { label: "Tipo", width: "22%", render: (r) => DAMAGE_KIND_LABEL[r.d.kind] },
+          { label: "Qtd.", width: "11%", align: "right", render: (r) => `${r.d.quantity} ${r.d.unit}` },
+          { label: "Validade", width: "15%", render: (r) => formatIsoBr(r.d.expiryDate) },
+          { label: "Lote", width: "18%", render: (r) => r.d.lot ?? "—" },
+        ]}
+        rows={d.damages}
+        empty="Nenhuma avaria registrada."
+      />
+      <PhotoStrip title="Fotos · Avaria" photos={damageImgs} images={images} />
 
       <Text style={base.h3}>Observações e ocorrências</Text>
       {d.occurrences.length ? (

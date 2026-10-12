@@ -58,14 +58,27 @@ function attendancePayload(over: Partial<AttendanceInput> & { brandId: string })
     deletedUnregisteredIds: [],
     ruptures: [],
     deletedRuptureIds: [],
+    validities: [],
+    deletedValidityIds: [],
+    damages: [],
+    deletedDamageIds: [],
     occurrences: [],
     deletedOccurrenceIds: [],
     ...over,
   };
 }
 
-function photo(kind: "before" | "after" | "rupture", ruptureId: string | null = null) {
-  return { id: randomUUID(), kind, ruptureId, occurrenceId: null, source: "camera" as const, takenAt: new Date().toISOString() };
+function photo(kind: "before" | "after" | "rupture" | "damage" | "validity", link: { ruptureId?: string; damageId?: string; validityId?: string } = {}) {
+  return {
+    id: randomUUID(),
+    kind,
+    ruptureId: link.ruptureId ?? null,
+    occurrenceId: null,
+    validityId: link.validityId ?? null,
+    damageId: link.damageId ?? null,
+    source: "camera" as const,
+    takenAt: new Date().toISOString(),
+  };
 }
 
 function visitPayload(over: Partial<VisitInput> & { storeId: string; attendances: AttendanceInput[] }): VisitInput {
@@ -116,15 +129,25 @@ describe("fluxos críticos", () => {
     const bravoProducts = await productsOf(ids.BRAVO, ids.store);
     const fofProducts = await productsOf(ids.FOFINHO, ids.store);
     const ruptureId = randomUUID();
+    const damageId = randomUUID();
     const now = new Date().toISOString();
+    const today = todayIso();
+    const plus = (d: number) => new Date(Date.parse(`${today}T12:00:00Z`) + d * 86_400_000).toISOString().slice(0, 10);
     const bravo = attendancePayload({
       brandId: ids.BRAVO,
       status: "completed",
       finishedAt: now,
-      photos: [photo("before"), photo("after")],
+      photos: [photo("before"), photo("after"), photo("damage", { damageId })],
       stock: bravoProducts.map((p, i) => ({ productId: p, state: i === 0 ? ("zero" as const) : ("quantity" as const), quantity: i === 0 ? 0 : 5 + i, note: null, recordedAt: now })),
-      ruptures: [{ id: ruptureId, productId: bravoProducts[0], situation: "shelf_empty", knownStock: 0, note: null, fromStockSuggestion: true, recordedAt: now }],
+      ruptures: [{ id: ruptureId, productId: bravoProducts[0], situation: "total", knownStock: null, note: null, fromStockSuggestion: true, recordedAt: now }],
+      validities: [
+        { id: randomUUID(), productId: bravoProducts[1], location: "sales_floor", quantity: 4, unit: "un", expiryDate: plus(2), lot: "L1", price: 12.9, note: null, recordedAt: now },
+        { id: randomUUID(), productId: bravoProducts[1], location: "stock", quantity: 30, unit: "cx", expiryDate: plus(10), lot: null, price: null, note: null, recordedAt: now },
+        { id: randomUUID(), productId: bravoProducts[1], location: "stock", quantity: 5, unit: "un", expiryDate: plus(10), lot: null, price: null, note: null, recordedAt: now },
+      ],
+      damages: [{ id: damageId, productId: bravoProducts[1], kind: "no_vacuum", quantity: 2, unit: "un", expiryDate: plus(20), lot: "A9", note: null, recordedAt: now }],
     });
+    ids.damage = damageId;
     const fof = attendancePayload({
       brandId: ids.FOFINHO,
       status: "completed",
@@ -318,15 +341,49 @@ describe("fluxos críticos", () => {
     assert.ok(logs.some((l) => l.action === "correction_answered" && l.userId === scopes.lucas.userId));
   });
 
-  test("ruptura: status final exige ação; histórico registra responsável", async () => {
-    const noAction = await manager.updateRuptureStatus(scopes.gestor, ids.rupture, "resolved", "", null);
-    assert.equal(noAction.ok, false);
-    const ok = await manager.updateRuptureStatus(scopes.gestor, ids.rupture, "resolved", "Reposição feita pelo comprador", null);
-    assert.ok(ok.ok);
-    const events = await db.select().from(s.ruptureEvents).where(eq(s.ruptureEvents.ruptureId, ids.rupture));
-    assert.ok(events.some((e) => e.toStatus === "resolved" && e.userId === scopes.gestor.userId));
-    const outOfScope = await manager.updateRuptureStatus(scopes.bravo, ids.rupture, "analysis", "x", null);
-    assert.ok(outOfScope.ok, "gestor da Bravo pode tratar ruptura da Bravo");
+  test("modo SUINCO: validade com severidade do servidor, avaria com foto e ruptura total", async () => {
+    const vals = await db.select().from(s.validities).where(eq(s.validities.attendanceId, ids.bravoAtt));
+    assert.equal(vals.length, 3);
+    assert.deepEqual(vals.map((v) => v.severity).sort(), ["attention", "attention", "critical"]);
+    assert.ok(vals.every((v) => v.daysToExpiry === (v.location === "sales_floor" ? 2 : 10)));
+    assert.equal(vals.find((v) => v.location === "sales_floor")?.price, "12.90");
+    const [dmg] = await db.select().from(s.damages).where(eq(s.damages.id, ids.damage));
+    assert.equal(dmg.kind, "no_vacuum");
+    const [r] = await db.select().from(s.ruptures).where(eq(s.ruptures.id, ids.rupture));
+    assert.equal(r.situation, "total");
+  });
+
+  test("alerta de WhatsApp: nome da agência, itens críticos + grande quantidade, link do PDF, sem duplicar", async () => {
+    const sent: string[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url).includes("callmebot")) {
+        sent.push(new URL(String(url)).searchParams.get("text")!);
+        return new Response("Message queued");
+      }
+      return realFetch(url, init);
+    }) as typeof fetch;
+    try {
+      const alert = await import("../src/server/whatsapp-alert");
+      const scope = { ...scopes.lucas, settings: { ...scopes.lucas.settings, alerts: { ...scopes.lucas.settings.alerts, whatsappPhone: "+5531999990000", whatsappApiKey: "teste" } } };
+      await alert.notifyCriticalAttendance(scope, ids.bravoAtt);
+      await alert.notifyCriticalAttendance(scope, ids.bravoAtt);
+      assert.equal(sent.length, 1, "um alerta por atendimento");
+      const msg = sent[0];
+      assert.ok(msg.includes(scope.agencyName), "nome da agência no alerta");
+      assert.match(msg, /Vencidos ou vencendo em até 3 dias \(1\)/);
+      assert.match(msg, /Grande quantidade .*\(1\)/);
+      assert.ok(!msg.includes("5 un"), "5 unidades não é grande quantidade");
+      const linkId = /\/r\/([0-9a-f-]{36})/.exec(msg)![1];
+      const { GET } = await import("../src/app/r/[id]/route");
+      const pdfRes = await GET(new Request(`http://x/r/${linkId}`), { params: Promise.resolve({ id: linkId }) } as never);
+      assert.equal(pdfRes.status, 200);
+      assert.equal(pdfRes.headers.get("content-type"), "application/pdf");
+      const bad = await GET(new Request("http://x/r/x"), { params: Promise.resolve({ id: randomUUID() }) } as never);
+      assert.equal(bad.status, 404);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 
   test("uma visita aberta por vez e programação sem duplicidade", async () => {

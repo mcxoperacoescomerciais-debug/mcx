@@ -13,9 +13,8 @@ import {
   OCCURRENCE_CATEGORY_LABEL,
   OCCURRENCE_STATUS_LABEL,
   REVIEW_STATUS_LABEL,
-  RUPTURE_SITUATION_LABEL,
-  RUPTURE_STATUS_LABEL,
-  RUPTURE_STATUS_TONE,
+  DAMAGE_KIND_LABEL,
+  VALIDITY_LOCATION_LABEL,
   STOCK_STATE_LABEL,
   STOCK_STATE_TONE,
   UNIT_LABEL,
@@ -25,6 +24,8 @@ import {
 import { fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates";
 import { isRelevantDivergence } from "@/lib/rules";
 import { Badge, LinkButton, PageHeader, StatusBadge, inputClass } from "@/components/ui";
+import { SeverityBadge } from "@/components/severity";
+import { describeDays, formatIsoBr } from "@/lib/validity";
 import { SectionCard, Table, Td, Th } from "../../_components/widgets";
 import { BeforeAfter, Gallery, type ViewerPhoto } from "../../_components/photo-viewer";
 import { ActionForm, Disclosure } from "../../_components/action-form";
@@ -189,51 +190,123 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
             <p className="px-5 py-3 text-[12px] text-muted">Unidades: {Object.entries(UNIT_LABEL).map(([k, v]) => `${k} = ${v.toLowerCase()}`).join(" · ")}</p>
           </SectionCard>
 
-          <SectionCard title={`Rupturas (${d.ruptures.length})`} subtitle="Cada ruptura tem seu próprio tratamento e histórico">
-            {d.ruptures.length ? (
+          <SectionCard title={`Validades (${d.validities.length})`} subtitle="Classificação calculada sobre a data da visita">
+            {d.validities.length ? (
               <Table>
                 <thead>
                   <tr>
                     <Th>Produto</Th>
-                    <Th>Situação encontrada</Th>
-                    <Th align="right">Estoque conhecido</Th>
-                    <Th>Evidência</Th>
-                    <Th>Status</Th>
+                    <Th>Local</Th>
+                    <Th>Validade</Th>
+                    <Th>Situação</Th>
+                    <Th align="right">Qtd.</Th>
+                    <Th align="right">Preço</Th>
+                    <Th>Lote</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {d.ruptures.map(({ rupture: r, productName, sku }) => {
-                    const ev = d.photos.filter((p) => p.ruptureId === r.id);
+                  {d.validities.map(({ v, productName, sku }) => (
+                    <tr key={v.id} className="hover:bg-subtle">
+                      <Td>
+                        <span className="font-medium">{productName}</span>
+                        <span className="block text-[11.5px] text-muted">
+                          SKU {sku}
+                          {v.note ? ` · “${v.note}”` : ""}
+                        </span>
+                      </Td>
+                      <Td>{VALIDITY_LOCATION_LABEL[v.location]}</Td>
+                      <Td className="tnum">
+                        {formatIsoBr(v.expiryDate)}
+                        <span className="block text-[11.5px] text-muted">{describeDays(v.daysToExpiry)}</span>
+                      </Td>
+                      <Td>
+                        <SeverityBadge severity={v.severity} />
+                      </Td>
+                      <Td align="right" className="tnum">
+                        {v.quantity} {v.unit}
+                      </Td>
+                      <Td align="right" className="tnum">
+                        {((n: string | null) => (n === null ? "—" : `R$ ${Number(n).toFixed(2).replace(".", ",")}`))(v.price)}
+                      </Td>
+                      <Td>{v.lot ?? "—"}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            ) : (
+              <p className="px-5 pb-5 text-[13.5px] text-muted">Nenhuma validade registrada neste atendimento.</p>
+            )}
+            {d.photos.some((p) => p.kind === "validity") ? (
+              <div className="px-5 py-4 border-t border-line">
+                <Gallery photos={d.photos.filter((p) => p.kind === "validity").map((p) => toViewer(p, `Validade · ${d.validities.find((x) => x.v.id === p.validityId)?.productName ?? ""}`))} />
+              </div>
+            ) : null}
+          </SectionCard>
+
+          <SectionCard title={`Rupturas (${d.ruptures.length})`} subtitle="Produtos marcados pelo promotor como “Ruptura total”">
+            {d.ruptures.length ? (
+              <ul className="px-5 pb-5 grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-[13.5px]">
+                {d.ruptures.map(({ rupture: r, productName, sku }) => (
+                  <li key={r.id} className="flex items-start gap-2">
+                    <span className="mt-1.5 size-2 rounded-full bg-bad shrink-0" />
+                    <span>
+                      <span className="font-medium">{productName}</span>
+                      <span className="block text-[11.5px] text-muted">
+                        SKU {sku}
+                        {r.fromStockSuggestion ? " · sugerida pelo estoque" : ""}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-5 pb-5 text-[13.5px] text-muted">Nenhuma ruptura registrada neste atendimento.</p>
+            )}
+          </SectionCard>
+
+          <SectionCard title={`Avarias (${d.damages.length})`}>
+            {d.damages.length ? (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Produto</Th>
+                    <Th>Tipo</Th>
+                    <Th align="right">Qtd.</Th>
+                    <Th>Validade</Th>
+                    <Th>Lote</Th>
+                    <Th>Foto</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.damages.map(({ d: x, productName, sku }) => {
+                    const ph = d.photos.filter((p) => p.damageId === x.id).length;
                     return (
-                      <tr key={r.id} className="hover:bg-subtle">
+                      <tr key={x.id} className="hover:bg-subtle">
                         <Td>
-                          <Link href={`/painel/rupturas/${r.id}`} className="font-medium hover:underline">
-                            {productName}
-                          </Link>
+                          <span className="font-medium">{productName}</span>
                           <span className="block text-[11.5px] text-muted">
                             SKU {sku}
-                            {r.fromStockSuggestion ? " · confirmada a partir do estoque" : ""}
+                            {x.note ? ` · “${x.note}”` : ""}
                           </span>
                         </Td>
-                        <Td>{RUPTURE_SITUATION_LABEL[r.situation]}</Td>
-                        <Td align="right">{r.knownStock ?? "—"}</Td>
-                        <Td>{ev.length ? `${ev.length} foto(s)` : <span className="text-muted">Sem foto</span>}</Td>
-                        <Td>
-                          <StatusBadge tone={RUPTURE_STATUS_TONE[r.status]} size="sm">
-                            {RUPTURE_STATUS_LABEL[r.status]}
-                          </StatusBadge>
+                        <Td>{DAMAGE_KIND_LABEL[x.kind]}</Td>
+                        <Td align="right" className="tnum">
+                          {x.quantity} {x.unit}
                         </Td>
+                        <Td className="tnum">{formatIsoBr(x.expiryDate)}</Td>
+                        <Td>{x.lot ?? "—"}</Td>
+                        <Td>{ph ? `${ph} foto(s)` : <span className="text-bad">Sem foto</span>}</Td>
                       </tr>
                     );
                   })}
                 </tbody>
               </Table>
             ) : (
-              <p className="px-5 pb-5 text-[13.5px] text-muted">Nenhuma ruptura registrada neste atendimento.</p>
+              <p className="px-5 pb-5 text-[13.5px] text-muted">Nenhuma avaria registrada neste atendimento.</p>
             )}
-            {d.photos.some((p) => p.kind === "rupture") ? (
+            {d.photos.some((p) => p.kind === "damage") ? (
               <div className="px-5 py-4 border-t border-line">
-                <Gallery photos={d.photos.filter((p) => p.kind === "rupture").map((p) => toViewer(p, `Evidência de ruptura · ${d.ruptures.find((r) => r.rupture.id === p.ruptureId)?.productName ?? ""}`))} />
+                <Gallery photos={d.photos.filter((p) => p.kind === "damage").map((p) => toViewer(p, `Avaria · ${d.damages.find((x) => x.d.id === p.damageId)?.productName ?? ""}`))} />
               </div>
             ) : null}
           </SectionCard>

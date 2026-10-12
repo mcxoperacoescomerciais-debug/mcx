@@ -5,7 +5,7 @@ import { C, Footer, H2, Header, Pill, PdfTable, StatBoxes, base, type PdfAgency,
 import type { DailyReport } from "../reports";
 import type { brandReport } from "../reports";
 import { PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TONE } from "../operations";
-import { ISSUE_KIND_LABEL, OCCURRENCE_CATEGORY_LABEL, RUPTURE_SITUATION_LABEL, RUPTURE_STATUS_LABEL, RUPTURE_STATUS_TONE, STOCK_STATE_LABEL, STOP_BUCKET_LABEL, STOP_BUCKET_TONE, STOP_BUCKETS } from "@/lib/domain";
+import { ISSUE_KIND_LABEL, OCCURRENCE_CATEGORY_LABEL, RUPTURE_SITUATION_LABEL, STOCK_STATE_LABEL, STOP_BUCKET_LABEL, STOP_BUCKET_TONE, STOP_BUCKETS } from "@/lib/domain";
 import { fmtDate, fmtDateTime, fmtLongDate, fmtTime } from "@/lib/dates";
 import { pct } from "@/lib/rules";
 
@@ -90,9 +90,8 @@ export async function renderDailyPdf(agency: PdfAgency, r: DailyReport, filtersN
             cols={[
               { label: "Loja", width: "22%", render: (x: DailyReport["ruptures"][number]) => x.storeName },
               { label: "Marca", width: "12%", render: (x) => x.brandName },
-              { label: "Produto", width: "26%", render: (x) => `${x.productName} (${x.sku})` },
-              { label: "Situação", width: "22%", render: (x) => RUPTURE_SITUATION_LABEL[x.situation] },
-              { label: "Status", width: "18%", render: (x) => <Pill tone={RUPTURE_STATUS_TONE[x.status] as PdfTone}>{RUPTURE_STATUS_LABEL[x.status]}</Pill> },
+              { label: "Produto", width: "40%", render: (x) => `${x.productName} (${x.sku})` },
+              { label: "Situação", width: "26%", render: (x) => RUPTURE_SITUATION_LABEL[x.situation] },
             ]}
             rows={r.ruptures}
             empty="Nenhuma ruptura registrada no dia."
@@ -194,9 +193,8 @@ export async function renderBrandPdf(agency: PdfAgency, r: BrandData, from: stri
             cols={[
               { label: "Data", width: "10%", render: (x: BrandData["ruptures"][number]) => fmtDate(x.visitDate).slice(0, 5) },
               { label: "Loja", width: "26%", render: (x) => x.storeName },
-              { label: "Produto", width: "30%", render: (x) => x.productName },
-              { label: "Situação", width: "18%", render: (x) => RUPTURE_SITUATION_LABEL[x.situation] },
-              { label: "Status", width: "16%", render: (x) => <Pill tone={RUPTURE_STATUS_TONE[x.status] as PdfTone}>{RUPTURE_STATUS_LABEL[x.status]}</Pill> },
+              { label: "Produto", width: "40%", render: (x) => x.productName },
+              { label: "Situação", width: "24%", render: (x) => RUPTURE_SITUATION_LABEL[x.situation] },
             ]}
             rows={r.ruptures}
             empty="Nenhuma ruptura no período."

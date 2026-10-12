@@ -28,8 +28,7 @@ import {
   Upload,
   Users,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type LucideIcon, CalendarClock, ShieldX } from "lucide-react";
 import clsx from "clsx";
 import { BrandMark, McxFooter } from "@/components/ui";
 import { ROLE_LABEL, type Role } from "@/lib/domain";
@@ -58,7 +57,9 @@ const NAV: { title: string; items: NavItem[] }[] = [
     title: "Análise",
     items: [
       { href: "/painel/estoque", label: "Estoque", icon: PackageSearch },
+      { href: "/painel/validades", label: "Validades", icon: CalendarClock },
       { href: "/painel/rupturas", label: "Rupturas", icon: ClipboardCheck },
+      { href: "/painel/avarias", label: "Avarias", icon: ShieldX },
       { href: "/painel/fotos", label: "Relatório fotográfico", icon: Images },
       { href: "/painel/relatorios", label: "Relatórios e exportação", icon: FileText },
     ],

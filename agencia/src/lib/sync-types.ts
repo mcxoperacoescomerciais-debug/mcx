@@ -7,7 +7,10 @@
  */
 import { z } from "zod";
 import {
+  DAMAGE_KINDS,
   EXCEPTION_ITEMS,
+  ITEM_UNITS,
+  VALIDITY_LOCATIONS,
   EXCEPTION_REASONS,
   OCCURRENCE_CATEGORIES,
   PHOTO_KINDS,
@@ -17,6 +20,7 @@ import {
   type AttendanceStatus,
   type Unit,
 } from "./domain";
+import type { SeverityBands } from "./validity";
 
 const id = z.uuid();
 const instant = z.iso.datetime({ offset: true });
@@ -28,6 +32,8 @@ export const photoInput = z.object({
   kind: z.enum(PHOTO_KINDS),
   ruptureId: id.nullable().optional().default(null),
   occurrenceId: id.nullable().optional().default(null),
+  validityId: id.nullable().optional().default(null),
+  damageId: id.nullable().optional().default(null),
   source: z.enum(PHOTO_SOURCES),
   takenAt: instant,
 });
@@ -54,6 +60,33 @@ export const ruptureInput = z.object({
   knownStock: z.number().int().min(0).max(100_000).nullable(),
   note: shortText(300),
   fromStockSuggestion: z.boolean(),
+  recordedAt: instant,
+});
+
+/** Validade (modo SUINCO). Dias para vencer e severidade são calculados no servidor. */
+export const validityInput = z.object({
+  id,
+  productId: id,
+  location: z.enum(VALIDITY_LOCATIONS),
+  quantity: z.number().int().min(1).max(100_000),
+  unit: z.enum(ITEM_UNITS),
+  expiryDate: isoDate,
+  lot: shortText(60),
+  price: z.number().min(0).max(100_000).nullable(),
+  note: shortText(300),
+  recordedAt: instant,
+});
+
+/** Avaria (modo SUINCO): foto obrigatória (regra de finalização). */
+export const damageInput = z.object({
+  id,
+  productId: id,
+  kind: z.enum(DAMAGE_KINDS),
+  quantity: z.number().int().min(1).max(100_000),
+  unit: z.enum(ITEM_UNITS),
+  expiryDate: isoDate.nullable(),
+  lot: shortText(60),
+  note: shortText(300),
   recordedAt: instant,
 });
 
@@ -84,6 +117,10 @@ export const attendanceInput = z.object({
   deletedUnregisteredIds: z.array(id).max(100),
   ruptures: z.array(ruptureInput).max(500),
   deletedRuptureIds: z.array(id).max(500),
+  validities: z.array(validityInput).max(500).default([]),
+  deletedValidityIds: z.array(id).max(500).default([]),
+  damages: z.array(damageInput).max(200).default([]),
+  deletedDamageIds: z.array(id).max(200).default([]),
   occurrences: z.array(occurrenceInput).max(50),
   deletedOccurrenceIds: z.array(id).max(100),
 });
@@ -118,6 +155,8 @@ export type PhotoInput = z.infer<typeof photoInput>;
 export type StockInput = z.infer<typeof stockInput>;
 export type UnregisteredInput = z.infer<typeof unregisteredInput>;
 export type RuptureInput = z.infer<typeof ruptureInput>;
+export type ValidityInput = z.infer<typeof validityInput>;
+export type DamageInput = z.infer<typeof damageInput>;
 export type OccurrenceInput = z.infer<typeof occurrenceInput>;
 export type AttendanceInput = z.infer<typeof attendanceInput>;
 export type VisitInput = z.infer<typeof visitInput>;
@@ -128,6 +167,8 @@ export interface AttendanceSyncResult {
   /** "locked": finalizado no servidor; o aparelho deve adotar a versão do servidor. */
   code?: "locked" | "invalid" | "forbidden";
   error?: string;
+  /** Finalizado agora (dispara o alerta de validade crítica no servidor). */
+  completedNow?: boolean;
 }
 
 export interface VisitSyncResult {
@@ -206,7 +247,14 @@ export interface ServerVisit extends Omit<VisitInput, "attendances"> {
 export interface BootstrapPayload {
   user: { id: string; name: string; employment: string | null; mustChangePassword: boolean };
   agency: { name: string; logoUrl: string | null };
-  settings: { allowIncompleteVisit: boolean; allowExtraVisits: boolean; captureLocation: boolean; allowExceptions: boolean };
+  settings: {
+    allowIncompleteVisit: boolean;
+    allowExtraVisits: boolean;
+    captureLocation: boolean;
+    allowExceptions: boolean;
+    /** Faixas de validade da agência: classificação instantânea no celular, sem internet. */
+    validityBands: SeverityBands;
+  };
   today: string;
   brands: BootstrapBrand[];
   stores: BootstrapStore[];

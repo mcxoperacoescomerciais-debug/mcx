@@ -8,7 +8,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { audit } from "./audit";
 import { canSeeBrand, canSeePromoter, isStaff } from "./scope";
-import { RUPTURE_FINAL_STATUSES, RUPTURE_STATUSES, type IssueReviewStatus, type RuptureStatus } from "@/lib/domain";
+import type { IssueReviewStatus } from "@/lib/domain";
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 const fail = (error: string): ActionResult => ({ ok: false, error });
@@ -80,43 +80,6 @@ export async function reviewAttendance(scope: Scope, attendanceId: string, decis
     .where(eq(s.attendances.id, attendanceId));
   await audit({ agencyId: scope.agencyId, userId: scope.userId }, "attendance", attendanceId, decision === "approved" ? "approved" : "rejected", { before: { reviewStatus: row.a.reviewStatus }, after: { reviewStatus: decision }, reason: note.trim() || null });
   return { ok: true, message: decision === "approved" ? "Atendimento aprovado." : "Atendimento reprovado." };
-}
-
-export async function updateRuptureStatus(scope: Scope, ruptureId: string, to: RuptureStatus, action: string, resolvedAt: string | null): Promise<ActionResult> {
-  if (!isStaff(scope)) return fail("Sem permissão.");
-  if (!RUPTURE_STATUSES.includes(to)) return fail("Status inválido.");
-  const db = await getDb();
-  const [row] = await db
-    .select({ r: s.ruptures, brandId: s.attendances.brandId, promoterId: s.visits.promoterId })
-    .from(s.ruptures)
-    .innerJoin(s.attendances, eq(s.attendances.id, s.ruptures.attendanceId))
-    .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
-    .where(and(eq(s.ruptures.id, ruptureId), eq(s.ruptures.agencyId, scope.agencyId), isNull(s.ruptures.deletedAt)));
-  if (!row || !canSeeBrand(scope, row.brandId) || !canSeePromoter(scope, row.promoterId)) return fail("Ruptura não encontrada.");
-  const text = action.trim();
-  if (row.r.status === to && !text) return fail("Nada mudou. Registre uma ação ou escolha outro status.");
-  // Estados finais exigem a ação tomada: visualizar não resolve nada.
-  if (RUPTURE_FINAL_STATUSES.includes(to) && text.length < 5) return fail("Para este status, descreva a ação tomada (mínimo 5 caracteres).");
-  let resolved: Date | null = null;
-  if (to === "resolved") {
-    resolved = resolvedAt ? new Date(`${resolvedAt}T12:00:00-03:00`) : new Date();
-    if (Number.isNaN(resolved.getTime()) || resolved < row.r.recordedAt) return fail("Data de resolução inválida (anterior ao registro).");
-  }
-  await db.transaction(async (tx) => {
-    await tx
-      .update(s.ruptures)
-      .set({
-        status: to,
-        resolutionAction: RUPTURE_FINAL_STATUSES.includes(to) ? text : row.r.resolutionAction,
-        resolvedAt: to === "resolved" ? resolved : null,
-        updatedAt: new Date(),
-        updatedBy: scope.userId,
-      })
-      .where(eq(s.ruptures.id, ruptureId));
-    await tx.insert(s.ruptureEvents).values({ ruptureId, fromStatus: row.r.status, toStatus: to, action: text || null, userId: scope.userId });
-    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "rupture", ruptureId, "status_changed", { before: { status: row.r.status }, after: { status: to }, reason: text || null }, tx);
-  });
-  return { ok: true, message: "Ruptura atualizada." };
 }
 
 export async function reviewIssue(scope: Scope, key: string, status: IssueReviewStatus, action: string): Promise<ActionResult> {

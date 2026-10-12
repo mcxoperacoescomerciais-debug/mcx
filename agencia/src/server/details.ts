@@ -32,7 +32,7 @@ export async function getAttendanceDetail(scope: Scope, attendanceId: string) {
   if (!row || !canSeeBrand(scope, row.attendance.brandId) || !canSeePromoter(scope, row.visit.promoterId)) return null;
 
   const tracked = await trackedProducts(db, row.store.id, row.brand.id);
-  const [photos, stock, products, unregistered, ruptures, occurrences, corrections, history, reviewer] = await Promise.all([
+  const [photos, stock, products, unregistered, ruptures, occurrences, corrections, history, reviewer, validities, damages] = await Promise.all([
     db.select().from(s.photos).where(eq(s.photos.attendanceId, attendanceId)).orderBy(asc(s.photos.takenAt)),
     db.select().from(s.stockEntries).where(eq(s.stockEntries.attendanceId, attendanceId)),
     db.select().from(s.products).where(eq(s.products.brandId, row.brand.id)).orderBy(asc(s.products.sortOrder), asc(s.products.name)),
@@ -56,6 +56,17 @@ export async function getAttendanceDetail(scope: Scope, attendanceId: string) {
       .where(and(eq(s.auditLogs.agencyId, scope.agencyId), or(and(eq(s.auditLogs.entity, "attendance"), eq(s.auditLogs.entityId, attendanceId)), and(eq(s.auditLogs.entity, "visit"), eq(s.auditLogs.entityId, row.visit.id)))))
       .orderBy(asc(s.auditLogs.createdAt)),
     row.attendance.reviewedBy ? db.select({ name: s.users.name }).from(s.users).where(eq(s.users.id, row.attendance.reviewedBy)) : Promise.resolve([]),
+    db
+      .select({ v: s.validities, productName: s.products.name, sku: s.products.sku })
+      .from(s.validities)
+      .innerJoin(s.products, eq(s.products.id, s.validities.productId))
+      .where(and(eq(s.validities.attendanceId, attendanceId), isNull(s.validities.deletedAt)))
+      .orderBy(asc(s.validities.daysToExpiry)),
+    db
+      .select({ d: s.damages, productName: s.products.name, sku: s.products.sku })
+      .from(s.damages)
+      .innerJoin(s.products, eq(s.products.id, s.damages.productId))
+      .where(and(eq(s.damages.attendanceId, attendanceId), isNull(s.damages.deletedAt))),
   ]);
   const photoHistory = photos.filter((p) => p.deletedAt);
   const live = photos.filter((p) => !p.deletedAt);
@@ -74,6 +85,8 @@ export async function getAttendanceDetail(scope: Scope, attendanceId: string) {
     previous,
     unregistered,
     ruptures,
+    validities,
+    damages,
     occurrences,
     corrections,
     history,

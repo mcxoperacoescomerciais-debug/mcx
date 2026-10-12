@@ -22,6 +22,13 @@
       "when": 1791845231330,
       "tag": "0002_multiagencia",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791846357346,
+      "tag": "0003_suinco_validade_avaria",
+      "breakpoints": true
     }
   ]
 }

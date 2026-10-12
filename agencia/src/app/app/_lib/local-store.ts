@@ -14,6 +14,7 @@ import { createStore, del, get, set } from "idb-keyval";
 import type {
   AttendanceInput,
   BootstrapPayload,
+  DamageInput,
   OccurrenceInput,
   PhotoInput,
   PromoterHistoryItem,
@@ -21,6 +22,7 @@ import type {
   ServerVisit,
   StockInput,
   UnregisteredInput,
+  ValidityInput,
   VisitInput,
   VisitSyncResult,
 } from "@/lib/sync-types";
@@ -57,6 +59,11 @@ export interface LocalAttendance {
   deletedRuptureIds: string[];
   occurrences: Record<string, OccurrenceInput>;
   deletedOccurrenceIds: string[];
+  /** Validades e avarias (modo SUINCO). Opcionais: atendimentos gravados antes da atualização não têm. */
+  validities?: Record<string, ValidityInput>;
+  deletedValidityIds?: string[];
+  damages?: Record<string, DamageInput>;
+  deletedDamageIds?: string[];
   /** Pedido de correção aberto pelo gestor. */
   correction: { id: string; reason: string; requestedAt: string } | null;
   /** Finalizado no servidor: o promotor não altera mais (salvo correção). */
@@ -264,6 +271,10 @@ function fromServerVisit(sv: ServerVisit, plannedBrandIds: string[], previous?: 
       deletedRuptureIds: [],
       occurrences: Object.fromEntries(a.occurrences.map((x) => [x.id, x])),
       deletedOccurrenceIds: [],
+      validities: Object.fromEntries((a.validities ?? []).map((x) => [x.id, x])),
+      deletedValidityIds: [],
+      damages: Object.fromEntries((a.damages ?? []).map((x) => [x.id, x])),
+      deletedDamageIds: [],
       correction: a.correction,
       locked: a.status === "completed" || a.status === "cancelled",
       reviewStatus: a.reviewStatus,
@@ -433,6 +444,10 @@ export async function startAttendance(visitId: string, brandId: string): Promise
     deletedRuptureIds: [],
     occurrences: {},
     deletedOccurrenceIds: [],
+    validities: {},
+    deletedValidityIds: [],
+    damages: {},
+    deletedDamageIds: [],
     correction: null,
     locked: false,
     rev: 1,
@@ -446,7 +461,14 @@ export function updateAttendance(visitId: string, attendanceId: string, patch: P
   return bumpAttendance(visitId, attendanceId, (a) => ({ ...a, ...patch }));
 }
 
-export async function addPhoto(visitId: string, attendanceId: string, kind: PhotoKind, source: PhotoSource, blob: Blob, thumb: Blob | null, link: { ruptureId?: string; occurrenceId?: string } = {}): Promise<string> {
+export interface PhotoLink {
+  ruptureId?: string;
+  occurrenceId?: string;
+  validityId?: string;
+  damageId?: string;
+}
+
+export async function addPhoto(visitId: string, attendanceId: string, kind: PhotoKind, source: PhotoSource, blob: Blob, thumb: Blob | null, link: PhotoLink = {}): Promise<string> {
   const id = uuid();
   await set(blobKey(id), blob, idb);
   if (thumb) await set(thumbKey(id), thumb, idb);
@@ -454,7 +476,7 @@ export async function addPhoto(visitId: string, attendanceId: string, kind: Phot
     ...a,
     photos: [
       ...a.photos,
-      { id, kind, source, takenAt: new Date().toISOString(), ruptureId: link.ruptureId ?? null, occurrenceId: link.occurrenceId ?? null, uploaded: false, local: true },
+      { id, kind, source, takenAt: new Date().toISOString(), ruptureId: link.ruptureId ?? null, occurrenceId: link.occurrenceId ?? null, validityId: link.validityId ?? null, damageId: link.damageId ?? null, uploaded: false, local: true },
     ],
   }));
   return id;
@@ -472,6 +494,13 @@ export async function removePhoto(visitId: string, attendanceId: string, photoId
     await del(blobKey(photoId), idb);
     await del(thumbKey(photoId), idb);
   }
+}
+
+/** Fotos tiradas para um item que acabou não sendo salvo (o promotor fechou sem salvar). */
+export async function discardUnsavedPhotos(visitId: string, attendanceId: string, link: PhotoLink) {
+  const a = state.visits[visitId]?.attendances[attendanceId];
+  const orphan = a?.photos.filter((p) => (link.validityId && p.validityId === link.validityId) || (link.damageId && p.damageId === link.damageId)) ?? [];
+  for (const p of orphan) await removePhoto(visitId, attendanceId, p.id);
 }
 
 export function getPhotoBlob(photoId: string, thumb = false): Promise<Blob | undefined> {
@@ -517,6 +546,54 @@ export async function deleteRupture(visitId: string, attendanceId: string, ruptu
     const ruptures = { ...x.ruptures };
     delete ruptures[ruptureId];
     return { ...x, ruptures, deletedRuptureIds: [...x.deletedRuptureIds, ruptureId] };
+  });
+}
+
+/** Ruptura no modo SUINCO: um toque marca/desmarca "Ruptura total" do produto. */
+export async function toggleRupture(visitId: string, attendanceId: string, productId: string, fromStockSuggestion = false): Promise<boolean> {
+  const a = state.visits[visitId]?.attendances[attendanceId];
+  const existing = Object.values(a?.ruptures ?? {}).find((r) => r.productId === productId);
+  if (existing) {
+    await deleteRupture(visitId, attendanceId, existing.id);
+    return false;
+  }
+  await saveRupture(visitId, attendanceId, {
+    id: uuid(),
+    productId,
+    situation: "total",
+    knownStock: null,
+    note: null,
+    fromStockSuggestion,
+    recordedAt: new Date().toISOString(),
+  });
+  return true;
+}
+
+export function saveValidity(visitId: string, attendanceId: string, v: ValidityInput) {
+  return bumpAttendance(visitId, attendanceId, (a) => ({ ...a, validities: { ...(a.validities ?? {}), [v.id]: v } }));
+}
+
+export async function deleteValidity(visitId: string, attendanceId: string, id: string) {
+  const a = state.visits[visitId]?.attendances[attendanceId];
+  for (const p of a?.photos.filter((x) => x.validityId === id) ?? []) await removePhoto(visitId, attendanceId, p.id);
+  await bumpAttendance(visitId, attendanceId, (x) => {
+    const validities = { ...(x.validities ?? {}) };
+    delete validities[id];
+    return { ...x, validities, deletedValidityIds: [...(x.deletedValidityIds ?? []), id] };
+  });
+}
+
+export function saveDamage(visitId: string, attendanceId: string, d: DamageInput) {
+  return bumpAttendance(visitId, attendanceId, (a) => ({ ...a, damages: { ...(a.damages ?? {}), [d.id]: d } }));
+}
+
+export async function deleteDamage(visitId: string, attendanceId: string, id: string) {
+  const a = state.visits[visitId]?.attendances[attendanceId];
+  for (const p of a?.photos.filter((x) => x.damageId === id) ?? []) await removePhoto(visitId, attendanceId, p.id);
+  await bumpAttendance(visitId, attendanceId, (x) => {
+    const damages = { ...(x.damages ?? {}) };
+    delete damages[id];
+    return { ...x, damages, deletedDamageIds: [...(x.deletedDamageIds ?? []), id] };
   });
 }
 
@@ -620,7 +697,16 @@ function toAttendanceInput(a: LocalAttendance): AttendanceInput {
     exceptionReason: a.exceptionItems.length ? a.exceptionReason : null,
     exceptionNote: a.exceptionItems.length ? a.exceptionNote || null : null,
     cancelReason: a.cancelReason || null,
-    photos: a.photos.map(({ id, kind, ruptureId, occurrenceId, source, takenAt }) => ({ id, kind, ruptureId, occurrenceId, source, takenAt })),
+    photos: a.photos.map(({ id, kind, ruptureId, occurrenceId, validityId, damageId, source, takenAt }) => ({
+      id,
+      kind,
+      ruptureId,
+      occurrenceId,
+      validityId: validityId ?? null,
+      damageId: damageId ?? null,
+      source,
+      takenAt,
+    })),
     deletedPhotoIds: a.deletedPhotoIds,
     stock: Object.values(a.stock),
     clearedStockProductIds: a.clearedStockProductIds,
@@ -630,6 +716,10 @@ function toAttendanceInput(a: LocalAttendance): AttendanceInput {
     deletedRuptureIds: a.deletedRuptureIds,
     occurrences: Object.values(a.occurrences),
     deletedOccurrenceIds: a.deletedOccurrenceIds,
+    validities: Object.values(a.validities ?? {}),
+    deletedValidityIds: a.deletedValidityIds ?? [],
+    damages: Object.values(a.damages ?? {}),
+    deletedDamageIds: a.deletedDamageIds ?? [],
   };
 }
 

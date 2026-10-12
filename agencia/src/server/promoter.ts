@@ -25,6 +25,9 @@ import type {
   VisitSyncResult,
 } from "@/lib/sync-types";
 import type { AttendanceStatus } from "@/lib/domain";
+import { classify } from "@/lib/validity";
+import { daysBetween } from "@/lib/dates";
+import { notifyCriticalAttendance } from "./whatsapp-alert";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 
@@ -159,6 +162,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
       allowExtraVisits: scope.settings.allowExtraVisits,
       captureLocation: scope.settings.captureLocation,
       allowExceptions: scope.settings.allowExceptions,
+      validityBands: scope.settings.validityBands,
     },
     today,
     brands: brandRows
@@ -236,7 +240,7 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
   const atts = await db.select().from(s.attendances).where(inArray(s.attendances.visitId, visitIds));
   const attIds = atts.map((a) => a.id);
   const none = [] as never[];
-  const [ph, st, un, ru, oc, cr] = attIds.length
+  const [ph, st, un, ru, oc, cr, va, dm] = attIds.length
     ? await Promise.all([
         db.select().from(s.photos).where(and(inArray(s.photos.attendanceId, attIds), isNull(s.photos.deletedAt))),
         db.select().from(s.stockEntries).where(inArray(s.stockEntries.attendanceId, attIds)),
@@ -244,8 +248,10 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
         db.select().from(s.ruptures).where(and(inArray(s.ruptures.attendanceId, attIds), isNull(s.ruptures.deletedAt))),
         db.select().from(s.occurrences).where(and(inArray(s.occurrences.attendanceId, attIds), isNull(s.occurrences.deletedAt))),
         db.select().from(s.correctionRequests).where(and(inArray(s.correctionRequests.attendanceId, attIds), eq(s.correctionRequests.status, "open"))),
+        db.select().from(s.validities).where(and(inArray(s.validities.attendanceId, attIds), isNull(s.validities.deletedAt))),
+        db.select().from(s.damages).where(and(inArray(s.damages.attendanceId, attIds), isNull(s.damages.deletedAt))),
       ])
-    : [none, none, none, none, none, none];
+    : [none, none, none, none, none, none, none, none];
   const iso = (d: Date | null) => (d ? d.toISOString() : null);
   return rows.map((v) => ({
     id: v.id,
@@ -282,6 +288,8 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
               kind: p.kind,
               ruptureId: p.ruptureId,
               occurrenceId: p.occurrenceId,
+              validityId: p.validityId,
+              damageId: p.damageId,
               source: p.source,
               takenAt: p.takenAt.toISOString(),
               uploaded: Boolean(p.uploadedAt),
@@ -307,6 +315,35 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
           deletedRuptureIds: [],
           occurrences: oc.filter((x) => x.attendanceId === a.id).map((x) => ({ id: x.id, category: x.category, note: x.note, recordedAt: x.recordedAt.toISOString() })),
           deletedOccurrenceIds: [],
+          validities: va
+            .filter((x) => x.attendanceId === a.id)
+            .map((x) => ({
+              id: x.id,
+              productId: x.productId,
+              location: x.location,
+              quantity: x.quantity,
+              unit: x.unit as "un" | "cx" | "kg",
+              expiryDate: x.expiryDate,
+              lot: x.lot,
+              price: x.price === null ? null : Number(x.price),
+              note: x.note,
+              recordedAt: x.recordedAt.toISOString(),
+            })),
+          deletedValidityIds: [],
+          damages: dm
+            .filter((x) => x.attendanceId === a.id)
+            .map((x) => ({
+              id: x.id,
+              productId: x.productId,
+              kind: x.kind,
+              quantity: x.quantity,
+              unit: x.unit as "un" | "cx" | "kg",
+              expiryDate: x.expiryDate,
+              lot: x.lot,
+              note: x.note,
+              recordedAt: x.recordedAt.toISOString(),
+            })),
+          deletedDamageIds: [],
           correction: (() => {
             const c = cr.find((x) => x.attendanceId === a.id);
             return c ? { id: c.id, reason: c.reason, requestedAt: c.requestedAt.toISOString() } : null;
@@ -364,7 +401,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
   const allowedBrands = access.get(input.storeId);
   if (!allowedBrands) throw new SyncError("forbidden", "Loja não autorizada para você.");
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx): Promise<VisitSyncResult> => {
     const [existing] = await tx.select().from(s.visits).where(eq(s.visits.id, input.id));
     if (existing && (existing.promoterId !== promoterId || existing.agencyId !== scope.agencyId)) {
       throw new SyncError("forbidden", "Visita de outro usuário.");
@@ -425,7 +462,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
     const visitRow = existing ?? { visitDate: input.visitDate, storeId: input.storeId };
     const attResults: AttendanceSyncResult[] = [];
     for (const a of input.attendances) {
-      attResults.push(await applyAttendance(tx, scope, input.id, visitRow.storeId, allowedBrands, a));
+      attResults.push(await applyAttendance(tx, scope, input.id, visitRow.storeId, visitRow.visitDate, allowedBrands, a));
     }
 
     // Encerramento da visita (validado com o estado JÁ gravado dos atendimentos).
@@ -478,6 +515,10 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
       attendances: attResults,
     };
   });
+  // Alerta de validade crítica (WhatsApp) só depois do commit e em segundo plano:
+  // nunca atrasa nem derruba o envio do promotor.
+  for (const r of result.attendances) if (r.completedNow) void notifyCriticalAttendance(scope, r.attendanceId);
+  return result;
 }
 
 async function applyAttendance(
@@ -485,6 +526,7 @@ async function applyAttendance(
   scope: Scope,
   visitId: string,
   storeId: string,
+  visitDate: string,
   allowedBrands: Set<string>,
   a: AttendanceInput,
 ): Promise<AttendanceSyncResult> {
@@ -516,6 +558,8 @@ async function applyAttendance(
     if (err) return fail("invalid", err);
   }
   for (const r of a.ruptures) if (!brandProducts.has(r.productId)) return fail("invalid", "Produto da ruptura não pertence à marca.");
+  for (const v of a.validities) if (!brandProducts.has(v.productId)) return fail("invalid", "Produto da validade não pertence à marca.");
+  for (const d of a.damages) if (!brandProducts.has(d.productId)) return fail("invalid", "Produto da avaria não pertence à marca.");
   if (new Set(a.ruptures.map((r) => r.productId)).size !== a.ruptures.length) return fail("invalid", "Ruptura duplicada para o mesmo produto.");
 
   // Regras de finalização (servidor decide).
@@ -531,7 +575,7 @@ async function applyAttendance(
       afterPhotos: livePhotos.filter((p) => p.kind === "after").length,
       trackedProductIds: tracked,
       stock: Object.fromEntries(a.stock.map((x) => [x.productId, x.state])),
-      ruptures: a.ruptures.map((r) => ({ productId: r.productId, photos: livePhotos.filter((p) => p.ruptureId === r.id).length })),
+      damages: a.damages.map((d) => ({ productId: d.productId, photos: livePhotos.filter((p) => p.damageId === d.id).length })),
       exceptionItems: a.exceptionItems,
       exceptionReason: a.exceptionReason,
       exceptionNote: a.exceptionNote,
@@ -588,6 +632,8 @@ async function applyAttendance(
         kind: p.kind,
         ruptureId: p.ruptureId,
         occurrenceId: p.occurrenceId,
+        validityId: p.validityId,
+        damageId: p.damageId,
         source: p.source,
         takenAt: new Date(p.takenAt),
         createdBy: promoterId,
@@ -647,12 +693,12 @@ async function applyAttendance(
       .where(and(eq(s.unregisteredProducts.attendanceId, a.id), inArray(s.unregisteredProducts.id, a.deletedUnregisteredIds)));
   }
 
-  // Rupturas: o promotor edita situação/estoque/observação; o status é do gestor.
+  // Rupturas (modo SUINCO): um toque marca "Ruptura total", outro desmarca.
   if (a.deletedRuptureIds.length) {
     const removed = await tx
       .update(s.ruptures)
       .set({ deletedAt: now, updatedBy: promoterId })
-      .where(and(eq(s.ruptures.attendanceId, a.id), inArray(s.ruptures.id, a.deletedRuptureIds), eq(s.ruptures.status, "new"), isNull(s.ruptures.deletedAt)))
+      .where(and(eq(s.ruptures.attendanceId, a.id), inArray(s.ruptures.id, a.deletedRuptureIds), isNull(s.ruptures.deletedAt)))
       .returning({ id: s.ruptures.id });
     for (const r of removed) await audit(actor, "rupture", r.id, "removed_by_promoter", {}, tx);
   }
@@ -683,8 +729,50 @@ async function applyAttendance(
         createdBy: promoterId,
         updatedBy: promoterId,
       });
-      await tx.insert(s.ruptureEvents).values({ ruptureId: r.id, fromStatus: null, toStatus: "new", action: "Registrada em campo", userId: promoterId });
     }
+  }
+
+  // Validades: dias para vencer e severidade calculados aqui, sobre a data da
+  // visita e as faixas da agência (o histórico guarda a classificação do dia).
+  if (a.deletedValidityIds.length) {
+    await tx
+      .update(s.validities)
+      .set({ deletedAt: now, updatedBy: promoterId })
+      .where(and(eq(s.validities.attendanceId, a.id), inArray(s.validities.id, a.deletedValidityIds), isNull(s.validities.deletedAt)));
+  }
+  for (const v of a.validities) {
+    const daysToExpiry = daysBetween(visitDate, v.expiryDate);
+    const values = {
+      productId: v.productId,
+      location: v.location,
+      quantity: v.quantity,
+      unit: v.unit,
+      expiryDate: v.expiryDate,
+      daysToExpiry,
+      severity: classify(daysToExpiry, scope.settings.validityBands),
+      lot: v.lot,
+      price: v.price === null ? null : v.price.toFixed(2),
+      note: v.note,
+    };
+    await tx
+      .insert(s.validities)
+      .values({ id: v.id, agencyId: scope.agencyId, attendanceId: a.id, ...values, recordedAt: new Date(v.recordedAt), createdBy: promoterId, updatedBy: promoterId })
+      .onConflictDoUpdate({ target: s.validities.id, set: { ...values, updatedAt: now, updatedBy: promoterId }, where: isNull(s.validities.deletedAt) });
+  }
+
+  // Avarias.
+  if (a.deletedDamageIds.length) {
+    await tx
+      .update(s.damages)
+      .set({ deletedAt: now, updatedBy: promoterId })
+      .where(and(eq(s.damages.attendanceId, a.id), inArray(s.damages.id, a.deletedDamageIds), isNull(s.damages.deletedAt)));
+  }
+  for (const d of a.damages) {
+    const values = { productId: d.productId, kind: d.kind, quantity: d.quantity, unit: d.unit, expiryDate: d.expiryDate, lot: d.lot, note: d.note };
+    await tx
+      .insert(s.damages)
+      .values({ id: d.id, agencyId: scope.agencyId, attendanceId: a.id, ...values, recordedAt: new Date(d.recordedAt), createdBy: promoterId, updatedBy: promoterId })
+      .onConflictDoUpdate({ target: s.damages.id, set: { ...values, updatedAt: now, updatedBy: promoterId }, where: isNull(s.damages.deletedAt) });
   }
 
   for (const o of a.occurrences) {
@@ -719,7 +807,7 @@ async function applyAttendance(
     await audit(actor, "attendance", a.id, "correction_answered", {}, tx);
   }
 
-  return statusError ? fail("invalid", statusError) : { attendanceId: a.id, ok: true };
+  return statusError ? fail("invalid", statusError) : { attendanceId: a.id, ok: true, completedNow: targetStatus === "completed" && prevStatus !== "completed" };
 }
 
 const unitCache = new Map<string, string>();

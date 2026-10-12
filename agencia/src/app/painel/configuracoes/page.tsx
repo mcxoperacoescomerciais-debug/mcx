@@ -5,7 +5,8 @@ import { ISSUE_KIND_LABEL, ISSUE_KINDS } from "@/lib/domain";
 import { PageHeader, inputClass } from "@/components/ui";
 import { SectionCard } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
-import { saveSettingsAction } from "../cadastros/actions";
+import { saveSettingsAction, testWhatsAppAction } from "../cadastros/actions";
+import { SEVERITY_COLOR } from "@/lib/validity";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -41,6 +42,49 @@ export default async function SettingsPage() {
               <input type="number" name="stockDivergencePct" min={5} max={1000} defaultValue={st.stockDivergencePct} className={inputClass} />
             </Row>
           </SectionCard>
+          <SectionCard title="Faixas de validade" subtitle="Dias para vencer (limite de cada faixa). Acima de 'Monitoramento' é Normal; já vencido é Vencido." bodyClass="px-5 pb-5">
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  ["critical", "Crítico até", st.validityBands.critical],
+                  ["high", "Alto até", st.validityBands.high],
+                  ["attention", "Atenção até", st.validityBands.attention],
+                  ["monitor", "Monitoramento até", st.validityBands.monitor],
+                ] as const
+              ).map(([k, label, v]) => (
+                <label key={k} className="block">
+                  <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-2 mb-1">
+                    <span className="size-2.5 rounded-full" style={{ background: SEVERITY_COLOR[k].solid }} /> {label} (dias)
+                  </span>
+                  <input type="number" name={`band_${k}`} min={0} max={730} defaultValue={v} className={inputClass} />
+                </label>
+              ))}
+            </div>
+          </SectionCard>
+          <SectionCard
+            title="Alerta de validade no WhatsApp"
+            subtitle={`Quando o promotor finaliza um atendimento com validade crítica, chega no WhatsApp: ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
+            bodyClass="px-5 pb-5 space-y-3"
+          >
+            <p className="text-[12.5px] text-ink-2">
+              Crítico = <b>vencido ou vencendo em até {st.validityBands.critical} dias</b> (faixa “Crítico até”) <b>ou</b> grande quantidade:
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Row label="Grande quantidade: vence em até (dias)">
+                <input type="number" name="alert_bulkDays" min={0} max={365} defaultValue={st.alerts.bulkDays} className={inputClass} />
+              </Row>
+              <Row label="e quantidade acima de">
+                <input type="number" name="alert_bulkMinQty" min={0} defaultValue={st.alerts.bulkMinQty} className={inputClass} />
+              </Row>
+            </div>
+            <Row label="Número do WhatsApp (com DDD; vários: separe por vírgula)">
+              <input name="alert_phone" defaultValue={st.alerts.whatsappPhone} placeholder="31 99999-8888" className={inputClass} />
+            </Row>
+            <Row label={st.alerts.whatsappApiKey ? "Chave do CallMeBot — salva ✓ (vazio mantém; digite apagar para remover)" : "Chave (apikey) do CallMeBot"}>
+              <input name="alert_apikey" type="password" autoComplete="off" placeholder={st.alerts.whatsappApiKey ? "••••••• (salva)" : "ex.: 1234567"} className={inputClass} />
+            </Row>
+            <p className="text-[12px] text-muted">Sem número e chave, nenhum alerta é enviado. Depois de salvar, use “Enviar mensagem de teste” abaixo.</p>
+          </SectionCard>
           <SectionCard title="Prioridade das pendências" subtitle="1 = mais urgente. Define a ordem da Central de pendências." bodyClass="px-5 pb-5">
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2">
               {ISSUE_KINDS.map((k) => (
@@ -53,6 +97,11 @@ export default async function SettingsPage() {
           </SectionCard>
         </div>
       </ActionForm>
+      <div className="mt-6 max-w-xl">
+        <ActionForm action={testWhatsAppAction} hidden={{}} submitLabel="Enviar mensagem de teste no WhatsApp" resetOnSuccess={false}>
+          <p className="text-[13px] text-ink-2">Envia uma mensagem de teste para o(s) número(s) salvo(s) no alerta de validade desta agência.</p>
+        </ActionForm>
+      </div>
     </>
   );
 }

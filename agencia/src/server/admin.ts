@@ -345,7 +345,9 @@ export async function saveSettings(scope: Scope, patch: Partial<AgencySettings>)
   const before = mergeSettings(agency.settings);
   const after = mergeSettings({ ...before, ...patch });
   await db.update(s.agencies).set({ settings: after, updatedAt: new Date() }).where(eq(s.agencies.id, scope.agencyId));
-  const d = diffFields(before as never, after as never);
+  const mask = (x: AgencySettings) => ({ ...x, alerts: { ...x.alerts, whatsappApiKey: x.alerts.whatsappApiKey ? "(definida)" : "" } });
+  const keyChanged = before.alerts.whatsappApiKey !== after.alerts.whatsappApiKey;
+  const d = diffFields(mask(before) as never, { ...mask(after), ...(keyChanged ? { alertKeyChanged: true } : {}) } as never);
   if (d) await audit(actor(scope), "settings", scope.agencyId, "updated", d);
   return { ok: true, message: "Configurações salvas." };
 }

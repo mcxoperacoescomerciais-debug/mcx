@@ -98,15 +98,15 @@ export interface AttendanceCheckInput {
   trackedProductIds: string[];
   /** productId → estado registrado (ausente = pendente). */
   stock: Record<string, StockState | undefined>;
-  /** Fotos de evidência por ruptura. */
-  ruptures: { productId: string; photos: number }[];
+  /** Fotos por avaria (modo SUINCO: toda avaria precisa de foto). */
+  damages: { productId: string; photos: number }[];
   exceptionItems: ExceptionItem[];
   exceptionReason: ExceptionReason | null;
   exceptionNote: string | null;
   allowExceptions: boolean;
 }
 
-export type MissingKind = ExceptionItem | "rupture_photo" | "exception_reason";
+export type MissingKind = ExceptionItem | "damage_photo" | "exception_reason";
 
 export interface MissingItem {
   kind: MissingKind;
@@ -146,11 +146,10 @@ export function attendanceMissing(i: AttendanceCheckInput): MissingItem[] {
       });
     }
   }
-  if (i.brand.rupturePhotoRequired) {
-    const noPhoto = i.ruptures.filter((r) => r.photos === 0).length;
-    if (noPhoto > 0) {
-      out.push({ kind: "rupture_photo", message: `${plural(noPhoto, "ruptura", "rupturas")} sem foto de evidência.`, excusable: false });
-    }
+  // Ruptura no modo SUINCO não exige foto; avaria sempre exige.
+  const damageNoPhoto = i.damages.filter((d) => d.photos === 0).length;
+  if (damageNoPhoto > 0) {
+    out.push({ kind: "damage_photo", message: `${plural(damageNoPhoto, "avaria", "avarias")} sem foto.`, excusable: false });
   }
   if (i.exceptionItems.length > 0 && !exceptionIsValid(i.exceptionReason, i.exceptionNote)) {
     out.push({ kind: "exception_reason", message: "A exceção precisa de motivo e justificativa (mínimo 5 letras).", excusable: false });

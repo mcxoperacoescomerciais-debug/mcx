@@ -63,7 +63,7 @@ export function missingFor(a: LocalAttendance, brand: BootstrapBrand, tracked: B
     afterPhotos: a.photos.filter((p) => p.kind === "after").length,
     trackedProductIds: tracked.map((p) => p.id),
     stock: Object.fromEntries(Object.values(a.stock).map((x) => [x.productId, x.state])),
-    ruptures: Object.values(a.ruptures).map((r) => ({ productId: r.productId, photos: a.photos.filter((p) => p.ruptureId === r.id).length })),
+    damages: Object.values(a.damages ?? {}).map((d) => ({ productId: d.productId, photos: a.photos.filter((p) => p.damageId === d.id).length })),
     exceptionItems: a.exceptionItems,
     exceptionReason: a.exceptionReason,
     exceptionNote: a.exceptionNote,

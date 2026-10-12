@@ -14,7 +14,7 @@ import {
   EXCEPTION_ITEM_LABEL,
   EXCEPTION_REASON_LABEL,
   EXCEPTION_REASONS,
-  RUPTURE_SITUATION_LABEL,
+  DAMAGE_KIND_LABEL,
   type ExceptionItem,
   type ExceptionReason,
 } from "@/lib/domain";
@@ -27,23 +27,31 @@ import { Chip, Notice, Screen, Sheet, TextArea, toast, TopBar } from "./primitiv
 import { PhotoCapture, PhotoThumb } from "./photo-capture";
 import { StockStep } from "./stock-step";
 import { RuptureStep } from "./rupture-step";
+import { ValidityStep } from "./validity-step";
+import { DamageStep } from "./damage-step";
+import { daysBetween } from "@/lib/dates";
+import { classify, DEFAULT_BANDS, SEVERITY_LABEL } from "@/lib/validity";
 import { OccurrenceStep } from "./occurrence-step";
+import { SharePdf } from "./share-pdf";
 
 const STEPS = [
   { id: "antes", label: "Antes" },
   { id: "execucao", label: "Execução" },
   { id: "depois", label: "Depois" },
   { id: "estoque", label: "Estoque" },
+  { id: "validade", label: "Validade" },
   { id: "ruptura", label: "Ruptura" },
+  { id: "avaria", label: "Avaria" },
   { id: "ocorrencias", label: "Ocorrências" },
   { id: "revisao", label: "Revisão" },
 ] as const;
 type StepId = (typeof STEPS)[number]["id"];
+/** Etapas sem mínimo obrigatório: não ganham o "check" verde só por estarem vazias. */
+const OPTIONAL_STEPS = new Set<StepId>(["validade", "ruptura", "avaria", "ocorrencias"]);
 
 export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: string; attendanceId: string; step?: string }) {
   const visit = useVisit(visitId);
   const cat = useCatalog();
-  const [suggest, setSuggest] = useState<string | null>(null);
   const attendance = visit?.attendances[attendanceId];
   const brand = attendance ? cat.brandById.get(attendance.brandId) : undefined;
   const store = visit ? cat.storeById.get(visit.storeId) : undefined;
@@ -74,7 +82,9 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
     execucao: brand.activities.length === 0 || attendance.activitiesDone.length === brand.activities.length,
     depois: attendance.photos.filter((p) => p.kind === "after").length >= brand.minAfterPhotos || attendance.exceptionItems.includes("after_photo"),
     estoque: !brand.requireStock || tracked.every((p) => attendance.stock[p.id]) || attendance.exceptionItems.includes("stock"),
+    validade: true,
     ruptura: true,
+    avaria: Object.values(attendance.damages ?? {}).every((d) => attendance.photos.some((p) => p.damageId === d.id)),
     ocorrencias: true,
     revisao: status === "completed" || status === "awaiting_sync",
   };
@@ -107,16 +117,16 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
                 aria-current={s.id === current ? "step" : undefined}
                 className={clsx(
                   "h-9 pl-1.5 pr-2.5 rounded-full flex items-center gap-1.5 text-[12.5px] font-semibold whitespace-nowrap",
-                  s.id === current ? "bg-brand-800 text-white" : stepDone[s.id] && s.id !== "ruptura" && s.id !== "ocorrencias" ? "text-ok" : "text-ink-2",
+                  s.id === current ? "bg-brand-800 text-white" : stepDone[s.id] && !OPTIONAL_STEPS.has(s.id) ? "text-ok" : "text-ink-2",
                 )}
               >
                 <span
                   className={clsx(
                     "size-6 rounded-full grid place-items-center text-[11px]",
-                    s.id === current ? "bg-white/20" : stepDone[s.id] && s.id !== "ruptura" && s.id !== "ocorrencias" ? "bg-ok-bg" : "bg-canvas",
+                    s.id === current ? "bg-white/20" : stepDone[s.id] && !OPTIONAL_STEPS.has(s.id) ? "bg-ok-bg" : "bg-canvas",
                   )}
                 >
-                  {stepDone[s.id] && s.id !== "ruptura" && s.id !== "ocorrencias" && s.id !== current ? <Check className="size-3.5" /> : i + 1}
+                  {stepDone[s.id] && !OPTIONAL_STEPS.has(s.id) && s.id !== current ? <Check className="size-3.5" /> : i + 1}
                 </span>
                 {s.label}
               </button>
@@ -173,23 +183,14 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             attendance={attendance}
             products={tracked}
             editable={editable}
-            onSuggestRupture={(productId) => {
-              setSuggest(productId);
-              goStep("ruptura");
-            }}
+            onSuggestRupture={() => goStep("ruptura")}
           />
+        ) : current === "validade" ? (
+          <ValidityStep visitId={visitId} visitDate={visit.visitDate} attendance={attendance} brand={brand} products={tracked} editable={editable} />
         ) : current === "ruptura" ? (
-          <RuptureStep
-            key={suggest ?? "none"}
-            visitId={visitId}
-            storeName={store?.name ?? ""}
-            attendance={attendance}
-            brand={brand}
-            products={cat.productsByBrand.get(brand.id) ?? []}
-            editable={editable}
-            suggestProductId={suggest}
-            onSuggestHandled={() => setSuggest(null)}
-          />
+          <RuptureStep visitId={visitId} attendance={attendance} products={tracked} editable={editable} />
+        ) : current === "avaria" ? (
+          <DamageStep visitId={visitId} visitDate={visit.visitDate} attendance={attendance} brand={brand} products={tracked} editable={editable} />
         ) : current === "ocorrencias" ? (
           <OccurrenceStep visitId={visitId} attendance={attendance} brand={brand} editable={editable} />
         ) : (
@@ -261,7 +262,11 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
   const after = attendance.photos.filter((p) => p.kind === "after");
   const ruptures = Object.values(attendance.ruptures);
   const excusable = missing.filter((m) => m.excusable);
-  const stepFor: Partial<Record<string, StepId>> = { before_photo: "antes", after_photo: "depois", stock: "estoque", rupture_photo: "ruptura" };
+  const stepFor: Partial<Record<string, StepId>> = { before_photo: "antes", after_photo: "depois", stock: "estoque", damage_photo: "avaria" };
+  const bands = cat.settings?.validityBands ?? DEFAULT_BANDS;
+  const validities = Object.values(attendance.validities ?? {}).map((v) => ({ v, sev: classify(daysBetween(visit.visitDate, v.expiryDate), bands) }));
+  const urgent = validities.filter((x) => x.sev === "expired" || x.sev === "critical").length;
+  const damages = Object.values(attendance.damages ?? {});
 
   return (
     <div className="space-y-4 pb-6">
@@ -319,18 +324,53 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
       </section>
 
       <section className="bg-surface border border-line rounded-2xl p-4">
+        <button type="button" onClick={() => goStep("validade")} className="w-full text-left">
+          <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Validades ({validities.length})</h3>
+          {validities.length ? (
+            <p className="text-[14px]">
+              {(["expired", "critical", "high", "attention", "monitor", "normal"] as const)
+                .map((sev) => [sev, validities.filter((x) => x.sev === sev).length] as const)
+                .filter(([, n]) => n > 0)
+                .map(([sev, n]) => `${n} ${SEVERITY_LABEL[sev].toLowerCase()}`)
+                .join(" · ")}
+              {urgent ? <span className="block text-bad font-semibold text-[13px] mt-0.5">{urgent} vencido(s) ou crítico(s)</span> : null}
+            </p>
+          ) : (
+            <p className="text-[14px] text-muted">Nenhuma validade registrada.</p>
+          )}
+        </button>
+      </section>
+
+      <section className="bg-surface border border-line rounded-2xl p-4">
         <button type="button" onClick={() => goStep("ruptura")} className="w-full text-left">
           <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Rupturas ({ruptures.length})</h3>
           {ruptures.length ? (
             <ul className="space-y-1 text-[13.5px]">
               {ruptures.map((r) => (
                 <li key={r.id}>
-                  <strong>{cat.productById.get(r.productId)?.name}</strong> — {RUPTURE_SITUATION_LABEL[r.situation]}
+                  <strong>{cat.productById.get(r.productId)?.name}</strong> — Ruptura total
                 </li>
               ))}
             </ul>
           ) : (
             <p className="text-[14px] text-muted">Nenhuma ruptura registrada.</p>
+          )}
+        </button>
+      </section>
+
+      <section className="bg-surface border border-line rounded-2xl p-4">
+        <button type="button" onClick={() => goStep("avaria")} className="w-full text-left">
+          <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Avarias ({damages.length})</h3>
+          {damages.length ? (
+            <ul className="space-y-1 text-[13.5px]">
+              {damages.map((d) => (
+                <li key={d.id}>
+                  <strong>{cat.productById.get(d.productId)?.name}</strong> — {DAMAGE_KIND_LABEL[d.kind]} · {d.quantity} {d.unit}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[14px] text-muted">Nenhuma avaria registrada.</p>
           )}
         </button>
       </section>
@@ -354,6 +394,8 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
           ) : null}
         </Notice>
       ) : null}
+
+      {status === "completed" || status === "awaiting_sync" ? <SharePdf attendance={attendance} storeId={visit.storeId} visitDate={visit.visitDate} /> : null}
 
       {editable ? (
         <>

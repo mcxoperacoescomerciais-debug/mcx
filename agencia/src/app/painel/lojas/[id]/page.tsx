@@ -10,7 +10,7 @@ import { brandFilter } from "@/server/scope";
 import { listVisits } from "@/server/history";
 import { ruptureList } from "@/server/analytics";
 import { parseFilters, withParams } from "@/lib/filters";
-import { ATTENDANCE_STATUS_TONE, ATTENDANCE_STATUS_LABEL, RUPTURE_SITUATION_LABEL, RUPTURE_STATUS_LABEL, RUPTURE_STATUS_TONE, VISIT_STATUS_LABEL, VISIT_STATUS_TONE } from "@/lib/domain";
+import { ATTENDANCE_STATUS_TONE, ATTENDANCE_STATUS_LABEL, RUPTURE_SITUATION_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE } from "@/lib/domain";
 import { fmtDate, fmtTime } from "@/lib/dates";
 import { Badge, EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
 import { FilterBar } from "../../_components/filter-bar";
@@ -36,7 +36,7 @@ export default async function StorePage({ params, searchParams }: PageProps<"/pa
     .innerJoin(s.brands, eq(s.brands.id, s.storeBrands.brandId))
     .where(and(eq(s.storeBrands.storeId, id), brandFilter(scope, s.brands.id)));
   if (scope.brandIds !== null && !brands.length) notFound();
-  const [visits, ruptures] = await Promise.all([listVisits(scope, f), ruptureList(scope, { ...f, status: "open" }, { pageSize: 50 })]);
+  const [visits, ruptures] = await Promise.all([listVisits(scope, f), ruptureList(scope, f, { pageSize: 50 })]);
   const st = row.store;
 
   return (
@@ -62,7 +62,7 @@ export default async function StorePage({ params, searchParams }: PageProps<"/pa
         {st.rules ? <span className="text-[13px] text-ink-2 ml-3">Regras: {st.rules}</span> : null}
       </div>
 
-      <SectionCard title={`Rupturas em aberto (${ruptures.total})`} subtitle="Nova, em análise ou em tratativa — no período">
+      <SectionCard title={`Rupturas no período (${ruptures.total})`} subtitle="Produtos marcados como ruptura total">
         {ruptures.rows.length ? (
           <Table>
             <thead>
@@ -71,7 +71,6 @@ export default async function StorePage({ params, searchParams }: PageProps<"/pa
                 <Th>Produto</Th>
                 <Th>Marca</Th>
                 <Th>Situação</Th>
-                <Th>Status</Th>
               </tr>
             </thead>
             <tbody>
@@ -79,23 +78,18 @@ export default async function StorePage({ params, searchParams }: PageProps<"/pa
                 <tr key={r.id} className="hover:bg-subtle">
                   <Td className="tnum">{fmtDate(r.visitDate)}</Td>
                   <Td>
-                    <Link href={`/painel/rupturas/${r.id}`} className="font-semibold hover:underline">
+                    <Link href={`/painel/atendimentos/${r.attendanceId}`} className="font-semibold hover:underline">
                       {r.productName}
                     </Link>
                   </Td>
                   <Td>{r.brandName}</Td>
                   <Td>{RUPTURE_SITUATION_LABEL[r.situation]}</Td>
-                  <Td>
-                    <StatusBadge tone={RUPTURE_STATUS_TONE[r.status]} size="sm">
-                      {RUPTURE_STATUS_LABEL[r.status]}
-                    </StatusBadge>
-                  </Td>
                 </tr>
               ))}
             </tbody>
           </Table>
         ) : (
-          <p className="px-5 pb-5 text-[13.5px] text-muted">Nenhuma ruptura em aberto.</p>
+          <p className="px-5 pb-5 text-[13.5px] text-muted">Nenhuma ruptura no período.</p>
         )}
       </SectionCard>
 

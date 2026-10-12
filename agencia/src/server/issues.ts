@@ -13,7 +13,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
 import { getDayBoard } from "./operations";
-import { EXCEPTION_ITEM_LABEL, RUPTURE_SITUATION_LABEL, OCCURRENCE_CATEGORY_LABEL, type ExceptionItem, type IssueKind, type IssueReviewStatus } from "@/lib/domain";
+import { EXCEPTION_ITEM_LABEL, OCCURRENCE_CATEGORY_LABEL, type ExceptionItem, type IssueKind, type IssueReviewStatus } from "@/lib/domain";
 import { todayIso } from "@/lib/dates";
 import type { PanelFilters } from "@/lib/filters";
 
@@ -111,17 +111,6 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
     for (const c of corr) {
       const a = atts.find((x) => x.id === c.attendanceId)!;
       issues.push({ key: `correction_pending:${c.id}`, kind: "correction_pending", priority: pr.correction_pending, title: "Atendimento aguardando correção do promotor", detail: `“${c.reason}”`, date: a.date, at: c.at, storeName: a.storeName, brandName: a.brandName, promoterName: a.promoterName, href: href(a), review: null });
-    }
-
-    // Rupturas novas (ainda não analisadas).
-    const rup = await db
-      .select({ id: s.ruptures.id, attendanceId: s.ruptures.attendanceId, situation: s.ruptures.situation, product: s.products.name, at: s.ruptures.recordedAt })
-      .from(s.ruptures)
-      .innerJoin(s.products, eq(s.products.id, s.ruptures.productId))
-      .where(and(inArray(s.ruptures.attendanceId, attIds), eq(s.ruptures.status, "new"), isNull(s.ruptures.deletedAt)));
-    for (const r of rup) {
-      const a = atts.find((x) => x.id === r.attendanceId)!;
-      issues.push({ key: `rupture_open:${r.id}`, kind: "rupture_open", priority: pr.rupture_open, title: `Ruptura: ${r.product}`, detail: RUPTURE_SITUATION_LABEL[r.situation], date: a.date, at: r.at, storeName: a.storeName, brandName: a.brandName, promoterName: a.promoterName, href: `/painel/rupturas/${r.id}`, review: null });
     }
 
     // Ocorrências não tratadas.
