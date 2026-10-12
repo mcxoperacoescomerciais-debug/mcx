@@ -76,6 +76,7 @@ export async function stockRecords(scope: Scope, f: F, opts: { page?: number; pa
         ${s.stockEntries.productId} as product_id, ${s.attendances.brandId} as brand_id, ${s.visits.storeId} as store_id, ${s.visits.promoterId} as promoter_id,
         lag(${s.stockEntries.quantity}) over w as prev_quantity,
         lag(${s.stockEntries.state}) over w as prev_state,
+        lag(${s.stockEntries.unit}) over w as prev_unit,
         lag(${s.visits.visitDate}::text) over w as prev_date
       from ${s.stockEntries}
       join ${s.attendances} on ${s.attendances.id} = ${s.stockEntries.attendanceId}
@@ -85,7 +86,7 @@ export async function stockRecords(scope: Scope, f: F, opts: { page?: number; pa
       window w as (partition by ${s.visits.storeId}, ${s.stockEntries.productId} order by ${s.visits.visitDate}, ${s.stockEntries.recordedAt})
     ), flagged as (
       select base.*,
-        (prev_quantity is not null and quantity is not null and ((prev_quantity = 0 and quantity >= 10) or (prev_quantity > 0 and abs(quantity - prev_quantity) * 100.0 / prev_quantity >= ${pct}))) as divergent
+        (prev_quantity is not null and quantity is not null and prev_unit = unit and ((prev_quantity = 0 and quantity >= 10) or (prev_quantity > 0 and abs(quantity - prev_quantity) * 100.0 / prev_quantity >= ${pct}))) as divergent
       from base where visit_date >= ${f.from}
     )
     select flagged.*, p.name as product_name, p.sku, b.name as brand_name, st.name as store_name, st.city, u.name as promoter_name, count(*) over() as total

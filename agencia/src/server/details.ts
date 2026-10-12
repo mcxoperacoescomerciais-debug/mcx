@@ -97,13 +97,13 @@ export async function getAttendanceDetail(scope: Scope, attendanceId: string) {
 async function previousStock(storeId: string, brandId: string, visitDate: string, attendanceId: string) {
   const db = await getDb();
   const rows = await db
-    .select({ productId: s.stockEntries.productId, state: s.stockEntries.state, quantity: s.stockEntries.quantity, date: s.visits.visitDate, attendanceId: s.attendances.id })
+    .select({ productId: s.stockEntries.productId, state: s.stockEntries.state, quantity: s.stockEntries.quantity, unit: s.stockEntries.unit, date: s.visits.visitDate, attendanceId: s.attendances.id })
     .from(s.stockEntries)
     .innerJoin(s.attendances, eq(s.attendances.id, s.stockEntries.attendanceId))
     .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
     .where(and(eq(s.visits.storeId, storeId), eq(s.attendances.brandId, brandId), eq(s.attendances.status, "completed")))
     .orderBy(desc(s.visits.visitDate), desc(s.stockEntries.recordedAt));
-  const map = new Map<string, { state: string; quantity: number | null; date: string }>();
+  const map = new Map<string, { state: string; quantity: number | null; unit: string; date: string }>();
   for (const r of rows) {
     if (r.attendanceId === attendanceId || r.date > visitDate) continue;
     if (r.date === visitDate) continue;

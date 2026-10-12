@@ -141,7 +141,8 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                 {d.stockRows.map(({ product, entry }) => {
                   const state: StockDisplayState = entry ? entry.state : "pending";
                   const prev = d.previous.get(product.id);
-                  const divergent = entry && prev && isRelevantDivergence(prev.quantity, entry.quantity, pctDiv);
+                  // Só compara contagens na mesma unidade (caixa × unidade não é divergência).
+                  const divergent = entry && prev && prev.unit === entry.unit && isRelevantDivergence(prev.quantity, entry.quantity, pctDiv);
                   return (
                     <tr key={product.id}>
                       <Td>
@@ -161,7 +162,7 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                       <Td align="right" className="text-muted">
                         {prev ? (
                           <span className={divergent ? "text-warn font-semibold" : ""} title={divergent ? `Variação acima de ${pctDiv}%` : undefined}>
-                            {prev.quantity !== null ? prev.quantity : STOCK_STATE_LABEL[prev.state as StockDisplayState]} ({fmtDate(prev.date).slice(0, 5)}){divergent ? " ⚠" : ""}
+                            {prev.quantity !== null ? `${prev.quantity} ${prev.unit}` : STOCK_STATE_LABEL[prev.state as StockDisplayState]} ({fmtDate(prev.date).slice(0, 5)}){divergent ? " ⚠" : ""}
                           </span>
                         ) : (
                           "—"

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, ChevronRight, PackagePlus, Search, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
-import { STOCK_STATE_SHORT, STOCK_STATE_TONE, UNIT_LABEL, type StockDisplayState, type StockState } from "@/lib/domain";
+import { STOCK_COUNT_UNITS, STOCK_STATE_SHORT, STOCK_STATE_TONE, UNIT_LABEL, type StockDisplayState, type StockState, type Unit } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { matchesQuery, suggestsRupture, validateStock } from "@/lib/rules";
 import type { BootstrapProduct } from "@/lib/sync-types";
@@ -85,13 +85,13 @@ export function StockStep({ visitId, storeId, attendance, products, editable, on
                   <p className="text-[12px] text-muted mt-0.5">
                     SKU {p.sku}
                     {p.package ? ` · ${p.package}` : ""}
-                    {prev ? ` · última: ${prev.state === "quantity" ? `${prev.quantity} ${p.unit}` : STOCK_STATE_SHORT[prev.state as StockState] ?? "—"} (${fmtDate(prev.date).slice(0, 5)})` : ""}
+                    {prev ? ` · última: ${prev.state === "quantity" ? `${prev.quantity} ${prev.unit ?? p.unit}` : STOCK_STATE_SHORT[prev.state as StockState] ?? "—"} (${fmtDate(prev.date).slice(0, 5)})` : ""}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
                   {entry?.state === "quantity" ? (
                     <p className="text-[18px] font-bold tnum leading-none">
-                      {entry.quantity} <span className="text-[12px] font-medium text-muted">{p.unit}</span>
+                      {entry.quantity} <span className="text-[12px] font-medium text-muted">{entry.unit ?? p.unit}</span>
                     </p>
                   ) : (
                     <StatusBadge tone={STOCK_STATE_TONE[state]} size="sm">
@@ -141,8 +141,8 @@ export function StockStep({ visitId, storeId, attendance, products, editable, on
           product={editing}
           current={attendance.stock[editing.id]}
           onClose={() => setEditing(null)}
-          onSave={async (state, quantity, note) => {
-            await saveStock(visitId, attendance.id, { productId: editing.id, state, quantity, note: note || null, recordedAt: new Date().toISOString() });
+          onSave={async (state, quantity, note, unit) => {
+            await saveStock(visitId, attendance.id, { productId: editing.id, state, quantity, unit, note: note || null, recordedAt: new Date().toISOString() });
             haptic(15);
             setEditing(null);
             if (suggestsRupture(state) && !Object.values(attendance.ruptures).some((r) => r.productId === editing.id)) onSuggestRupture(editing.id);
@@ -178,9 +178,12 @@ function StockSheet({
   product: BootstrapProduct;
   current: LocalAttendance["stock"][string] | undefined;
   onClose: () => void;
-  onSave: (state: StockState, quantity: number | null, note: string) => Promise<void>;
+  onSave: (state: StockState, quantity: number | null, note: string, unit: Unit) => Promise<void>;
   onClear: () => Promise<void>;
 }) {
+  // Unidade da contagem: unidade ou caixa (e a unidade do cadastro, se for outra — ex.: pacote).
+  const unitOptions: Unit[] = (STOCK_COUNT_UNITS as readonly Unit[]).includes(product.unit) ? [...STOCK_COUNT_UNITS] : [product.unit, ...STOCK_COUNT_UNITS];
+  const [unit, setUnit] = useState<Unit>((current?.unit as Unit | null | undefined) ?? product.unit);
   const [qty, setQty] = useState(current?.state === "quantity" && current.quantity !== null ? String(current.quantity) : "");
   const [note, setNote] = useState(current?.note ?? "");
   const [showNote, setShowNote] = useState(Boolean(current?.note));
@@ -204,27 +207,40 @@ function StockSheet({
             value={qty}
             onChange={(e) => setQty(e.target.value.replace(/\D/g, "").slice(0, 6))}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && n && !qtyError) void onSave("quantity", n, note);
+              if (e.key === "Enter" && n && !qtyError) void onSave("quantity", n, note, unit);
             }}
             className="flex-1 min-w-0 h-16 rounded-2xl border-2 border-line-strong bg-surface px-4 text-[28px] font-bold tnum focus:border-brand-600 focus:outline-none"
             placeholder="0"
-            aria-describedby="unit"
           />
-          <span id="unit" className="w-28 rounded-2xl bg-canvas grid place-items-center text-[14px] font-semibold text-ink-2 text-center px-2">
-            {UNIT_LABEL[product.unit]}
-          </span>
         </div>
-        {qtyError ? <span className="block text-[13px] text-bad mt-1.5 font-medium">{qtyError}</span> : null}
       </label>
-      <Button size="xl" className="w-full mt-3" disabled={!n || Boolean(qtyError)} onClick={() => n && void onSave("quantity", n, note)}>
+      <div className={clsx("grid gap-2 mt-2", unitOptions.length === 3 ? "grid-cols-3" : "grid-cols-2")} role="radiogroup" aria-label="Unidade da contagem">
+        {unitOptions.map((u) => (
+          <button
+            key={u}
+            type="button"
+            role="radio"
+            aria-checked={unit === u}
+            onClick={() => setUnit(u)}
+            className={clsx(
+              "h-12 rounded-xl border-2 text-[14px] font-bold uppercase tracking-wide",
+              unit === u ? "border-brand-700 bg-brand-800 text-white" : "border-line-strong bg-surface text-ink-2",
+            )}
+          >
+            {UNIT_LABEL[u].replace(/s$/, "")}
+          </button>
+        ))}
+      </div>
+      {qtyError ? <p className="text-[13px] text-bad mt-1.5 font-medium">{qtyError}</p> : null}
+      <Button size="xl" className="w-full mt-3" disabled={!n || Boolean(qtyError)} onClick={() => n && void onSave("quantity", n, note, unit)}>
         SALVAR ESTOQUE
       </Button>
 
       <p className="text-[13px] font-semibold text-ink-2 mt-6 mb-2">Ou informe a situação</p>
       <div className="grid grid-cols-1 gap-2">
-        <SituationButton tone="bad" label="Estoque zero" help="Verifiquei: não há nenhuma unidade" active={current?.state === "zero"} onClick={() => void onSave("zero", 0, note)} />
-        <SituationButton tone="warn" label="Produto não encontrado" help="Não localizei o produto na loja" active={current?.state === "not_found"} onClick={() => void onSave("not_found", null, note)} />
-        <SituationButton tone="muted" label="Não se aplica a esta loja" help="A loja não trabalha com este item" active={current?.state === "not_applicable"} onClick={() => void onSave("not_applicable", null, note)} />
+        <SituationButton tone="bad" label="Estoque zero" help="Verifiquei: não há nenhuma unidade" active={current?.state === "zero"} onClick={() => void onSave("zero", 0, note, unit)} />
+        <SituationButton tone="warn" label="Produto não encontrado" help="Não localizei o produto na loja" active={current?.state === "not_found"} onClick={() => void onSave("not_found", null, note, unit)} />
+        <SituationButton tone="muted" label="Não se aplica a esta loja" help="A loja não trabalha com este item" active={current?.state === "not_applicable"} onClick={() => void onSave("not_applicable", null, note, unit)} />
       </div>
 
       <div className="mt-4">

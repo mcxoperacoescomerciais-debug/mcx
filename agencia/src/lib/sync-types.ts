@@ -17,6 +17,7 @@ import {
   PHOTO_SOURCES,
   RUPTURE_SITUATIONS,
   STOCK_STATES,
+  UNITS,
   type AttendanceStatus,
   type Unit,
 } from "./domain";
@@ -42,6 +43,8 @@ export const stockInput = z.object({
   productId: id,
   state: z.enum(STOCK_STATES),
   quantity: z.number().int().min(0).max(100_000).nullable(),
+  /** Unidade da contagem escolhida pelo promotor (unidade, caixa…); ausente = unidade do produto. */
+  unit: z.enum(UNITS).nullable().optional(),
   note: shortText(300),
   recordedAt: instant,
 });
@@ -264,7 +267,7 @@ export interface BootstrapPayload {
   schedules: BootstrapSchedule[];
   visits: ServerVisit[];
   /** Último levantamento de estoque por loja/produto (referência para o promotor). */
-  lastStock: Record<string, Record<string, { state: string; quantity: number | null; date: string }>>;
+  lastStock: Record<string, Record<string, { state: string; quantity: number | null; unit?: string; date: string }>>;
   serverTime: string;
 }
 

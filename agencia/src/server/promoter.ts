@@ -139,9 +139,9 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
   const lastStock: BootstrapPayload["lastStock"] = {};
   const scheduledStores = [...new Set(scheduleRows.map((r) => r.storeId))];
   if (scheduledStores.length) {
-    type Row = { store_id: string; product_id: string; state: string; quantity: number | null; visit_date: string };
+    type Row = { store_id: string; product_id: string; state: string; quantity: number | null; unit: string; visit_date: string };
     const rows = await db.execute(sql`
-      select distinct on (v.store_id, se.product_id) v.store_id, se.product_id, se.state, se.quantity, v.visit_date::text as visit_date
+      select distinct on (v.store_id, se.product_id) v.store_id, se.product_id, se.state, se.quantity, se.unit, v.visit_date::text as visit_date
       from ${s.stockEntries} se
       join ${s.attendances} a on a.id = se.attendance_id
       join ${s.visits} v on v.id = a.visit_id
@@ -150,7 +150,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
       order by v.store_id, se.product_id, v.visit_date desc, se.recorded_at desc
     `);
     for (const r of rowsOf<Row>(rows)) {
-      (lastStock[r.store_id] ??= {})[r.product_id] = { state: r.state, quantity: r.quantity, date: r.visit_date };
+      (lastStock[r.store_id] ??= {})[r.product_id] = { state: r.state, quantity: r.quantity, unit: r.unit, date: r.visit_date };
     }
   }
 
@@ -654,7 +654,7 @@ async function applyAttendance(
   // Estoque: upsert por (atendimento, produto). Limpar = volta a "pendente".
   for (const st of a.stock) {
     const quantity = storedQuantity(st.state, st.quantity);
-    const unit = await productUnit(tx, st.productId);
+    const unit = st.unit ?? (await productUnit(tx, st.productId));
     await tx
       .insert(s.stockEntries)
       .values({
@@ -671,7 +671,7 @@ async function applyAttendance(
       })
       .onConflictDoUpdate({
         target: [s.stockEntries.attendanceId, s.stockEntries.productId],
-        set: { state: st.state, quantity, note: st.note, recordedAt: new Date(st.recordedAt), updatedAt: now, updatedBy: promoterId },
+        set: { state: st.state, quantity, unit, note: st.note, recordedAt: new Date(st.recordedAt), updatedAt: now, updatedBy: promoterId },
       });
   }
   if (a.clearedStockProductIds.length) {

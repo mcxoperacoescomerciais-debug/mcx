@@ -143,6 +143,8 @@ export const STOCK_STATE_TONE: Record<StockDisplayState, Tone> = {
 
 export const UNITS = ["un", "pct", "cx", "fd", "kg", "dp"] as const;
 export type Unit = (typeof UNITS)[number];
+/** Unidades que o promotor escolhe ao contar o estoque (além da unidade do produto). */
+export const STOCK_COUNT_UNITS = ["un", "cx"] as const satisfies readonly Unit[];
 export const UNIT_LABEL: Record<Unit, string> = {
   un: "Unidades",
   pct: "Pacotes",
