@@ -1,0 +1,154 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { getScope } from "@/server/auth";
+import * as admin from "@/server/admin";
+import { readTable, runImport, type ImportKind, type ImportReport } from "@/server/import";
+import type { FormState } from "../actions";
+import type { Employment, Role, Unit } from "@/lib/domain";
+import { mergeSettings } from "@/lib/settings";
+import { ISSUE_KINDS } from "@/lib/domain";
+
+const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
+const bool = (fd: FormData, k: string) => fd.get(k) === "on" || fd.get(k) === "true";
+const all = (fd: FormData, k: string) => fd.getAll(k).map(String).filter(Boolean);
+
+function done<T extends { ok: boolean }>(r: T): T {
+  if (r.ok) revalidatePath("/painel", "layout");
+  return r;
+}
+
+export async function saveBrandAction(_: FormState, fd: FormData): Promise<FormState> {
+  return done(
+    await admin.saveBrand(await getScope(), {
+      id: str(fd, "id") || null,
+      name: str(fd, "name"),
+      code: str(fd, "code"),
+      status: str(fd, "status") === "inactive" ? "inactive" : "active",
+      minBeforePhotos: Number(str(fd, "minBeforePhotos") || 1),
+      minAfterPhotos: Number(str(fd, "minAfterPhotos") || 1),
+      requireStock: bool(fd, "requireStock"),
+      rupturePhotoRequired: bool(fd, "rupturePhotoRequired"),
+      allowGallery: bool(fd, "allowGallery"),
+      activities: str(fd, "activities").split("\n"),
+      notes: str(fd, "notes") || null,
+    }),
+  );
+}
+
+export async function saveChainAction(_: FormState, fd: FormData): Promise<FormState> {
+  return done(await admin.saveChain(await getScope(), str(fd, "id") || null, str(fd, "name"), str(fd, "status") === "inactive" ? "inactive" : "active"));
+}
+
+export async function saveStoreAction(_: FormState, fd: FormData): Promise<FormState> {
+  const r = await admin.saveStore(await getScope(), {
+    id: str(fd, "id") || null,
+    chainId: str(fd, "chainId") || null,
+    name: str(fd, "name"),
+    code: str(fd, "code") || null,
+    cnpj: str(fd, "cnpj") || null,
+    address: str(fd, "address") || null,
+    district: str(fd, "district") || null,
+    city: str(fd, "city"),
+    state: str(fd, "state") || "MG",
+    status: str(fd, "status") === "inactive" ? "inactive" : "active",
+    brandIds: all(fd, "brandIds"),
+    rules: str(fd, "rules") || null,
+    notes: str(fd, "notes") || null,
+  });
+  done(r);
+  if (r.ok && !str(fd, "id")) redirect(`/painel/cadastros/lojas/${r.id}`);
+  return r;
+}
+
+export async function storeProductsAction(_: FormState, fd: FormData): Promise<FormState> {
+  return done(await admin.setStoreProducts(await getScope(), str(fd, "storeId"), str(fd, "brandId"), all(fd, "productIds")));
+}
+
+export async function saveProductAction(_: FormState, fd: FormData): Promise<FormState> {
+  return done(
+    await admin.saveProduct(await getScope(), {
+      id: str(fd, "id") || null,
+      brandId: str(fd, "brandId"),
+      name: str(fd, "name"),
+      sku: str(fd, "sku"),
+      ean: str(fd, "ean") || null,
+      category: str(fd, "category") || null,
+      variant: str(fd, "variant") || null,
+      package: str(fd, "package") || null,
+      unit: (str(fd, "unit") || "un") as Unit,
+      status: str(fd, "status") === "inactive" ? "inactive" : "active",
+    }),
+  );
+}
+
+export async function saveUserAction(_: FormState, fd: FormData): Promise<FormState> {
+  const role = (["admin", "manager", "promoter"].includes(str(fd, "role")) ? str(fd, "role") : "promoter") as Role;
+  const r = await admin.saveUser(await getScope(), {
+    id: str(fd, "id") || null,
+    role,
+    name: str(fd, "name"),
+    username: str(fd, "username"),
+    email: str(fd, "email") || null,
+    phone: str(fd, "phone") || null,
+    internalCode: str(fd, "internalCode") || null,
+    employment: (str(fd, "employment") || null) as Employment | null,
+    region: str(fd, "region") || null,
+    managerId: str(fd, "managerId") || null,
+    status: str(fd, "status") === "inactive" ? "inactive" : "active",
+    allBrands: str(fd, "allBrands") !== "restricted",
+    teamOnly: bool(fd, "teamOnly"),
+    brandIds: all(fd, "brandIds"),
+    storeIds: all(fd, "storeIds"),
+    password: str(fd, "password") || null,
+  });
+  done(r);
+  if (r.ok && !str(fd, "id")) redirect(`/painel/cadastros/usuarios/${r.id}`);
+  return r;
+}
+
+export async function saveSettingsAction(_: FormState, fd: FormData): Promise<FormState> {
+  const scope = await getScope();
+  const priority = Object.fromEntries(ISSUE_KINDS.map((k) => [k, Number(str(fd, `p_${k}`) || 5)]));
+  const name = str(fd, "agencyName");
+  if (name && name !== scope.agencyName) await admin.saveAgencyName(scope, name);
+  return done(
+    await admin.saveSettings(
+      scope,
+      mergeSettings({
+        requireApproval: bool(fd, "requireApproval"),
+        allowIncompleteVisit: bool(fd, "allowIncompleteVisit"),
+        allowExtraVisits: bool(fd, "allowExtraVisits"),
+        captureLocation: bool(fd, "captureLocation"),
+        allowExceptions: bool(fd, "allowExceptions"),
+        lateToleranceMin: Number(str(fd, "lateToleranceMin")),
+        dayEndsAt: str(fd, "dayEndsAt"),
+        stockDivergencePct: Number(str(fd, "stockDivergencePct")),
+        issuePriority: priority as never,
+      }),
+    ),
+  );
+}
+
+export type ImportState = { report?: ImportReport; error?: string } | null;
+
+export async function importAction(_: ImportState, fd: FormData): Promise<ImportState> {
+  const scope = await getScope();
+  if (scope.role !== "admin") return { error: "Somente administradores." };
+  const kind = str(fd, "kind") as ImportKind;
+  if (!["produtos", "lojas", "promotores"].includes(kind)) return { error: "Tipo de importação inválido." };
+  const file = fd.get("file");
+  if (!(file instanceof File) || !file.size) return { error: "Escolha o arquivo." };
+  if (file.size > 10 * 1024 * 1024) return { error: "Arquivo muito grande (máx. 10 MB)." };
+  try {
+    const rows = await readTable(file);
+    if (!rows.length) return { error: "Planilha vazia ou sem cabeçalho na primeira linha." };
+    const report = await runImport(scope, kind, rows, bool(fd, "dryRun"));
+    if (!report.dryRun) revalidatePath("/painel", "layout");
+    return { report };
+  } catch (err) {
+    console.error("[import]", err);
+    return { error: "Não foi possível ler o arquivo. Use .xlsx ou .csv com cabeçalho na primeira linha." };
+  }
+}
