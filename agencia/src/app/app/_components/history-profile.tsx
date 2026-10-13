@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ChevronRight, History, Loader2, LogOut, RefreshCw, WifiOff } from "lucide-react";
 import { Button, McxFooter, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, EMPLOYMENT_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE, type AttendanceStatus, type Employment, type VisitStatus } from "@/lib/domain";
 import { fmtAgo, fmtDate, fmtTime } from "@/lib/dates";
-import { pendingCount, refreshAll, refreshHistory } from "../_lib/local-store";
-import { go, useLocal } from "../_lib/hooks";
+import { attendanceDisplayStatus, isVisitDirty, pendingCount, refreshAll, refreshHistory } from "../_lib/local-store";
+import { go, useCatalog, useLocal } from "../_lib/hooks";
+import type { PromoterHistoryItem } from "@/lib/sync-types";
 import { BottomTabs, Notice, Screen, Sheet, toast, TopBar } from "./primitives";
 
 export function HistoryScreen() {
@@ -15,14 +16,46 @@ export function HistoryScreen() {
   useEffect(() => {
     void refreshHistory().finally(() => setLoading(false));
   }, []);
-  const history = local.history;
+  const cat = useCatalog();
+  // Visitas gravadas neste celular entram no histórico mesmo sem sinal (e antes de chegarem ao servidor).
+  const history = useMemo<PromoterHistoryItem[] | null>(() => {
+    const server = local.history ?? [];
+    const known = new Set(server.map((h) => h.visitId));
+    const mine: PromoterHistoryItem[] = Object.values(local.visits)
+      .filter((v) => !known.has(v.id) || isVisitDirty(v))
+      .map((v) => {
+        const store = cat.storeById.get(v.storeId);
+        return {
+          visitId: v.id,
+          visitDate: v.visitDate,
+          storeName: store?.name ?? "Loja",
+          chainName: null,
+          city: store?.city ?? "",
+          status: v.status,
+          startedAt: v.startedAt,
+          finishedAt: v.finishedAt,
+          brands: Object.values(v.attendances).map((a) => ({
+            attendanceId: a.id,
+            brandName: cat.brandById.get(a.brandId)?.name ?? "Marca",
+            status: attendanceDisplayStatus(a),
+            ruptures: Object.keys(a.ruptures).length,
+            correction: a.status === "correction_requested",
+          })),
+        };
+      });
+    if (!mine.length && local.history === null) return null;
+    const ids = new Set(mine.map((m) => m.visitId));
+    return [...mine, ...server.filter((h) => !ids.has(h.visitId))].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }, [local.history, local.visits, cat]);
   return (
     <Screen>
       <TopBar title="Meu histórico" subtitle="Últimos 45 dias" />
       <div className="px-4 pt-4 space-y-2.5">
         {!local.sync.online ? (
           <Notice tone="warn" icon={<WifiOff className="size-5" />}>
-            Sem sinal: mostrando o último histórico carregado.
+            {local.historyAt
+              ? `Sem sinal: mostrando as visitas deste celular e o histórico salvo ${fmtAgo(local.historyAt)}.`
+              : "Sem sinal: mostrando as visitas gravadas neste celular. O histórico completo aparece com internet."}
           </Notice>
         ) : null}
         {loading && !history ? (
@@ -82,8 +115,12 @@ export function HistoryScreen() {
 
 /** /sair é um route handler (limpa o cookie): precisa de navegação completa. */
 function leave() {
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-  window.location.href = "/sair";
+  // Fotos e logo guardados para uso sem sinal não ficam para o próximo usuário do aparelho.
+  const clear = typeof caches !== "undefined" ? caches.delete("media-v1").catch(() => false) : Promise.resolve(false);
+  void clear.finally(() => {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = "/sair";
+  });
 }
 
 export function ProfileScreen() {

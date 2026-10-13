@@ -25,6 +25,7 @@
     "exceljs": "^4.4.0",
     "idb-keyval": "^6.3.0",
     "jose": "^6.2.12",
+    "jspdf": "^2.5.2",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "lucide-react": "^1.52.0",

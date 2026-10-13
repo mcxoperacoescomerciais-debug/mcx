@@ -10,26 +10,35 @@ import { haptic, useObjectUrl } from "../_lib/hooks";
 import { preparePhoto } from "../_lib/photo";
 import { Sheet, toast } from "./primitives";
 
-/** Miniatura: do aparelho (ainda não enviada) ou do servidor (já enviada). */
+/**
+ * Foto do atendimento. Ampliada: original do aparelho → servidor (com sinal) →
+ * miniatura guardada. Miniatura: a guardada no aparelho (fica mesmo depois do
+ * envio, para aparecer sem sinal) → servidor.
+ */
 export function PhotoThumb({ photo, className, full = false }: { photo: LocalPhoto; className?: string; full?: boolean }) {
-  const [blob, setBlob] = useState<Blob | null>(null);
+  const [original, setOriginal] = useState<Blob | null>(null);
+  const [thumb, setThumb] = useState<Blob | null>(null);
+  const [serverFailed, setServerFailed] = useState(false);
   useEffect(() => {
     let alive = true;
-    if (photo.local) {
-      void (async () => {
-        const b = (!full ? await getPhotoBlob(photo.id, true) : undefined) ?? (await getPhotoBlob(photo.id));
-        if (alive) setBlob(b ?? null);
-      })();
-    }
+    void (async () => {
+      const [o, t] = await Promise.all([getPhotoBlob(photo.id), getPhotoBlob(photo.id, true)]);
+      if (alive) {
+        setOriginal(o ?? null);
+        setThumb(t ?? null);
+      }
+    })();
     return () => {
       alive = false;
     };
-  }, [photo.id, photo.local, full]);
-  const localUrl = useObjectUrl(blob);
-  const src = localUrl ?? (photo.uploaded ? `/api/photos/${photo.id}${full ? "" : "?size=thumb"}` : null);
+  }, [photo.id, photo.local, photo.uploaded]);
+  const originalUrl = useObjectUrl(original);
+  const thumbUrl = useObjectUrl(thumb);
+  const server = photo.uploaded && !serverFailed ? `/api/photos/${photo.id}${full ? "" : "?size=thumb"}` : null;
+  const src = full ? (originalUrl ?? server ?? thumbUrl) : (thumbUrl ?? originalUrl ?? server);
   if (!src) return <div className={clsx("bg-canvas grid place-items-center text-muted text-[12px]", className)}>Sem prévia</div>;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt="" className={clsx("object-cover bg-canvas", className)} />;
+  return <img src={src} alt="" onError={() => src === server && setServerFailed(true)} className={clsx("object-cover bg-canvas", className)} />;
 }
 
 export function PhotoStatus({ photo }: { photo: LocalPhoto }) {

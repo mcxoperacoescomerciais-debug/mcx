@@ -5,12 +5,23 @@
  *   o app abre dentro do supermercado mesmo sem internet.
  * - Arquivos estáticos do Next (/_next/static, com hash no nome): cache
  *   primeiro — nunca mudam de conteúdo.
- * - APIs: sempre pela rede. Quem trata a falta de sinal é o próprio app
+ * - Fotos já enviadas (/api/photos/:id) e logo da agência (/api/logo/:id):
+ *   conteúdo nunca muda para a mesma URL — cache primeiro, para aparecerem
+ *   sem sinal. Limite de itens para não lotar o celular.
+ * - Demais APIs: sempre pela rede. Quem trata a falta de sinal é o próprio app
  *   (fila de sincronização no IndexedDB).
  */
-const VERSION = "campo-v1";
+const VERSION = "campo-v2";
 const SHELL_CACHE = `shell-${VERSION}`;
 const STATIC_CACHE = `static-${VERSION}`;
+const MEDIA_CACHE = "media-v1";
+const MEDIA_MAX = 400;
+
+async function trimMedia() {
+  const cache = await caches.open(MEDIA_CACHE);
+  const keys = await cache.keys();
+  for (const k of keys.slice(0, Math.max(0, keys.length - MEDIA_MAX))) await cache.delete(k);
+}
 const PRECACHE = ["/app", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -27,7 +38,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => ![SHELL_CACHE, STATIC_CACHE].includes(k)).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => ![SHELL_CACHE, STATIC_CACHE, MEDIA_CACHE].includes(k)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -68,6 +79,22 @@ self.addEventListener("fetch", (event) => {
           return res;
         })
         .catch(() => caches.match("/app").then((hit) => hit || Response.error())),
+    );
+    return;
+  }
+
+  if (/^\/api\/(photos|logo)\//.test(url.pathname)) {
+    event.respondWith(
+      caches.open(MEDIA_CACHE).then((cache) =>
+        cache.match(request).then(
+          (hit) =>
+            hit ||
+            fetch(request).then((res) => {
+              if (res.ok) cache.put(request, res.clone()).then(trimMedia).catch(() => {});
+              return res;
+            }),
+        ),
+      ),
     );
     return;
   }

@@ -26,6 +26,8 @@ function registerServiceWorker() {
       .map((e) => e.name)
       .filter((u) => u.startsWith(`${location.origin}/_next/static/`));
     for (const url of new Set(assets)) fetch(url).catch(() => {});
+    // Gerador de PDF do celular: baixa agora (com sinal) para funcionar sem sinal depois.
+    void import("../_lib/local-pdf").catch(() => {});
   };
   if (navigator.serviceWorker.controller) warm();
   else navigator.serviceWorker.addEventListener("controllerchange", warm, { once: true });

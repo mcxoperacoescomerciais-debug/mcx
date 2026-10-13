@@ -111,6 +111,8 @@ export interface LocalState {
   bootstrapAt: string | null;
   visits: Record<string, LocalVisit>;
   history: PromoterHistoryItem[] | null;
+  /** Quando o histórico foi baixado (null = nunca). */
+  historyAt: string | null;
   sync: SyncState;
   sessionExpired: boolean;
 }
@@ -119,6 +121,8 @@ const idb = typeof window !== "undefined" ? createStore("mcx-campo", "kv") : und
 const KEY_BOOTSTRAP = "bootstrap";
 const KEY_BOOTSTRAP_AT = "bootstrapAt";
 const KEY_VISITS = "visits";
+/** Último histórico baixado — consultável sem sinal. */
+const KEY_HISTORY = "history";
 const blobKey = (id: string) => `photo:${id}`;
 const thumbKey = (id: string) => `thumb:${id}`;
 
@@ -128,6 +132,7 @@ let state: LocalState = {
   bootstrapAt: null,
   visits: {},
   history: null,
+  historyAt: null,
   sync: { online: true, syncing: false, lastSyncAt: null, lastError: null },
   sessionExpired: false,
 };
@@ -159,12 +164,21 @@ let initialized = false;
 export async function initLocalStore(): Promise<void> {
   if (initialized) return;
   initialized = true;
-  const [bootstrap, bootstrapAt, visits] = await Promise.all([
+  const [bootstrap, bootstrapAt, visits, history] = await Promise.all([
     get<BootstrapPayload>(KEY_BOOTSTRAP, idb),
     get<string>(KEY_BOOTSTRAP_AT, idb),
     get<Record<string, LocalVisit>>(KEY_VISITS, idb),
+    get<{ at: string; items: PromoterHistoryItem[] }>(KEY_HISTORY, idb),
   ]);
-  emit({ ready: true, bootstrap: bootstrap ?? null, bootstrapAt: bootstrapAt ?? null, visits: visits ?? {}, sync: { ...state.sync, online: navigator.onLine } });
+  emit({
+    ready: true,
+    bootstrap: bootstrap ?? null,
+    bootstrapAt: bootstrapAt ?? null,
+    visits: visits ?? {},
+    history: history?.items ?? null,
+    historyAt: history?.at ?? null,
+    sync: { ...state.sync, online: navigator.onLine },
+  });
 
   window.addEventListener("online", () => {
     emit({ sync: { ...state.sync, online: true } });
@@ -216,7 +230,10 @@ export async function refreshBootstrap(): Promise<void> {
 export async function refreshHistory(): Promise<void> {
   const res = await apiFetch("/api/promoter/history");
   if (!res?.ok) return;
-  emit({ history: (await res.json()) as PromoterHistoryItem[] });
+  const items = (await res.json()) as PromoterHistoryItem[];
+  const at = new Date().toISOString();
+  emit({ history: items, historyAt: at });
+  await set(KEY_HISTORY, { at, items }, idb);
 }
 
 // ───────────────────────────── Conversões ─────────────────────────────
@@ -832,8 +849,8 @@ async function doSync(): Promise<void> {
         if (!res) break outer;
         if (res.ok) {
           await markPhoto(v.id, a.id, p.id, { uploaded: true, local: false, lastError: undefined });
+          // Original sai do aparelho; a miniatura fica para o app (e o PDF offline) mostrarem a foto sem sinal.
           await del(blobKey(p.id), idb);
-          await del(thumbKey(p.id), idb);
         } else if (res.status === 400) {
           await markPhoto(v.id, a.id, p.id, { lastError: "Arquivo recusado (formato ou tamanho)." });
           lastError = "Uma foto foi recusada pelo servidor. Tire a foto novamente.";
@@ -868,8 +885,10 @@ async function pruneOldVisits() {
   for (const v of Object.values(state.visits)) {
     const old = v.status !== "in_progress" && isVisitFullySynced(v) && v.finishedAt !== null && new Date(v.finishedAt).getTime() < limit;
     const hasCorrection = Object.values(v.attendances).some((a) => a.status === "correction_requested");
-    if (old && !hasCorrection) changed = true;
-    else keep[v.id] = v;
+    if (old && !hasCorrection) {
+      changed = true;
+      for (const a of Object.values(v.attendances)) for (const p of a.photos) await del(thumbKey(p.id), idb);
+    } else keep[v.id] = v;
   }
   if (changed) await persistVisits(keep);
 }

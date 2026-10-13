@@ -1,29 +1,34 @@
 "use client";
 
 /**
- * "Enviar PDF no WhatsApp" (modo SUINCO). O PDF é preparado assim que o
- * atendimento está no servidor com todas as fotos: o celular só abre a janela
- * de compartilhar logo após o toque, então o toque não pode esperar o download
- * (era isso que fazia a 1ª tentativa falhar).
+ * "Enviar PDF no WhatsApp" (modo SUINCO). Com sinal e o atendimento já no
+ * servidor, usa o PDF oficial; sem sinal (ou antes de sincronizar), gera o PDF
+ * no próprio celular com o que está gravado nele — o promotor nunca fica sem o
+ * relatório. O arquivo é preparado ANTES do toque: o celular só abre a janela
+ * de compartilhar logo após o toque, então o toque não pode esperar.
  */
-import { useEffect, useState } from "react";
-import { Download, FileText, Share2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Download, FileText, Share2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 import { attendanceDisplayStatus, type LocalAttendance } from "../_lib/local-store";
-import { useCatalog, useLocal } from "../_lib/hooks";
+import { useCatalog, useLocal, useObjectUrl } from "../_lib/hooks";
 
 export function SharePdf({ attendance, storeId, visitDate }: { attendance: LocalAttendance; storeId: string; visitDate: string }) {
-  const { bootstrap } = useLocal();
+  const { bootstrap, sync } = useLocal();
   const cat = useCatalog();
   const store = cat.storeById.get(storeId);
   const brand = cat.brandById.get(attendance.brandId);
-  const synced = attendanceDisplayStatus(attendance) === "completed" && attendance.photos.every((p) => p.uploaded);
-  const [file, setFile] = useState<File | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const status = attendanceDisplayStatus(attendance);
+  const synced = status === "completed" && attendance.photos.every((p) => p.uploaded);
+  const useServer = synced && sync.online;
+  const [serverFile, setServerFile] = useState<File | null>(null);
+  const [serverFailed, setServerFailed] = useState(false);
+  // Guardado junto do atendimento de origem: PDF de uma versão anterior não é usado.
+  const [localPdf, setLocalPdf] = useState<{ source: LocalAttendance; file: File | null } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const url = `/api/promoter/attendance/${attendance.id}/pdf`;
+  const products = useMemo(() => new Map(cat.products.map((p) => [p.id, p])), [cat.products]);
 
   const text = [
     `Relatório de atendimento – ${bootstrap?.agency.name ?? ""}`,
@@ -34,29 +39,60 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
     `Data: ${fmtDate(visitDate)}`,
   ].join("\n");
 
+  // PDF oficial (servidor), quando há sinal e tudo já foi enviado.
   useEffect(() => {
-    if (!synced) return;
+    if (!useServer) return;
     let cancelled = false;
     void (async () => {
-      setFailed(false);
-      for (let i = 0; i < 4 && !cancelled; i++) {
+      setServerFailed(false);
+      for (let i = 0; i < 3 && !cancelled; i++) {
         try {
           const res = await fetch(url, { cache: "no-store" });
           if (!res.ok) throw new Error(String(res.status));
           const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "atendimento.pdf";
           const f = new File([await res.blob()], name, { type: "application/pdf" });
-          if (!cancelled) setFile(f);
+          if (!cancelled) setServerFile(f);
           return;
         } catch {
-          await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+          await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
         }
       }
-      if (!cancelled) setFailed(true);
+      if (!cancelled) setServerFailed(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [synced, url, attempt]);
+  }, [useServer, url]);
+
+  // PDF do aparelho: sem sinal, antes de sincronizar ou se o servidor falhar.
+  const needLocal = !useServer || serverFailed;
+  useEffect(() => {
+    if (!needLocal || !bootstrap) return;
+    let cancelled = false;
+    void (async () => {
+      const { buildLocalPdf } = await import("../_lib/local-pdf");
+      const f = await buildLocalPdf({
+        agency: bootstrap.agency.name,
+        promoter: bootstrap.user.name,
+        brand: brand?.name ?? "Marca",
+        store: store?.name ?? "Loja",
+        city: store?.city ?? "",
+        visitDate,
+        status,
+        attendance,
+        products,
+      }).catch(() => null);
+      if (!cancelled) setLocalPdf({ source: attendance, file: f });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [needLocal, bootstrap, attendance, brand, store, visitDate, status, products]);
+
+  const localFile = localPdf?.source === attendance ? localPdf.file : null;
+  const file = useServer && serverFile ? serverFile : needLocal ? localFile : null;
+  const isLocal = file !== null && file === localFile;
+  const fileUrl = useObjectUrl(isLocal ? file : null);
 
   async function share() {
     if (!file) return;
@@ -82,23 +118,29 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
     }
   }
 
-  if (!synced) {
-    return <p className="text-[13px] text-muted text-center">O PDF fica disponível quando o atendimento e as fotos chegarem ao servidor.</p>;
-  }
+  const href = isLocal ? fileUrl : url;
   return (
     <div className="space-y-2">
-      <Button size="xl" variant="success" className="w-full" disabled={!file && !failed} onClick={() => (file ? void share() : setAttempt((n) => n + 1))}>
-        <Share2 className="size-5" /> {file ? "ENVIAR PDF NO WHATSAPP" : failed ? "TENTAR PREPARAR O PDF DE NOVO" : "PREPARANDO O PDF…"}
+      <Button size="xl" variant="success" className="w-full" disabled={!file} onClick={() => void share()}>
+        <Share2 className="size-5" /> {file ? "ENVIAR PDF NO WHATSAPP" : "PREPARANDO O PDF…"}
       </Button>
+      {isLocal ? (
+        <p className="text-[12.5px] text-muted text-center inline-flex items-center justify-center gap-1.5 w-full">
+          <WifiOff className="size-3.5" />
+          {sync.online ? "PDF gerado no celular (o oficial fica pronto quando tudo for enviado)." : "Sem sinal: PDF gerado no celular com o que está gravado nele."}
+        </p>
+      ) : null}
       {msg ? <p className="text-[13px] text-bad text-center">{msg}</p> : null}
-      <div className="grid grid-cols-2 gap-2">
-        <a href={url} className="h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
-          <Download className="size-4" /> Baixar PDF
-        </a>
-        <a href={url} target="_blank" rel="noreferrer" className="h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
-          <FileText className="size-4" /> Ver relatório
-        </a>
-      </div>
+      {href && file ? (
+        <div className="grid grid-cols-2 gap-2">
+          <a href={href} download={file.name} className="h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
+            <Download className="size-4" /> Baixar PDF
+          </a>
+          <a href={href} target="_blank" rel="noreferrer" className="h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
+            <FileText className="size-4" /> Ver relatório
+          </a>
+        </div>
+      ) : null}
       <div className="rounded-xl bg-canvas px-3 py-2.5 text-[12.5px] text-ink-2">
         <p className="font-semibold mb-0.5">Mensagem que vai junto do PDF:</p>
         <p className="whitespace-pre-line">{text}</p>
