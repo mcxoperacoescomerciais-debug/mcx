@@ -52,6 +52,30 @@ async function main() {
       });
       console.log(`Administrador da plataforma criado: ${username} (troca de senha exigida no primeiro acesso).`);
     }
+
+    // Recuperação de acesso: com ADMIN_RESET_PASSWORD definido, a senha do
+    // ADMIN_USERNAME passa a ser essa (desbloqueia e encerra as sessões abertas).
+    // Remova a variável depois de entrar — a cada deploy a senha seria redefinida.
+    const reset = process.env.ADMIN_RESET_PASSWORD ?? "";
+    if (reset) {
+      const [target] = await db.select().from(s.users).where(sql`lower(${s.users.username}) = ${username}`);
+      if (target) {
+        await db
+          .update(s.users)
+          .set({
+            passwordHash: await bcrypt.hash(reset, 12),
+            mustChangePassword: false,
+            failedLogins: 0,
+            lockedUntil: null,
+            status: "active",
+            sessionVersion: target.sessionVersion + 1,
+            updatedAt: new Date(),
+          })
+          .where(eq(s.users.id, target.id));
+        await db.insert(s.auditLogs).values({ agencyId: target.agencyId, userId: null, entity: "user", entityId: target.id, action: "password_reset_bootstrap", reason: "ADMIN_RESET_PASSWORD no deploy" });
+        console.log(`Senha de ${username} redefinida por ADMIN_RESET_PASSWORD. Remova essa variável no Render.`);
+      }
+    }
   }
 
   const [client1] = await db.select({ id: s.agencies.id }).from(s.agencies).where(and(eq(s.agencies.kind, "client"))).limit(1);
