@@ -143,10 +143,12 @@ export async function buildLocalPdf(i: LocalPdfInput): Promise<File> {
     for (const act of a.activitiesDone) line(`• ${act}`);
   }
 
-  // Fotos (antes e depois primeiro), 3 por linha.
-  const photos = [...a.photos].sort((p, q) => ["before", "after"].indexOf(q.kind) - ["before", "after"].indexOf(p.kind));
+  // Fotos (antes, depois, demais), 3 por linha. Cada miniatura leva à foto ampliada no fim do PDF.
+  const order = (k: string) => (k === "before" ? 0 : k === "after" ? 1 : 2);
+  const photos = [...a.photos].sort((p, q) => order(p.kind) - order(q.kind));
+  const thumbs: { page: number; x: number; y: number; w: number; h: number; data: string; p: LocalPhoto }[] = [];
   if (photos.length) {
-    h2("Fotos");
+    h2("Fotos · toque para ampliar");
     const size = (W - 2 * M - 8) / 3;
     let col = 0;
     for (const p of photos) {
@@ -156,6 +158,7 @@ export async function buildLocalPdf(i: LocalPdfInput): Promise<File> {
       if (data) {
         try {
           doc.addImage(data, "JPEG", x, y, size, size * 0.75, undefined, "FAST");
+          thumbs.push({ page: doc.getNumberOfPages(), x, y, w: size, h: size * 0.75, data, p });
         } catch {
           doc.rect(x, y, size, size * 0.75);
         }
@@ -230,6 +233,35 @@ export async function buildLocalPdf(i: LocalPdfInput): Promise<File> {
   if (a.notes) {
     h2("Observações");
     line(a.notes);
+  }
+
+  // Fotos ampliadas (duas por página) e os links das miniaturas até elas.
+  if (thumbs.length) {
+    const fullW = W - 2 * M;
+    const fullH = fullW * 0.75;
+    thumbs.forEach((t, i) => {
+      if (i % 2 === 0) {
+        doc.addPage();
+        header();
+        y = 33;
+      }
+      doc.setFontSize(9);
+      doc.setTextColor(30, 33, 36);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${PHOTO_KIND_LABEL[t.p.kind as PhotoKind] ?? t.p.kind} · ${fmtDateTime(t.p.takenAt)}`, M, y);
+      doc.setFont("helvetica", "normal");
+      try {
+        doc.addImage(t.data, "JPEG", M, y + 2, fullW, fullH, undefined, "FAST");
+      } catch {
+        doc.rect(M, y + 2, fullW, fullH);
+      }
+      const target = doc.getNumberOfPages();
+      const here = y;
+      doc.setPage(t.page);
+      doc.link(t.x, t.y, t.w, t.h, { pageNumber: target });
+      doc.setPage(target);
+      y = here + fullH + 10;
+    });
   }
 
   // Rodapé em todas as páginas.

@@ -20,13 +20,12 @@ import {
 } from "@/lib/domain";
 import { fmtDate, fmtDuration, fmtTime } from "@/lib/dates";
 import { exceptionIsValid } from "@/lib/rules";
-import { attendanceDisplayStatus, cancelAttendance, finishAttendance, updateAttendance, type LocalAttendance } from "../_lib/local-store";
+import { attendanceDisplayStatus, cancelAttendance, finishAttendance, requestShare, updateAttendance, type LocalAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useLocal, useVisit } from "../_lib/hooks";
 import { missingFor } from "../_lib/derive";
 import { Chip, Notice, Screen, Sheet, TextArea, toast, TopBar } from "./primitives";
 import { PhotoCapture, PhotoThumb } from "./photo-capture";
 import { StockStep } from "./stock-step";
-import { RuptureStep } from "./rupture-step";
 import { ValidityStep } from "./validity-step";
 import { DamageStep } from "./damage-step";
 import { daysBetween } from "@/lib/dates";
@@ -38,16 +37,15 @@ const STEPS = [
   { id: "antes", label: "Antes" },
   { id: "execucao", label: "Execução" },
   { id: "depois", label: "Depois" },
-  { id: "estoque", label: "Estoque" },
+  { id: "estoque", label: "Estoque e ruptura" },
   { id: "validade", label: "Validade" },
-  { id: "ruptura", label: "Ruptura" },
   { id: "avaria", label: "Avaria" },
   { id: "ocorrencias", label: "Ocorrências" },
   { id: "revisao", label: "Revisão" },
 ] as const;
 type StepId = (typeof STEPS)[number]["id"];
 /** Etapas sem mínimo obrigatório: não ganham o "check" verde só por estarem vazias. */
-const OPTIONAL_STEPS = new Set<StepId>(["validade", "ruptura", "avaria", "ocorrencias"]);
+const OPTIONAL_STEPS = new Set<StepId>(["validade", "avaria", "ocorrencias"]);
 
 export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: string; attendanceId: string; step?: string }) {
   const visit = useVisit(visitId);
@@ -60,6 +58,12 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
     window.scrollTo(0, 0);
   }, [step]);
   const tracked = useMemo(() => (visit && attendance ? cat.trackedProducts(visit.storeId, attendance.brandId) : []), [cat, visit, attendance]);
+  // Abriu sem etapa na URL: fixa a etapa inicial, para a tela não pular sozinha ao
+  // atingir o mínimo de fotos (o promotor pode tirar quantas quiser antes de avançar).
+  const startStep = attendance && brand && !step ? (attendance.status === "in_progress" || attendance.status === "correction_requested" ? firstOpenStep(attendance, brand, 0) : "revisao") : null;
+  useEffect(() => {
+    if (startStep) go(`visita/${visitId}/marca/${attendanceId}/${startStep}`, true);
+  }, [startStep, visitId, attendanceId]);
 
   if (!visit || !attendance || !brand) {
     return (
@@ -83,7 +87,6 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
     depois: attendance.photos.filter((p) => p.kind === "after").length >= brand.minAfterPhotos || attendance.exceptionItems.includes("after_photo"),
     estoque: !brand.requireStock || tracked.every((p) => attendance.stock[p.id]) || attendance.exceptionItems.includes("stock"),
     validade: true,
-    ruptura: true,
     avaria: Object.values(attendance.damages ?? {}).every((d) => attendance.photos.some((p) => p.damageId === d.id)),
     ocorrencias: true,
     revisao: status === "completed" || status === "awaiting_sync",
@@ -183,12 +186,9 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             attendance={attendance}
             products={tracked}
             editable={editable}
-            onSuggestRupture={() => goStep("ruptura")}
           />
         ) : current === "validade" ? (
           <ValidityStep visitId={visitId} visitDate={visit.visitDate} attendance={attendance} brand={brand} products={tracked} editable={editable} />
-        ) : current === "ruptura" ? (
-          <RuptureStep visitId={visitId} attendance={attendance} products={tracked} editable={editable} />
         ) : current === "avaria" ? (
           <DamageStep visitId={visitId} visitDate={visit.visitDate} attendance={attendance} brand={brand} products={tracked} editable={editable} />
         ) : current === "ocorrencias" ? (
@@ -342,7 +342,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
       </section>
 
       <section className="bg-surface border border-line rounded-2xl p-4">
-        <button type="button" onClick={() => goStep("ruptura")} className="w-full text-left">
+        <button type="button" onClick={() => goStep("estoque")} className="w-full text-left">
           <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Rupturas ({ruptures.length})</h3>
           {ruptures.length ? (
             <ul className="space-y-1 text-[13.5px]">
@@ -434,6 +434,8 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
             onClick={async () => {
               await finishAttendance(visitId, attendance.id);
               haptic(40);
+              // De volta à loja já com o envio do relatório aberto (o promotor sempre manda no grupo).
+              requestShare(attendance.id);
               toast(local.sync.online ? "Atendimento finalizado. Enviando…" : "Atendimento finalizado no celular. Será enviado quando houver sinal.");
               go(`visita/${visitId}`, true);
             }}

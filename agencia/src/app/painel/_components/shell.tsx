@@ -263,16 +263,6 @@ export function PanelShell({
       ) : null}
 
       <main className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1480px]">
-        {platform && !mcx && agency ? (
-          <div className="mb-5 rounded-xl bg-info-bg text-info px-4 py-2.5 text-[13px] flex flex-wrap items-center justify-between gap-2 no-print">
-            <span>
-              Você está no painel da <strong>{agency.name}</strong> (acesso MCX). Tudo o que aparece aqui é só desta agência.
-            </span>
-            <form action={platform.leave}>
-              <button className="font-semibold underline">Voltar à visão MCX</button>
-            </form>
-          </div>
-        ) : null}
         {children}
       </main>
     </div>

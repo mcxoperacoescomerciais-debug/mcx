@@ -8,7 +8,7 @@
  * de compartilhar logo após o toque, então o toque não pode esperar.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, Share2, WifiOff } from "lucide-react";
+import { Download, FileText, Images, Share2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 import { attendanceDisplayStatus, type LocalAttendance } from "../_lib/local-store";
@@ -91,21 +91,51 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
 
   const localFile = localPdf?.source === attendance ? localPdf.file : null;
   const file = useServer && serverFile ? serverFile : needLocal ? localFile : null;
+
+  // Fotos do depois (com faixa de identificação) vão junto com o PDF.
+  const afterKey = attendance.photos
+    .filter((ph) => ph.kind === "after")
+    .map((ph) => `${ph.id}:${ph.uploaded}`)
+    .join(",");
+  const [photos, setPhotos] = useState<{ key: string; files: File[] } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { afterPhotoFiles } = await import("../_lib/photo-stamp");
+      const files = await afterPhotoFiles(attendance.photos, {
+        brand: brand?.name ?? "",
+        store: store?.name ?? "",
+        address: [store?.address, store?.city].filter(Boolean).join(" · "),
+      }).catch(() => []);
+      if (!cancelled) setPhotos({ key: afterKey, files });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refaz só quando as fotos do depois mudam
+  }, [afterKey, brand?.name, store?.name]);
+  const photoFiles = photos?.key === afterKey ? photos.files : null;
+  const ready = Boolean(file) && photoFiles !== null;
   const isLocal = file !== null && file === localFile;
   const fileUrl = useObjectUrl(isLocal ? file : null);
 
-  async function share() {
-    if (!file) return;
+  async function share(onlyPhotos = false) {
+    if (!file && !onlyPhotos) return;
     setMsg(null);
     // Mensagem também na área de transferência (sem esperar: o compartilhar sai no mesmo toque).
     navigator.clipboard?.writeText(text).then(
       () => undefined,
       () => undefined,
     );
+    const all = onlyPhotos ? (photoFiles ?? []) : [file!, ...(photoFiles ?? [])];
     try {
-      if (navigator.canShare?.({ files: [file], text })) await navigator.share({ files: [file], text, title: "Relatório de atendimento" });
-      else if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: "Relatório de atendimento" });
-      else {
+      if (all.length && navigator.canShare?.({ files: all, text })) await navigator.share({ files: all, text, title: "Relatório de atendimento" });
+      else if (all.length && navigator.canShare?.({ files: all })) await navigator.share({ files: all, title: "Relatório de atendimento" });
+      else if (!onlyPhotos && navigator.canShare?.({ files: [file!] })) {
+        // Celular não aceita vários arquivos de uma vez: vai o PDF; as fotos no botão abaixo.
+        await navigator.share({ files: [file!], text, title: "Relatório de atendimento" });
+        if (photoFiles?.length) setMsg("Este celular envia um arquivo por vez. Toque em “Enviar fotos do depois”.");
+      } else if (file) {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(file);
         a.download = file.name;
@@ -121,9 +151,14 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
   const href = isLocal ? fileUrl : url;
   return (
     <div className="space-y-2">
-      <Button size="xl" variant="success" className="w-full" disabled={!file} onClick={() => void share()}>
-        <Share2 className="size-5" /> {file ? "ENVIAR PDF NO WHATSAPP" : "PREPARANDO O PDF…"}
+      <Button size="xl" variant="success" className="w-full" disabled={!ready} onClick={() => void share()}>
+        <Share2 className="size-5" /> {ready ? "ENVIAR PDF + FOTOS DO DEPOIS" : "PREPARANDO O RELATÓRIO…"}
       </Button>
+      {ready && photoFiles?.length ? (
+        <p className="text-[12.5px] text-muted text-center">
+          PDF + {photoFiles.length} foto(s) do depois. No WhatsApp, escolha o grupo da loja.
+        </p>
+      ) : null}
       {isLocal ? (
         <p className="text-[12.5px] text-muted text-center inline-flex items-center justify-center gap-1.5 w-full">
           <WifiOff className="size-3.5" />
@@ -131,6 +166,11 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
         </p>
       ) : null}
       {msg ? <p className="text-[13px] text-bad text-center">{msg}</p> : null}
+      {photoFiles?.length ? (
+        <button type="button" onClick={() => void share(true)} className="w-full h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
+          <Images className="size-4" /> Enviar fotos do depois
+        </button>
+      ) : null}
       {href && file ? (
         <div className="grid grid-cols-2 gap-2">
           <a href={href} download={file.name} className="h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">

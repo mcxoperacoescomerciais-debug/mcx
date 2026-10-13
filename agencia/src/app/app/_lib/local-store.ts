@@ -567,6 +567,21 @@ export async function deleteRupture(visitId: string, attendanceId: string, ruptu
 }
 
 /** Ruptura no modo SUINCO: um toque marca/desmarca "Ruptura total" do produto. */
+/**
+ * Atendimento recém-finalizado cujo relatório a tela da visita deve oferecer
+ * para envio (só nesta sessão do app; não é persistido).
+ */
+let shareRequest: string | null = null;
+export function requestShare(attendanceId: string) {
+  shareRequest = attendanceId;
+}
+export function peekShareRequest(): string | null {
+  return shareRequest;
+}
+export function clearShareRequest() {
+  shareRequest = null;
+}
+
 export async function toggleRupture(visitId: string, attendanceId: string, productId: string, fromStockSuggestion = false): Promise<boolean> {
   const a = state.visits[visitId]?.attendances[attendanceId];
   const existing = Object.values(a?.ruptures ?? {}).find((r) => r.productId === productId);
@@ -849,8 +864,9 @@ async function doSync(): Promise<void> {
         if (!res) break outer;
         if (res.ok) {
           await markPhoto(v.id, a.id, p.id, { uploaded: true, local: false, lastError: undefined });
-          // Original sai do aparelho; a miniatura fica para o app (e o PDF offline) mostrarem a foto sem sinal.
-          await del(blobKey(p.id), idb);
+          // Original sai do aparelho (exceto as do depois, que vão no grupo com o PDF); a miniatura
+          // fica para o app e o PDF offline mostrarem a foto sem sinal.
+          if (p.kind !== "after") await del(blobKey(p.id), idb);
         } else if (res.status === 400) {
           await markPhoto(v.id, a.id, p.id, { lastError: "Arquivo recusado (formato ou tamanho)." });
           lastError = "Uma foto foi recusada pelo servidor. Tire a foto novamente.";
@@ -887,7 +903,11 @@ async function pruneOldVisits() {
     const hasCorrection = Object.values(v.attendances).some((a) => a.status === "correction_requested");
     if (old && !hasCorrection) {
       changed = true;
-      for (const a of Object.values(v.attendances)) for (const p of a.photos) await del(thumbKey(p.id), idb);
+      for (const a of Object.values(v.attendances))
+        for (const p of a.photos) {
+          await del(thumbKey(p.id), idb);
+          await del(blobKey(p.id), idb);
+        }
     } else keep[v.id] = v;
   }
   if (changed) await persistVisits(keep);

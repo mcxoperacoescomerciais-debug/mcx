@@ -1,21 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronRight, CloudUpload, Flag, Loader2, MapPin, MapPinOff, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, CloudUpload, Flag, Loader2, MapPin, MapPinOff, Send, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtDuration, fmtTime } from "@/lib/dates";
-import { addPlannedBrand, discardVisit, finishVisit, pendingPhotos, removeBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
+import { addPlannedBrand, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useVisit } from "../_lib/hooks";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
 import { Notice, Screen, SectionTitle, Sheet, TextArea, toast, TopBar } from "./primitives";
+import { SharePdf } from "./share-pdf";
 
 export function VisitScreen({ visitId, closing = false }: { visitId: string; closing?: boolean }) {
   const visit = useVisit(visitId);
   const cat = useCatalog();
   const [closeOpen, setCloseOpen] = useState(closing);
-  const [addOpen, setAddOpen] = useState(false);
+  // Relatório a enviar no grupo (aberto sozinho logo depois de finalizar um atendimento).
+  const [shareId, setShareId] = useState<string | null>(() => peekShareRequest());
+  const closeShare = () => {
+    clearShareRequest();
+    setShareId(null);
+  };
   const [discardOpen, setDiscardOpen] = useState(false);
 
   if (!visit) {
@@ -30,7 +36,10 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
   const schedule = visit.scheduleId ? cat.scheduleById.get(visit.scheduleId) : undefined;
   const slots = brandSlots(visit, schedule?.brandIds ?? visit.plannedBrandIds);
   const open = visit.status === "in_progress";
+  // Todas as marcas da loja aparecem: as programadas primeiro, depois as demais autorizadas.
   const extraBrands = (store?.brandIds ?? []).filter((b) => !slots.some((s) => s.brandId === b));
+  const allSlots = [...slots, ...extraBrands.map((brandId) => ({ brandId, attendance: undefined, status: "pending" as const, planned: false }))];
+  const shareAttendance = shareId ? visit.attendances[shareId] : undefined;
   const done = slots.filter((s) => isDoneStatus(s.status)).length;
   const status = stopStatus(visit);
 
@@ -38,6 +47,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
     const slot = slots.find((s) => s.brandId === brandId);
     if (slot?.attendance) return go(`visita/${visitId}/marca/${slot.attendance.id}`);
     if (!open) return;
+    if (!slot) await addPlannedBrand(visitId, brandId);
     const id = await startAttendance(visitId, brandId);
     haptic(20);
     go(`visita/${visitId}/marca/${id}`);
@@ -107,12 +117,12 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
 
       <SectionTitle>Marcas desta loja</SectionTitle>
       <div className="px-4 space-y-2.5">
-        {slots.map((slot) => {
+        {allSlots.map((slot) => {
           const brand = cat.brandById.get(slot.brandId);
           const a = slot.attendance;
           return (
+            <div key={slot.brandId}>
             <button
-              key={slot.brandId}
               type="button"
               onClick={() => void openBrand(slot.brandId)}
               disabled={!a && !open}
@@ -133,7 +143,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
                     <StatusBadge tone={ATTENDANCE_STATUS_TONE[slot.status]} size="sm">
                       {ATTENDANCE_STATUS_LABEL[slot.status]}
                     </StatusBadge>
-                    {!slot.planned ? <span className="text-[11px] text-muted">fora da programação</span> : null}
+                    {!slot.planned ? <span className="text-[11px] text-muted">não programada hoje</span> : null}
                   </div>
                   {a?.serverError ? <p className="text-[12.5px] text-bad mt-1.5 font-medium">{a.serverError}</p> : null}
                 </div>
@@ -144,17 +154,16 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
                   {fmtTime(a.startedAt)}–{fmtTime(a.finishedAt)} · {Object.keys(a.validities ?? {}).length} validade(s) · {Object.keys(a.ruptures).length} ruptura(s) · {Object.keys(a.damages ?? {}).length} avaria(s)
                 </p>
               ) : null}
-              {a && a.status === "completed" ? (
-                <p className="mt-2 text-[13px] font-bold text-ok">Toque para enviar o PDF no WhatsApp</p>
-              ) : null}
             </button>
+            {a && a.status === "completed" ? (
+              <button type="button" onClick={() => setShareId(a.id)} className="mt-1.5 w-full h-12 rounded-2xl bg-ok text-white text-[14px] font-bold inline-flex items-center justify-center gap-2 active:opacity-90">
+                <Send className="size-4" /> ENVIAR RELATÓRIO NO GRUPO
+              </button>
+            ) : null}
+            </div>
           );
         })}
-        {open && extraBrands.length ? (
-          <button type="button" onClick={() => setAddOpen(true)} className="w-full h-12 rounded-2xl border border-dashed border-line-strong text-[14px] font-semibold text-ink-2 flex items-center justify-center gap-2 active:bg-surface">
-            <Plus className="size-4" /> Atender outra marca autorizada
-          </button>
-        ) : null}
+
       </div>
 
       <SectionTitle>Observações da visita</SectionTitle>
@@ -171,24 +180,18 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
         ) : null}
       </div>
 
-      <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="Atender outra marca">
-        <p className="text-[14px] text-muted mb-3">Marcas autorizadas para você nesta loja, fora da programação de hoje.</p>
-        <div className="space-y-2">
-          {extraBrands.map((b) => (
-            <button
-              key={b}
-              type="button"
-              onClick={async () => {
-                await addPlannedBrand(visitId, b);
-                setAddOpen(false);
-                await openBrand(b);
-              }}
-              className="w-full h-14 rounded-2xl border border-line-strong px-4 text-left font-semibold text-[15px] active:bg-canvas"
-            >
-              {cat.brandById.get(b)?.name}
+      <Sheet open={Boolean(shareAttendance)} onClose={closeShare} title="Enviar relatório no grupo">
+        {shareAttendance ? (
+          <>
+            <p className="text-[14px] text-muted mb-3">
+              {cat.brandById.get(shareAttendance.brandId)?.name}: o PDF vai junto com as fotos do depois. Escolha o grupo no WhatsApp.
+            </p>
+            <SharePdf attendance={shareAttendance} storeId={visit.storeId} visitDate={visit.visitDate} />
+            <button type="button" onClick={closeShare} className="w-full text-center text-[13px] text-muted font-medium py-3">
+              Enviar depois
             </button>
-          ))}
-        </div>
+          </>
+        ) : null}
       </Sheet>
 
       <DiscardSheet open={discardOpen} onClose={() => setDiscardOpen(false)} visitId={visitId} />
@@ -354,4 +357,5 @@ function SummaryBox({ label, value, tone }: { label: string; value: number; tone
     </div>
   );
 }
+
 

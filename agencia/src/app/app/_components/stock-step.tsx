@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AlertTriangle, ChevronRight, PackagePlus, Search, Trash2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { MoreHorizontal, PackagePlus, PackageX, Search, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
-import { STOCK_COUNT_UNITS, STOCK_STATE_SHORT, STOCK_STATE_TONE, UNIT_LABEL, type StockDisplayState, type StockState, type Unit } from "@/lib/domain";
+import { STOCK_COUNT_UNITS, STOCK_STATE_SHORT, STOCK_STATE_TONE, UNIT_LABEL, type StockState, type Unit } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { matchesQuery, suggestsRupture, validateStock } from "@/lib/rules";
 import type { BootstrapProduct } from "@/lib/sync-types";
-import { clearStock, deleteUnregistered, saveStock, saveUnregistered, uuid, type LocalAttendance } from "../_lib/local-store";
+import { clearStock, deleteUnregistered, saveStock, saveUnregistered, toggleRupture, uuid, type LocalAttendance } from "../_lib/local-store";
 import { haptic, useCatalog } from "../_lib/hooks";
 import { Chip, Notice, Sheet, TextArea, toast } from "./primitives";
 
@@ -18,10 +18,9 @@ interface Props {
   attendance: LocalAttendance;
   products: BootstrapProduct[];
   editable: boolean;
-  onSuggestRupture: (productId: string) => void;
 }
 
-export function StockStep({ visitId, storeId, attendance, products, editable, onSuggestRupture }: Props) {
+export function StockStep({ visitId, storeId, attendance, products, editable }: Props) {
   const { lastStock } = useCatalog();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
@@ -45,7 +44,7 @@ export function StockStep({ visitId, storeId, attendance, products, editable, on
           {informed}/{products.length} informados
         </span>
       </div>
-      <p className="text-[13px] text-muted mb-3">Toque no produto e informe o que encontrou. Campo vazio fica como “pendente” — nunca vira zero.</p>
+      <p className="text-[13px] text-muted mb-3">Digite a quantidade na linha do produto e escolha unidade ou caixa. Em falta na gôndola: toque em RUPTURA. Campo vazio fica “pendente” — nunca vira zero.</p>
 
       {products.length > 6 ? (
         <label className="relative block mb-2">
@@ -72,45 +71,17 @@ export function StockStep({ visitId, storeId, attendance, products, editable, on
       </div>
 
       <div className="bg-surface border border-line rounded-2xl divide-y divide-line overflow-hidden">
-        {list.map((p) => {
-          const entry = attendance.stock[p.id];
-          const state: StockDisplayState = entry ? entry.state : "pending";
-          const hasRupture = Object.values(attendance.ruptures).some((r) => r.productId === p.id);
-          const prev = lastStock[storeId]?.[p.id];
-          return (
-            <div key={p.id}>
-              <button type="button" disabled={!editable} onClick={() => setEditing(p)} className="w-full text-left px-4 py-3 flex items-center gap-3 active:bg-canvas disabled:active:bg-transparent">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold leading-snug">{p.name}</p>
-                  <p className="text-[12px] text-muted mt-0.5">
-                    SKU {p.sku}
-                    {p.package ? ` · ${p.package}` : ""}
-                    {prev ? ` · última: ${prev.state === "quantity" ? `${prev.quantity} ${prev.unit ?? p.unit}` : STOCK_STATE_SHORT[prev.state as StockState] ?? "—"} (${fmtDate(prev.date).slice(0, 5)})` : ""}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  {entry?.state === "quantity" ? (
-                    <p className="text-[18px] font-bold tnum leading-none">
-                      {entry.quantity} <span className="text-[12px] font-medium text-muted">{entry.unit ?? p.unit}</span>
-                    </p>
-                  ) : (
-                    <StatusBadge tone={STOCK_STATE_TONE[state]} size="sm">
-                      {STOCK_STATE_SHORT[state]}
-                    </StatusBadge>
-                  )}
-                </div>
-                {editable ? <ChevronRight className="size-4 text-muted shrink-0" /> : null}
-              </button>
-              {editable && entry && suggestsRupture(entry.state) && !hasRupture ? (
-                <div className="px-4 pb-3 -mt-1">
-                  <button type="button" onClick={() => onSuggestRupture(p.id)} className="w-full rounded-xl bg-bad-bg text-bad text-[13px] font-semibold px-3 py-2.5 flex items-center gap-2 text-left">
-                    <AlertTriangle className="size-4 shrink-0" /> {entry.state === "zero" ? "Estoque zero" : "Não encontrado"}: registrar ruptura deste produto?
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+        {list.map((p) => (
+          <StockRow
+            key={p.id}
+            visitId={visitId}
+            attendance={attendance}
+            product={p}
+            prev={lastStock[storeId]?.[p.id]}
+            editable={editable}
+            onMore={() => setEditing(p)}
+          />
+        ))}
         {list.length === 0 ? <p className="px-4 py-6 text-center text-[14px] text-muted">Nenhum produto neste filtro.</p> : null}
       </div>
 
@@ -145,8 +116,7 @@ export function StockStep({ visitId, storeId, attendance, products, editable, on
             await saveStock(visitId, attendance.id, { productId: editing.id, state, quantity, unit, note: note || null, recordedAt: new Date().toISOString() });
             haptic(15);
             setEditing(null);
-            if (suggestsRupture(state) && !Object.values(attendance.ruptures).some((r) => r.productId === editing.id)) onSuggestRupture(editing.id);
-            else toast("Estoque salvo.");
+            toast("Estoque salvo.");
           }}
           onClear={async () => {
             await clearStock(visitId, attendance.id, editing.id);
@@ -164,6 +134,153 @@ export function StockStep({ visitId, storeId, attendance, products, editable, on
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/** Linha do produto: quantidade + unidade + ruptura, sem abrir outra tela. */
+function StockRow({
+  visitId,
+  attendance,
+  product: p,
+  prev,
+  editable,
+  onMore,
+}: {
+  visitId: string;
+  attendance: LocalAttendance;
+  product: BootstrapProduct;
+  prev: { state: string; quantity: number | null; unit?: string; date: string } | undefined;
+  editable: boolean;
+  onMore: () => void;
+}) {
+  const entry = attendance.stock[p.id];
+  const rupture = Object.values(attendance.ruptures).find((r) => r.productId === p.id);
+  const unitOptions: Unit[] = (STOCK_COUNT_UNITS as readonly Unit[]).includes(p.unit) ? [...STOCK_COUNT_UNITS] : [p.unit, ...STOCK_COUNT_UNITS];
+  const savedQty = entry?.state === "quantity" && entry.quantity !== null ? String(entry.quantity) : "";
+  const [qty, setQty] = useState(savedQty);
+  const [unit, setUnit] = useState<Unit>((entry?.unit as Unit | null | undefined) ?? p.unit);
+  // Valor salvo mudou por fora (folha de opções, ruptura): o campo acompanha.
+  const [lastSaved, setLastSaved] = useState(savedQty);
+  if (savedQty !== lastSaved) {
+    setLastSaved(savedQty);
+    setQty(savedQty);
+  }
+  const otherState = entry && entry.state !== "quantity" && entry.state !== "zero" ? entry.state : null;
+  // Salva sozinho logo depois de parar de digitar (e também ao sair do campo).
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function commit(nextQty = qty, nextUnit = unit) {
+    const n = nextQty === "" ? null : Number(nextQty);
+    if (n === null || !Number.isFinite(n)) return;
+    const now = new Date().toISOString();
+    if (n === 0) {
+      await saveStock(visitId, attendance.id, { productId: p.id, state: "zero", quantity: 0, unit: nextUnit, note: entry?.note ?? null, recordedAt: now });
+      return;
+    }
+    if (entry?.state === "quantity" && entry.quantity === n && (entry.unit ?? p.unit) === nextUnit) return;
+    await saveStock(visitId, attendance.id, { productId: p.id, state: "quantity", quantity: n, unit: nextUnit, note: entry?.note ?? null, recordedAt: now });
+    // Produto encontrado na gôndola: não está em ruptura.
+    if (rupture) await toggleRupture(visitId, attendance.id, p.id);
+    haptic(10);
+  }
+
+  async function ruptureTap() {
+    const on = await toggleRupture(visitId, attendance.id, p.id, suggestsRupture(entry?.state));
+    if (on && (!entry || entry.state === "quantity")) {
+      // Ruptura = nada na gôndola: o estoque fica registrado como zero.
+      await saveStock(visitId, attendance.id, { productId: p.id, state: "zero", quantity: 0, unit, note: entry?.note ?? null, recordedAt: new Date().toISOString() });
+      setQty("");
+    }
+    haptic(on ? 25 : 10);
+    toast(on ? `Ruptura: ${p.name}` : "Ruptura desmarcada.", on ? "warn" : "ok");
+  }
+
+  return (
+    <div className={clsx("px-4 py-3", rupture && "bg-bad-bg/40")}>
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-[15px] font-semibold leading-snug">{p.name}</p>
+          <p className="text-[12px] text-muted mt-0.5">
+            SKU {p.sku}
+            {p.package ? ` · ${p.package}` : ""}
+            {prev ? ` · última: ${prev.state === "quantity" ? `${prev.quantity} ${prev.unit ?? p.unit}` : (STOCK_STATE_SHORT[prev.state as StockState] ?? "—")} (${fmtDate(prev.date).slice(0, 5)})` : ""}
+          </p>
+        </div>
+        {editable ? (
+          <button type="button" onClick={onMore} aria-label="Mais opções" className="size-9 -mr-2 grid place-items-center rounded-lg text-muted active:bg-canvas">
+            <MoreHorizontal className="size-5" />
+          </button>
+        ) : null}
+      </div>
+
+      {otherState ? (
+        <div className="mt-2 flex items-center gap-2">
+          <StatusBadge tone={STOCK_STATE_TONE[otherState]} size="sm">
+            {STOCK_STATE_SHORT[otherState]}
+          </StatusBadge>
+          {editable ? (
+            <button type="button" onClick={onMore} className="text-[13px] font-semibold text-brand-700">
+              alterar
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mt-2 flex items-stretch gap-2">
+          <input
+            inputMode="numeric"
+            pattern="[0-9]*"
+            disabled={!editable}
+            value={qty}
+            placeholder={entry?.state === "zero" ? "0" : "Qtd."}
+            aria-label={`Quantidade de ${p.name}`}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+              setQty(v);
+              if (timer.current) clearTimeout(timer.current);
+              timer.current = setTimeout(() => void commit(v), 900);
+            }}
+            onBlur={() => {
+              if (timer.current) clearTimeout(timer.current);
+              void commit();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            className="w-20 h-12 rounded-xl border-2 border-line-strong bg-surface px-2 text-center text-[20px] font-bold tnum focus:border-brand-600 focus:outline-none disabled:bg-canvas"
+          />
+          <div className="flex rounded-xl border-2 border-line-strong overflow-hidden" role="radiogroup" aria-label="Unidade">
+            {unitOptions.map((u) => (
+              <button
+                key={u}
+                type="button"
+                role="radio"
+                aria-checked={unit === u}
+                disabled={!editable}
+                onClick={() => {
+                  setUnit(u);
+                  if (qty !== "") void commit(qty, u);
+                }}
+                className={clsx("px-2.5 text-[12px] font-bold uppercase", unit === u ? "bg-brand-800 text-white" : "bg-surface text-ink-2")}
+              >
+                {u === "un" ? "UN" : u === "cx" ? "CX" : u.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={!editable}
+            aria-pressed={Boolean(rupture)}
+            onClick={() => void ruptureTap()}
+            className={clsx(
+              "flex-1 min-w-[92px] rounded-xl border-2 text-[12.5px] font-bold inline-flex items-center justify-center gap-1",
+              rupture ? "bg-bad border-bad text-white" : "border-bad/40 text-bad bg-surface",
+            )}
+          >
+            <PackageX className="size-4" /> {rupture ? "RUPTURA ✓" : "RUPTURA"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

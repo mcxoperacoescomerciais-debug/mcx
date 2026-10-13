@@ -3,7 +3,7 @@
  * (visita: uma seção por marca, nunca misturadas) e no relatório da loja.
  */
 import "server-only";
-import { Document, Image, Page, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Image, Link, Page, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import type { Scope } from "../auth";
 import { getAttendanceDetail } from "../details";
 import { storage } from "../storage";
@@ -57,8 +57,8 @@ export async function loadAttendanceBlock(scope: Scope, attendanceId: string, ma
   if (!d) return null;
   const images = new Map<string, Img>();
   const wanted = [
-    ...d.photos.filter((p) => p.kind === "before").slice(0, 2),
-    ...d.photos.filter((p) => p.kind === "after").slice(0, 2),
+    ...d.photos.filter((p) => p.kind === "before").slice(0, 8),
+    ...d.photos.filter((p) => p.kind === "after").slice(0, 8),
     ...d.photos.filter((p) => p.kind === "validity").slice(0, maxPhotos),
     ...d.photos.filter((p) => p.kind === "damage").slice(0, maxPhotos),
   ];
@@ -80,11 +80,70 @@ function PhotoStrip({ title, photos, images }: { title: string; photos: Detail["
       <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.muted, textTransform: "uppercase", marginBottom: 3 }}>{title}</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {photos.slice(0, 8).map((p) => (
-          // eslint-disable-next-line jsx-a11y/alt-text
-          <Image key={p.id} src={images.get(p.id)!} style={{ width: 118, height: 88, objectFit: "cover", borderRadius: 3 }} />
+          <Link key={p.id} src={`#foto-${p.id}`}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image src={images.get(p.id)!} style={{ width: 118, height: 88, objectFit: "cover", borderRadius: 3 }} />
+          </Link>
         ))}
       </View>
     </View>
+  );
+}
+
+/** Fotos do antes/depois: todas, em miniatura; tocar abre a foto ampliada no fim do PDF. */
+function PhotoGrid({ label, photos, images }: { label: string; photos: Detail["photos"]; images: Map<string, Img> }) {
+  if (!photos.length) return <PhotoBox label={label} photo={undefined} img={undefined} />;
+  return (
+    <View style={{ marginTop: 6 }} wrap={false}>
+      <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.muted, marginBottom: 3, textTransform: "uppercase" }}>
+        {label} · {photos.length} foto(s) · toque para ampliar
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+        {photos.map((p) => {
+          const img = images.get(p.id);
+          return (
+            <View key={p.id} style={{ width: 165 }}>
+              {img ? (
+                <Link src={`#foto-${p.id}`}>
+                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                  <Image src={img} style={{ width: 165, height: 124, objectFit: "cover", borderRadius: 3 }} />
+                </Link>
+              ) : (
+                <View style={{ height: 124, borderRadius: 3, backgroundColor: C.syncBg, justifyContent: "center", alignItems: "center" }}>
+                  <Text style={{ fontSize: 8, color: C.sync }}>Aguardando sincronização</Text>
+                </View>
+              )}
+              <Text style={{ fontSize: 7, color: C.muted, marginTop: 2 }}>{fmtDateTime(p.takenAt)}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** Fotos ampliadas (destino dos toques nas miniaturas). */
+export function ZoomPages({ blocks }: { blocks: AttendanceBlockData[] }) {
+  const all = blocks.flatMap((b) =>
+    b.d.photos.filter((p) => b.images.has(p.id)).map((p) => ({ p, img: b.images.get(p.id)!, store: b.d.store.name, brand: b.d.brand.name })),
+  );
+  if (!all.length) return null;
+  const kind: Record<string, string> = { before: "Antes", after: "Depois", rupture: "Ruptura", occurrence: "Ocorrência", validity: "Validade", damage: "Avaria" };
+  return (
+    <Page size="A4" style={base.page}>
+      <View style={base.body}>
+        <H2>Fotos ampliadas</H2>
+        {all.map(({ p, img, store, brand }) => (
+          <View key={p.id} id={`foto-${p.id}`} wrap={false} style={{ marginBottom: 12 }}>
+            <Text style={{ fontSize: 8.5, fontFamily: "Helvetica-Bold", marginBottom: 3 }}>
+              {kind[p.kind] ?? p.kind} · {brand} · {store} · {fmtDateTime(p.takenAt)}
+            </Text>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image src={img} style={{ width: "100%", height: 340, objectFit: "contain", backgroundColor: "#F1F3F4", borderRadius: 3 }} />
+          </View>
+        ))}
+      </View>
+    </Page>
   );
 }
 
@@ -153,11 +212,10 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
         />
       </View>
 
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }} wrap={false}>
-        <PhotoBox label="Antes" photo={before[0]} img={before[0] ? images.get(before[0].id) : undefined} />
-        <PhotoBox label="Depois" photo={after[0]} img={after[0] ? images.get(after[0].id) : undefined} />
+      <View style={{ marginTop: 8 }}>
+        <PhotoGrid label="Antes" photos={before} images={images} />
+        <PhotoGrid label="Depois" photos={after} images={images} />
       </View>
-      {before.length + after.length > 2 ? <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 3 }}>+{before.length + after.length - 2} foto(s) adicional(is) disponível(is) no sistema.</Text> : null}
 
       <Text style={base.h3}>Execução</Text>
       <Text style={{ fontSize: 8.5, color: C.ink2 }}>
@@ -263,6 +321,7 @@ export async function renderAttendancesPdf(opts: { agency: PdfAgency; title: str
         </View>
         <Footer left={opts.footer} />
       </Page>
+      <ZoomPages blocks={opts.blocks} />
     </Document>,
   );
 }

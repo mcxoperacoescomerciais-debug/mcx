@@ -37,12 +37,6 @@ export default async function PanelLayout({ children }: LayoutProps<"/painel">) 
       scopeNote={user.platform ? "Equipe MCX" : scopeNote}
       logout={logoutAction}
     >
-      {user.mustChangePassword ? (
-        <div className="mb-5 rounded-xl bg-warn-bg text-warn px-4 py-3 text-[13.5px] font-medium flex flex-wrap items-center justify-between gap-2">
-          Você está usando a senha inicial definida pelo administrador.
-          <a href="/painel/senha" className="underline font-semibold">Trocar agora</a>
-        </div>
-      ) : null}
       {children}
     </PanelShell>
   );
