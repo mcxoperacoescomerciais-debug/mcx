@@ -108,7 +108,7 @@ export default async function ValiditiesPage({ searchParams }: PageProps<"/paine
                       <SeverityBadge severity={r.severity} />
                     </Td>
                     <Td>
-                      <Link href={`/painel/atendimentos/${r.attendanceId}`} className="font-semibold hover:underline">
+                      <Link href={`/painel/atendimentos/${r.attendanceId}`} target="_blank" className="font-semibold hover:underline">
                         {r.productName}
                       </Link>
                       <span className="block text-[11.5px] text-muted">
@@ -118,7 +118,7 @@ export default async function ValiditiesPage({ searchParams }: PageProps<"/paine
                       </span>
                     </Td>
                     <Td>
-                      <Link href={`/painel/lojas/${r.storeId}`} className="hover:underline">
+                      <Link href={`/painel/lojas/${r.storeId}`} target="_blank" className="hover:underline">
                         {r.storeName}
                       </Link>
                       <span className="block text-[11.5px] text-muted">{r.city}</span>

@@ -129,9 +129,11 @@ export interface AttendanceCheckInput {
   exceptionReason: ExceptionReason | null;
   exceptionNote: string | null;
   allowExceptions: boolean;
+  /** Checklist da execução: todos os itens precisam de OK (só o app confere; o servidor aceita dados antigos). */
+  checklist?: { items: string[]; done: string[] };
 }
 
-export type MissingKind = ExceptionItem | "damage_photo" | "exception_reason";
+export type MissingKind = ExceptionItem | "damage_photo" | "exception_reason" | "checklist";
 
 export interface MissingItem {
   kind: MissingKind;
@@ -170,6 +172,10 @@ export function attendanceMissing(i: AttendanceCheckInput): MissingItem[] {
         excusable: i.allowExceptions,
       });
     }
+  }
+  if (i.checklist) {
+    const pending = i.checklist.items.filter((x) => !i.checklist!.done.includes(x)).length;
+    if (pending > 0) out.push({ kind: "checklist", message: `Execução: ${plural(pending, "item", "itens")} do checklist sem OK.`, excusable: false });
   }
   // Ruptura no modo SUINCO não exige foto; avaria sempre exige.
   const damageNoPhoto = i.damages.filter((d) => d.photos === 0).length;

@@ -8,7 +8,7 @@ import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
-import { getDayBoard, summarizePromoters, PROMOTER_STATUS_LABEL } from "./operations";
+import { getDayBoard, getRangeBoard, summarizePromoters, PROMOTER_STATUS_LABEL } from "./operations";
 import { listIssues } from "./issues";
 import { ruptureList, stockRecords } from "./analytics";
 import { listVisits } from "./history";
@@ -26,10 +26,11 @@ import {
 import { fmtDateTime, fmtTime } from "@/lib/dates";
 import type { SheetSpec } from "./xlsx";
 
-export async function dailyReport(scope: Scope, f: PanelFilters) {
-  const day = { ...f, from: f.date, to: f.date, page: 1, status: null, kind: null, q: "" };
+/** Relatório do dia; com `range`, o período from → to (exportação de visitas). */
+export async function dailyReport(scope: Scope, f: PanelFilters, range = false) {
+  const day = range ? { ...f, page: 1, status: null, kind: null, q: "" } : { ...f, from: f.date, to: f.date, page: 1, status: null, kind: null, q: "" };
   const [board, issues, ruptures, zeroStock, occurrences] = await Promise.all([
-    getDayBoard(scope, f),
+    range ? getRangeBoard(scope, f) : getDayBoard(scope, f),
     listIssues(scope, day),
     ruptureList(scope, day, { pageSize: 2000 }),
     stockRecords(scope, { ...day, status: "zero" }, { pageSize: 2000 }),
@@ -96,6 +97,7 @@ export function dailySheets(r: DailyReport): SheetSpec[] {
     {
       name: "Lojas",
       columns: [
+        { header: "Data", key: "date", width: 11 },
         { header: "Loja", key: "store", width: 32 },
         { header: "Rede", key: "chain", width: 16 },
         { header: "Cidade", key: "city", width: 18 },
@@ -105,19 +107,24 @@ export function dailySheets(r: DailyReport): SheetSpec[] {
         { header: "Fim", key: "end" },
         { header: "Marcas previstas", key: "brands", width: 36 },
         { header: "Marcas concluídas", key: "done" },
+        { header: "Marcas atendidas", key: "attended", width: 36 },
+        { header: "Marcas NÃO atendidas", key: "notAttended", width: 36 },
         { header: "Situação", key: "bucket", width: 22 },
         { header: "Pendências", key: "issues" },
       ],
       rows: r.board.stops.map((st) => ({
+        date: st.date.split("-").reverse().join("/"),
         store: st.storeName,
         chain: st.chainName,
         city: st.city,
         promoter: st.promoterName,
-        planned: st.plannedStart ?? (st.scheduleId ? "" : "extraordinária"),
+        planned: st.plannedStart ?? (st.scheduleId ? "" : st.visit?.origin === "portfolio" ? "carteira" : "extraordinária"),
         start: st.visit ? fmtTime(st.visit.startedAt) : "",
         end: st.visit?.finishedAt ? fmtTime(st.visit.finishedAt) : "",
         brands: st.plannedBrands.map((b) => b.name).join(", "),
         done: `${st.brandsDone}/${st.brandsTotal}`,
+        attended: st.plannedBrands.filter((b) => st.attendances.some((a) => a.brandId === b.id && a.status === "completed")).map((b) => b.name).join(", "),
+        notAttended: st.plannedBrands.filter((b) => !st.attendances.some((a) => a.brandId === b.id && a.status === "completed")).map((b) => b.name).join(", "),
         bucket: STOP_BUCKET_LABEL[st.bucket],
         issues: st.issues,
       })),

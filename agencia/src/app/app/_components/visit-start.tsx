@@ -22,10 +22,10 @@ export function useStartVisit() {
   const [pending, setPending] = useState<Pending>(null);
   const [busy, setBusy] = useState(false);
 
-  async function doStart(storeId: string, scheduleId: string | null, plannedBrandIds: string[], extraReason?: string) {
+  async function doStart(storeId: string, scheduleId: string | null, plannedBrandIds: string[], extraReason?: string, portfolio = false) {
     setBusy(true);
     try {
-      const id = await startVisit({ storeId, scheduleId, plannedBrandIds, extraReason, captureLocation: settings?.captureLocation ?? false });
+      const id = await startVisit({ storeId, scheduleId, plannedBrandIds, extraReason, portfolio, captureLocation: settings?.captureLocation ?? false });
       haptic(20);
       go(`visita/${id}`);
     } finally {
@@ -58,6 +58,13 @@ export function useStartVisit() {
     guard(async () => setPending({ kind: "extra", store }));
   }
 
+  /** Carteira com meta: visita direta na loja, com as marcas que ainda faltam na semana. */
+  function startPortfolio(storeId: string, brandIds: string[]) {
+    const existing = Object.values(local.visits).find((v) => v.storeId === storeId && v.status === "in_progress");
+    if (existing) return go(`visita/${existing.id}`);
+    guard(() => doStart(storeId, null, brandIds, undefined, true));
+  }
+
   const openStore = pending?.kind === "conflict" ? storeById.get(local.visits[pending.openVisitId]?.storeId ?? "") : undefined;
 
   const sheets = (
@@ -84,7 +91,7 @@ export function useStartVisit() {
     </>
   );
 
-  return { startScheduled, startExtra, sheets, busy };
+  return { startScheduled, startExtra, startPortfolio, sheets, busy };
 }
 
 function ExtraVisitSheet({ store, busy, onClose, onConfirm }: { store: BootstrapStore; busy: boolean; onClose: () => void; onConfirm: (brandIds: string[], reason: string) => void }) {

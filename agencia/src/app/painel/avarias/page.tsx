@@ -70,7 +70,7 @@ export default async function DamagesPage({ searchParams }: PageProps<"/painel/a
                   <tr key={r.id} className="hover:bg-subtle">
                     <Td className="tnum whitespace-nowrap">{fmtDateTime(r.recordedAt)}</Td>
                     <Td>
-                      <Link href={`/painel/atendimentos/${r.attendanceId}`} className="font-semibold hover:underline">
+                      <Link href={`/painel/atendimentos/${r.attendanceId}`} target="_blank" className="font-semibold hover:underline">
                         {r.productName}
                       </Link>
                       <span className="block text-[11.5px] text-muted">
@@ -89,7 +89,7 @@ export default async function DamagesPage({ searchParams }: PageProps<"/painel/a
                     </Td>
                     <Td className="tnum">{formatIsoBr(r.expiryDate)}</Td>
                     <Td>
-                      <Link href={`/painel/lojas/${r.storeId}`} className="hover:underline">
+                      <Link href={`/painel/lojas/${r.storeId}`} target="_blank" className="hover:underline">
                         {r.storeName}
                       </Link>
                       <span className="block text-[11.5px] text-muted">{r.city}</span>

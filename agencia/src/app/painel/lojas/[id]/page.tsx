@@ -13,7 +13,6 @@ import { parseFilters, withParams } from "@/lib/filters";
 import { ATTENDANCE_STATUS_TONE, ATTENDANCE_STATUS_LABEL, RUPTURE_SITUATION_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE } from "@/lib/domain";
 import { fmtDate, fmtTime } from "@/lib/dates";
 import { Badge, EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
-import { FilterBar } from "../../_components/filter-bar";
 import { SectionCard, Table, Td, Th } from "../../_components/widgets";
 
 export const metadata: Metadata = { title: "Loja" };
@@ -42,16 +41,15 @@ export default async function StorePage({ params, searchParams }: PageProps<"/pa
   return (
     <>
       <PageHeader
-        eyebrow={<Link href="/painel/lojas" className="hover:underline">Lojas</Link>}
+        eyebrow={<Link href="/painel/visitas" className="hover:underline">Visitas</Link>}
         title={st.name}
-        subtitle={[row.chainName, st.code ? `cód. ${st.code}` : null, st.address, st.district, `${st.city}/${st.state}`].filter(Boolean).join(" · ")}
+        subtitle={`${[row.chainName, st.code ? `cód. ${st.code}` : null, st.address, st.district, `${st.city}/${st.state}`].filter(Boolean).join(" · ")} · últimos 30 dias`}
         actions={
           <LinkButton variant="secondary" href={`/api/reports/store/${id}${withParams({ from: f.from, to: f.to, brand: f.brand })}`} prefetch={false}>
             <FileDown className="size-4" /> Relatório da loja (PDF)
           </LinkButton>
         }
       />
-      <FilterBar range={{ from: f.from, to: f.to }} fields={["period", "brand", "promoter"]} options={{ brands }} />
       <div className="flex flex-wrap gap-2 mb-6">
         <span className="text-[13px] text-muted mr-1">Marcas autorizadas:</span>
         {brands.map((b) => (
@@ -78,7 +76,7 @@ export default async function StorePage({ params, searchParams }: PageProps<"/pa
                 <tr key={r.id} className="hover:bg-subtle">
                   <Td className="tnum">{fmtDate(r.visitDate)}</Td>
                   <Td>
-                    <Link href={`/painel/atendimentos/${r.attendanceId}`} className="font-semibold hover:underline">
+                    <Link href={`/painel/atendimentos/${r.attendanceId}`} target="_blank" className="font-semibold hover:underline">
                       {r.productName}
                     </Link>
                   </Td>
@@ -110,7 +108,7 @@ export default async function StorePage({ params, searchParams }: PageProps<"/pa
               {visits.map((v) => (
                 <tr key={v.id} className="hover:bg-subtle">
                   <Td className="tnum">
-                    <Link href={`/painel/visitas/${v.id}`} className="font-semibold hover:underline">
+                    <Link href={`/painel/visitas/${v.id}`} target="_blank" className="font-semibold hover:underline">
                       {fmtDate(v.date)}
                     </Link>
                   </Td>
@@ -121,7 +119,7 @@ export default async function StorePage({ params, searchParams }: PageProps<"/pa
                   <Td>
                     <div className="flex flex-wrap gap-1">
                       {v.attendances.map((a) => (
-                        <Link key={a.id} href={`/painel/atendimentos/${a.id}`} title={ATTENDANCE_STATUS_LABEL[a.status]}>
+                        <Link key={a.id} href={`/painel/atendimentos/${a.id}`} target="_blank" title={ATTENDANCE_STATUS_LABEL[a.status]}>
                           <StatusBadge tone={ATTENDANCE_STATUS_TONE[a.status]} size="sm">
                             {a.brandName}
                           </StatusBadge>

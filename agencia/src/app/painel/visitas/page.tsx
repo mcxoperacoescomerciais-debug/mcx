@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
-import { filterOptions, getDayBoard } from "@/server/operations";
-import { parseFilters, withParams } from "@/lib/filters";
+import { filterOptions, getRangeBoard } from "@/server/operations";
+import { parseDayRange, withParams } from "@/lib/filters";
 import { STOP_BUCKET_LABEL, STOP_BUCKET_TONE, STOP_BUCKETS } from "@/lib/domain";
-import { fmtLongDate, fmtTime } from "@/lib/dates";
+import { fmtDate, fmtLongDate, fmtTime } from "@/lib/dates";
 import { matchesQuery } from "@/lib/rules";
 import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
@@ -20,8 +20,9 @@ export const metadata: Metadata = { title: "Visitas" };
  */
 export default async function VisitsPage({ searchParams }: PageProps<"/painel/visitas">) {
   const scope = await getScope();
-  const f = parseFilters(await searchParams);
-  const [board, options] = await Promise.all([getDayBoard(scope, f), filterOptions(scope)]);
+  const f = parseDayRange(await searchParams);
+  const [board, options] = await Promise.all([getRangeBoard(scope, f), filterOptions(scope)]);
+  const oneDay = f.from === f.to;
   const stops = board.stops
     .filter((st) => !f.status || (f.status === "open" ? ["pending", "late", "missed"].includes(st.bucket) : f.status === "completed" ? st.bucket === "completed" || st.bucket === "exception" : st.bucket === f.status))
     .filter((st) => !f.store || st.storeId === f.store)
@@ -31,15 +32,16 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
     <>
       <PageHeader
         title="Visitas"
-        subtitle={<span className="first-letter:uppercase inline-block">{fmtLongDate(f.date)} · {stops.length} de {board.stops.length} visita(s) · cada visita reúne os atendimentos das marcas na loja</span>}
+        subtitle={<span className="first-letter:uppercase inline-block">{oneDay ? fmtLongDate(f.from) : `${fmtDate(f.from)} a ${fmtDate(f.to)}`} · {stops.length} de {board.stops.length} visita(s) · cada visita reúne os atendimentos das marcas na loja</span>}
         actions={
-          <LinkButton variant="secondary" href={`/api/export/stores${withParams({ date: f.date, brand: f.brand, chain: f.chain, promoter: f.promoter, city: f.city })}`} prefetch={false}>
+          <LinkButton variant="secondary" href={`/api/export/stores${withParams({ from: f.from, to: f.to, brand: f.brand, chain: f.chain, promoter: f.promoter, city: f.city })}`} prefetch={false}>
             <FileDown className="size-4" /> Exportar (Excel)
           </LinkButton>
         }
       />
       <FilterBar
-        fields={["date", "promoter", "city", "chain", "store", "status", "q"]}
+        range={{ from: f.from, to: f.to }}
+        fields={["period", "promoter", "city", "chain", "store", "status", "q"]}
         options={{ ...options, statuses: [{ id: "open", name: "Pendentes, atrasadas ou não realizadas" }, ...STOP_BUCKETS.map((b) => ({ id: b, name: STOP_BUCKET_LABEL[b] }))] }}
         statusLabel="Todas as situações"
         qPlaceholder="Buscar loja, rede ou promotor"
@@ -49,6 +51,7 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
           <Table>
             <thead>
               <tr>
+                {oneDay ? null : <Th>Data</Th>}
                 <Th>Loja</Th>
                 <Th>Promotor</Th>
                 <Th>Horário</Th>
@@ -62,15 +65,16 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
             <tbody>
               {stops.map((st) => (
                 <tr key={st.key} className="hover:bg-subtle">
+                  {oneDay ? null : <Td className="tnum whitespace-nowrap">{fmtDate(st.date)}</Td>}
                   <Td>
                     <span className="font-semibold">{st.storeName}</span>
                     <span className="block text-[11.5px] text-muted">
                       {[st.chainName, st.city].filter(Boolean).join(" · ")}
-                      {!st.scheduleId ? " · extraordinária" : ""}
+                      {!st.scheduleId ? (st.visit?.origin === "portfolio" ? " · carteira" : " · extraordinária") : ""}
                     </span>
                   </Td>
                   <Td>
-                    <Link href={`/painel/promotores/${st.promoterId}?date=${st.date}`} className="hover:underline">
+                    <Link href={`/painel/promotores/${st.promoterId}?date=${st.date}`} target="_blank" className="hover:underline">
                       {st.promoterName}
                     </Link>
                   </Td>
@@ -88,6 +92,11 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
                   <Td align="right">{st.brandsTotal}</Td>
                   <Td align="right" className={st.brandsDone < st.brandsTotal && st.visit ? "text-warn font-semibold" : ""}>
                     {st.brandsDone}
+                    {st.brandsDone < st.brandsTotal ? (
+                      <span className="block text-[11.5px] font-normal text-bad max-w-[220px] ml-auto">
+                        Não atendidas: {st.plannedBrands.filter((b) => !st.attendances.some((a) => a.brandId === b.id && a.status === "completed")).map((b) => b.name).join(", ")}
+                      </span>
+                    ) : null}
                   </Td>
                   <Td align="right" className={st.issues ? "text-bad font-semibold" : ""}>
                     {st.issues || "—"}
@@ -95,6 +104,7 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
                   <Td align="right">
                     <Link
                       href={st.visit ? `/painel/visitas/${st.visit.id}` : `/painel/lojas/${st.storeId}`}
+                      target="_blank"
                       className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700 hover:underline whitespace-nowrap"
                     >
                       {st.visit ? "Detalhes" : "Loja"} <ArrowRight className="size-3.5" />

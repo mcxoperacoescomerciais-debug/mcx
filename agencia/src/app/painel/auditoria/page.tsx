@@ -28,6 +28,7 @@ const ENTITY_LABEL: Record<string, string> = {
   agency: "Agência",
   report: "Relatório",
   export: "Exportação",
+  target: "Meta da carteira",
 };
 
 export default async function AuditPage({ searchParams }: PageProps<"/painel/auditoria">) {

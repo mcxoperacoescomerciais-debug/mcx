@@ -29,6 +29,13 @@
       "when": 1791846357346,
       "tag": "0003_suinco_validade_avaria",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791947222963,
+      "tag": "0004_carteira_meta",
+      "breakpoints": true
     }
   ]
 }

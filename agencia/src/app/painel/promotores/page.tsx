@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDown } from "lucide-react";
 import { getScope } from "@/server/auth";
-import { filterOptions, getDayBoard, PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TONE, summarizePromoters, type PromoterOpStatus } from "@/server/operations";
+import { filterOptions, getRangeBoard, PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TONE, summarizePromoters, type PromoterOpStatus } from "@/server/operations";
 import { listPromoters } from "@/server/history";
-import { parseFilters, withParams } from "@/lib/filters";
+import { parseDayRange, withParams } from "@/lib/filters";
 import { EMPLOYMENT_LABEL } from "@/lib/domain";
-import { fmtAgo, fmtLongDate } from "@/lib/dates";
+import { fmtAgo, fmtDate, fmtLongDate } from "@/lib/dates";
 import { matchesQuery } from "@/lib/rules";
 import { EmptyState, PageHeader, Progress, StatusBadge } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
@@ -19,9 +19,9 @@ const SORTS = { name: "Promotor", scheduled: "Lojas programadas", completed: "Co
 export default async function PromotersPage({ searchParams }: PageProps<"/painel/promotores">) {
   const scope = await getScope();
   const raw = await searchParams;
-  const f = parseFilters(raw);
+  const f = parseDayRange(raw);
   const sort = (typeof raw.sort === "string" && raw.sort in SORTS ? raw.sort : "name") as keyof typeof SORTS;
-  const [board, people, options] = await Promise.all([getDayBoard(scope, f), listPromoters(scope), filterOptions(scope)]);
+  const [board, people, options] = await Promise.all([getRangeBoard(scope, f), listPromoters(scope), filterOptions(scope)]);
   const summaries = new Map(summarizePromoters(board).map((p) => [p.promoterId, p]));
   let rows = people
     .filter((p) => p.status === "active" || summaries.has(p.id))
@@ -47,13 +47,14 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
   rows.sort((a, b) =>
     sort === "scheduled" ? b.scheduled - a.scheduled : sort === "completed" ? b.completed - a.completed : sort === "issues" ? b.issues - a.issues : sort === "last" ? (b.last?.getTime() ?? 0) - (a.last?.getTime() ?? 0) : a.name.localeCompare(b.name, "pt-BR"),
   );
-  const keep = { date: f.date, brand: f.brand, chain: f.chain, city: f.city, q: f.q || null, status: f.status };
+  const keep = { from: f.from, to: f.to, brand: f.brand, chain: f.chain, city: f.city, q: f.q || null, status: f.status };
 
   return (
     <>
-      <PageHeader title="Monitoramento dos promotores" subtitle={<span className="first-letter:uppercase inline-block">{fmtLongDate(f.date)} · situação calculada pela programação e pelos registros recebidos</span>} />
+      <PageHeader title="Monitoramento dos promotores" subtitle={<span className="first-letter:uppercase inline-block">{f.from === f.to ? fmtLongDate(f.from) : `${fmtDate(f.from)} a ${fmtDate(f.to)}`} · situação calculada pela programação e pelos registros recebidos</span>} />
       <FilterBar
-        fields={["date", "brand", "chain", "city", "status", "q"]}
+        range={{ from: f.from, to: f.to }}
+        fields={["period", "brand", "chain", "city", "status", "q"]}
         options={{ ...options, statuses: Object.entries(PROMOTER_STATUS_LABEL).map(([id, name]) => ({ id, name })) }}
         statusLabel="Todas as situações"
         qPlaceholder="Buscar promotor ou região"
@@ -80,7 +81,7 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
               {rows.map((p) => (
                 <tr key={p.id} className="hover:bg-subtle">
                   <Td>
-                    <Link href={`/painel/promotores/${p.id}${withParams({ date: f.date })}`} className="font-semibold hover:underline">
+                    <Link href={`/painel/promotores/${p.id}${withParams({ from: f.from, to: f.to })}`} target="_blank" className="font-semibold hover:underline">
                       {p.name}
                     </Link>
                     <span className="block text-[11.5px] text-muted">

@@ -4,7 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { getScope, requireRole } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
-import { UNIT_LABEL, UNITS } from "@/lib/domain";
+import { PRODUCT_UNITS, UNIT_LABEL } from "@/lib/domain";
 import { PageHeader, StatusBadge, inputClass, selectClass } from "@/components/ui";
 import { FilterBar } from "../../_components/filter-bar";
 import { Pagination, SectionCard, Table, Td, Th } from "../../_components/widgets";
@@ -111,8 +111,8 @@ function ProductForm({ product, brands, defaultBrand }: { product: Product | nul
         <input name="category" defaultValue={product?.category ?? ""} placeholder="Categoria" className={inputClass} />
         <input name="variant" defaultValue={product?.variant ?? ""} placeholder="Variante / sabor" className={inputClass} />
         <input name="package" defaultValue={product?.package ?? ""} placeholder="Embalagem / gramatura" className={inputClass} />
-        <select name="unit" defaultValue={product?.unit ?? "un"} className={selectClass} aria-label="Unidade de medida">
-          {UNITS.map((u) => (
+        <select name="unit" defaultValue={product?.unit === "cx" ? "cx" : "un"} className={selectClass} aria-label="Unidade de medida">
+          {PRODUCT_UNITS.map((u) => (
             <option key={u} value={u}>
               {UNIT_LABEL[u]}
             </option>

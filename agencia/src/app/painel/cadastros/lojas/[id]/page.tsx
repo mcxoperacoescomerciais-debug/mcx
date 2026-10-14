@@ -38,7 +38,7 @@ export default async function StoreAdminPage({ params }: PageProps<"/painel/cada
 
   return (
     <>
-      <PageHeader eyebrow={<Link href="/painel/cadastros/lojas" className="hover:underline">Redes e lojas</Link>} title={store.name} subtitle={`${store.city}/${store.state}${store.code ? ` · cód. ${store.code}` : ""}`} actions={<Link href={`/painel/lojas/${store.id}`} className="text-[13px] font-semibold text-brand-700">Ver operação da loja →</Link>} />
+      <PageHeader eyebrow={<Link href="/painel/cadastros/lojas" className="hover:underline">Redes e lojas</Link>} title={store.name} subtitle={`${store.city}/${store.state}${store.code ? ` · cód. ${store.code}` : ""}`} actions={<Link href={`/painel/lojas/${store.id}`} target="_blank" className="text-[13px] font-semibold text-brand-700">Ver operação da loja →</Link>} />
       <div className="grid xl:grid-cols-2 gap-6">
         <SectionCard title="Dados da loja" bodyClass="px-5 pb-5">
           <StoreForm store={store} brandIds={brandIds} chains={chains} brands={brands} />

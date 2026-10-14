@@ -98,6 +98,7 @@ export async function saveUserAction(_: FormState, fd: FormData): Promise<FormSt
     phone: str(fd, "phone") || null,
     internalCode: str(fd, "internalCode") || null,
     employment: (str(fd, "employment") || null) as Employment | null,
+    workMode: str(fd, "workMode") === "route" ? "route" : str(fd, "workMode") === "portfolio" ? "portfolio" : null,
     region: str(fd, "region") || null,
     managerId: str(fd, "managerId") || null,
     status: str(fd, "status") === "inactive" ? "inactive" : "active",
@@ -126,6 +127,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         allowExtraVisits: bool(fd, "allowExtraVisits"),
         captureLocation: bool(fd, "captureLocation"),
         allowExceptions: bool(fd, "allowExceptions"),
+        defaultWorkMode: str(fd, "defaultWorkMode"),
         lateToleranceMin: Number(str(fd, "lateToleranceMin")),
         dayEndsAt: str(fd, "dayEndsAt"),
         stockDivergencePct: Number(str(fd, "stockDivergencePct")),
@@ -172,7 +174,7 @@ export async function importAction(_: ImportState, fd: FormData): Promise<Import
   const scope = await getScope();
   if (scope.role !== "admin") return { error: "Somente administradores." };
   const kind = str(fd, "kind") as ImportKind;
-  if (!["produtos", "lojas", "promotores"].includes(kind)) return { error: "Tipo de importação inválido." };
+  if (!["produtos", "lojas", "promotores", "metas"].includes(kind)) return { error: "Tipo de importação inválido." };
   const file = fd.get("file");
   if (!(file instanceof File) || !file.size) return { error: "Escolha o arquivo." };
   if (file.size > 10 * 1024 * 1024) return { error: "Arquivo muito grande (máx. 10 MB)." };

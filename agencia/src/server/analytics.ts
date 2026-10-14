@@ -103,6 +103,58 @@ export async function stockRecords(scope: Scope, f: F, opts: { page?: number; pa
   return { rows, total: rows[0]?.total ?? 0 };
 }
 
+export interface LowStockRow {
+  store_id: string;
+  store_name: string;
+  city: string;
+  product_id: string;
+  product_name: string;
+  sku: string;
+  brand_name: string;
+  quantity: number;
+  unit: Unit;
+  visit_date: string;
+  attendance_id: string;
+  promoter_name: string;
+}
+
+/**
+ * "Na loja X o produto Y está acabando": a ÚLTIMA contagem de cada produto em
+ * cada loja no período, quando ela é baixa (até `maxUnits` unidades ou até 1
+ * caixa) ou zero. Ordenado do mais crítico (menor quantidade) para o menos.
+ */
+export async function lowStock(scope: Scope, f: F, maxUnits: number) {
+  const db = await getDb();
+  const conds = and(eq(s.stockEntries.agencyId, scope.agencyId), sql`${s.attendances.status} in ('completed','correction_requested')`, gte(s.visits.visitDate, f.from), lte(s.visits.visitDate, f.to), ...commonConds(scope, f));
+  const q = f.q ? `%${f.q.toLowerCase()}%` : null;
+  const result = await db.execute(sql`
+    with latest as (
+      select distinct on (${s.visits.storeId}, ${s.stockEntries.productId})
+        ${s.visits.storeId} as store_id, ${s.stockEntries.productId} as product_id, ${s.attendances.brandId} as brand_id,
+        ${s.stockEntries.state} as state, coalesce(${s.stockEntries.quantity}, 0) as quantity, ${s.stockEntries.unit} as unit,
+        ${s.visits.visitDate}::text as visit_date, ${s.stockEntries.attendanceId} as attendance_id, ${s.visits.promoterId} as promoter_id
+      from ${s.stockEntries}
+      join ${s.attendances} on ${s.attendances.id} = ${s.stockEntries.attendanceId}
+      join ${s.visits} on ${s.visits.id} = ${s.attendances.visitId}
+      join ${s.stores} on ${s.stores.id} = ${s.visits.storeId}
+      where ${conds} and ${s.stockEntries.state} in ('quantity','zero')
+      order by ${s.visits.storeId}, ${s.stockEntries.productId}, ${s.visits.visitDate} desc, ${s.stockEntries.recordedAt} desc
+    )
+    select latest.store_id, st.name as store_name, st.city, latest.product_id, p.name as product_name, p.sku, b.name as brand_name,
+      latest.quantity, latest.unit, latest.visit_date, latest.attendance_id, u.name as promoter_name
+    from latest
+    join products p on p.id = latest.product_id
+    join brands b on b.id = latest.brand_id
+    join stores st on st.id = latest.store_id
+    join users u on u.id = latest.promoter_id
+    where (latest.state = 'zero' or latest.quantity = 0 or (latest.unit = 'cx' and latest.quantity <= 1) or (latest.unit <> 'cx' and latest.quantity <= ${maxUnits}))
+      ${q ? sql`and (lower(p.name) like ${q} or lower(p.sku) like ${q} or lower(st.name) like ${q})` : sql``}
+    order by (case when latest.unit = 'cx' then latest.quantity * 1000 else latest.quantity end), st.name, p.name
+    limit 500
+  `);
+  return rowsOf<LowStockRow>(result).map((r) => ({ ...r, quantity: Number(r.quantity) }));
+}
+
 export async function stockSummary(scope: Scope, f: F) {
   const db = await getDb();
   const conds = and(eq(s.stockEntries.agencyId, scope.agencyId), sql`${s.attendances.status} in ('completed','correction_requested')`, gte(s.visits.visitDate, f.from), lte(s.visits.visitDate, f.to), ...commonConds(scope, f));

@@ -11,20 +11,23 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { saveChain, saveProduct, saveStore, saveUser, validateProduct } from "./admin";
+import { saveTarget } from "./portfolio";
 import { parseCoords, productNameKey } from "@/lib/rules";
-import { UNITS, type Unit } from "@/lib/domain";
+import type { Unit } from "@/lib/domain";
 
 export const TEMPLATES = {
   produtos: ["marca", "nome", "sku", "ean", "categoria", "variante", "embalagem", "unidade", "status"],
   lojas: ["rede", "nome", "codigo", "cnpj", "endereco", "bairro", "cidade", "uf", "marcas", "latitude", "longitude"],
   promotores: ["nome", "usuario", "senha_inicial", "vinculo", "regiao", "codigo_interno", "email", "telefone", "marcas", "lojas"],
+  metas: ["promotor", "loja", "marca", "visitas_semana"],
 } as const;
 export type ImportKind = keyof typeof TEMPLATES;
 
 export const TEMPLATE_HELP: Record<ImportKind, string> = {
-  produtos: "marca = identificador da marca (ex.: BRAVO). unidade: un, pct, cx, fd, kg ou dp. status: ativo/inativo (padrão ativo). Produtos são localizados pelo SKU dentro da marca; nomes com grafia diferente do mesmo produto são recusados como duplicados.",
+  produtos: "marca = identificador da marca (ex.: BRAVO). unidade: un (unidade) ou cx (caixa); outros valores viram unidade. status: ativo/inativo (padrão ativo). Produtos são localizados pelo SKU dentro da marca; nomes com grafia diferente do mesmo produto são recusados como duplicados.",
   lojas: "marcas = identificadores separados por vírgula (ex.: BRAVO, SUINCO). A loja é localizada por rede + código (ou rede + nome, se não houver código). latitude/longitude (opcionais) posicionam a loja no mapa operacional.",
   promotores: "vinculo: fixo ou freelancer. marcas = identificadores separados por vírgula. lojas = códigos ou nomes das lojas separados por “;”. A senha inicial deve ser trocada no primeiro acesso.",
+  metas: "Carteira com meta semanal. promotor = usuário do promotor. loja = código ou nome da loja. marca = identificador ou nome da marca. visitas_semana = quantas visitas por semana (1 a 14). Se a meta já existir, ela é atualizada. A loja e a marca passam a ser autorizadas ao promotor.",
 };
 
 const norm = (v: string) =>
@@ -92,7 +95,8 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
     report.errors.push({ line: 0, message: "Máximo de 5.000 linhas por arquivo." });
     return report;
   }
-  const missing = TEMPLATES[kind].filter((h) => ["nome", kind === "produtos" ? "sku" : kind === "lojas" ? "cidade" : "usuario"].includes(h)).filter((h) => rows.length && !(h in rows[0]));
+  const required: Record<ImportKind, string[]> = { produtos: ["nome", "sku"], lojas: ["nome", "cidade"], promotores: ["nome", "usuario"], metas: ["promotor", "loja", "marca", "visitas_semana"] };
+  const missing = required[kind].filter((h) => rows.length && !(h in rows[0]));
   if (missing.length) {
     report.errors.push({ line: 1, message: `Colunas obrigatórias ausentes: ${missing.join(", ")}. Baixe o modelo.` });
     return report;
@@ -120,12 +124,8 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
         report.errors.push({ line, message: `Marca “${r.marca ?? ""}” não encontrada.` });
         continue;
       }
-      const unit = ((r.unidade ?? "un").toLowerCase() || "un") as Unit;
+      const unit = productUnit(r.unidade);
       const input = { id: null as string | null, brandId: brand.id, name: r.nome ?? "", sku: r.sku ?? "", ean: r.ean || null, category: r.categoria || null, variant: r.variante || null, package: r.embalagem || null, unit, status: (isActive(r.status) ? "active" : "inactive") as "active" | "inactive" };
-      if (!UNITS.includes(unit)) {
-        report.errors.push({ line, message: `Unidade “${r.unidade}” inválida (use ${UNITS.join(", ")}).` });
-        continue;
-      }
       const v = validateProduct(input);
       if (v) {
         report.errors.push({ line, message: v });
@@ -187,6 +187,29 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
       if (!res.ok) report.errors.push({ line, message: res.error });
       else if (existing) report.updated++;
       else report.created++;
+    } else if (kind === "metas") {
+      const perWeek = Number((r.visitas_semana ?? "").replace(",", "."));
+      if (!Number.isInteger(perWeek) || perWeek < 1 || perWeek > 14) {
+        report.errors.push({ line, message: `visitas_semana “${r.visitas_semana ?? ""}” inválido (use 1 a 14).` });
+        continue;
+      }
+      const [promoter] = await db.select({ id: s.users.id, role: s.users.role }).from(s.users).where(and(eq(s.users.agencyId, scope.agencyId), sql`lower(${s.users.username}) = ${(r.promotor ?? "").trim().toLowerCase()}`));
+      if (!promoter || promoter.role !== "promoter") report.errors.push({ line, message: `Promotor “${r.promotor ?? ""}” não encontrado (use o usuário).` });
+      const ref = (r.loja ?? "").trim();
+      const stores = ref ? await db.select({ id: s.stores.id }).from(s.stores).where(and(eq(s.stores.agencyId, scope.agencyId), sql`(${s.stores.code} = ${ref} or lower(${s.stores.name}) = ${ref.toLowerCase()})`)) : [];
+      if (stores.length !== 1) report.errors.push({ line, message: stores.length ? `Loja “${ref}” é ambígua. Use o código.` : `Loja “${ref}” não encontrada.` });
+      const brandIds = brandList(r.marca, line);
+      if (report.errors.length > errorsBefore || !promoter || brandIds.length !== 1) continue;
+      const [prev] = await db.select({ id: s.visitTargets.id }).from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoter.id), eq(s.visitTargets.storeId, stores[0].id), eq(s.visitTargets.brandId, brandIds[0])));
+      if (dryRun) {
+        if (prev) report.updated++;
+        else report.created++;
+        continue;
+      }
+      const res = await saveTarget(scope, { promoterId: promoter.id, storeId: stores[0].id, brandId: brandIds[0], perWeek });
+      if (!res.ok) report.errors.push({ line, message: res.error });
+      else if (prev) report.updated++;
+      else report.created++;
     } else {
       if (!r.nome || !r.usuario) {
         report.errors.push({ line, message: "Nome e usuário são obrigatórios." });
@@ -246,4 +269,10 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
     }
   }
   return report;
+}
+
+/** Planilha: "cx", "caixa", "fardo"… vira CAIXA; o resto (un, pct, pacote, vazio) vira UNIDADE. */
+function productUnit(raw: string | undefined): Unit {
+  const v = (raw ?? "").trim().toLowerCase();
+  return v === "cx" || v.startsWith("caixa") || v === "fd" || v.startsWith("fardo") ? "cx" : "un";
 }

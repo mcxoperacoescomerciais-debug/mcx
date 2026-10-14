@@ -43,6 +43,8 @@ export async function requestCorrection(scope: Scope, attendanceId: string, reas
   if (text.length < 10) return fail("Descreva o que precisa ser corrigido (mínimo 10 caracteres).");
   const row = await loadAttendance(scope, attendanceId);
   if (!row) return fail("Atendimento não encontrado.");
+  // Reenvio (duplo clique, rede lenta): o pedido já foi gravado — não é erro.
+  if (row.a.status === "correction_requested") return { ok: true, message: "Correção solicitada. O promotor verá o pedido no app." };
   if (row.a.status !== "completed") return fail("Só é possível pedir correção de atendimento concluído.");
   const db = await getDb();
   const snap = await snapshot(attendanceId);

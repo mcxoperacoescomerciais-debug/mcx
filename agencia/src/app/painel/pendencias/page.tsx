@@ -27,7 +27,8 @@ const GROUPS: { id: string; title: string; text: string; kinds: IssueKind[] }[] 
 export default async function IssuesPage({ searchParams }: PageProps<"/painel/pendencias">) {
   const scope = await getScope();
   const f = parseFilters(await searchParams, 14);
-  const view = f.status ?? "open";
+  // Sem filtro = Todas (primeira opção); as demais filtram pela análise do gestor.
+  const view = f.status ?? "all";
   const [all, options] = await Promise.all([listIssues(scope, f, { includeConcluded: view === "concluded" || view === "all" }), filterOptions(scope)]);
   const issues = all
     .filter((i) => !f.kind || i.kind === f.kind)
@@ -48,14 +49,12 @@ export default async function IssuesPage({ searchParams }: PageProps<"/painel/pe
           ...options,
           statuses: [
             { id: "open", name: "Não analisadas" },
-            { id: "pending", name: "Abertas (todas)" },
             { id: "analyzed", name: "Analisadas" },
-            { id: "concluded", name: "Concluídas" },
-            { id: "all", name: "Todas" },
+            { id: "concluded", name: "Concluídas pelo gestor" },
           ],
           kinds: ISSUE_KINDS.map((k) => ({ id: k, name: ISSUE_KIND_LABEL[k] })),
         }}
-        statusLabel="Não analisadas"
+        statusLabel="Todas"
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 mb-6">
@@ -95,7 +94,7 @@ export default async function IssuesPage({ searchParams }: PageProps<"/painel/pe
                         P{i.priority} · {ISSUE_KIND_LABEL[i.kind]}
                       </Badge>
                       <div className="flex-1 min-w-[240px]">
-                        <Link href={i.href} className="font-semibold text-[14.5px] hover:underline inline-flex items-center gap-1">
+                        <Link href={i.href} target="_blank" className="font-semibold text-[14.5px] hover:underline inline-flex items-center gap-1">
                           {i.title} <ArrowUpRight className="size-3.5 text-muted" />
                         </Link>
                         <p className="text-[13px] text-ink-2 mt-0.5">{i.detail}</p>

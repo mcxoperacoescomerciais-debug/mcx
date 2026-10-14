@@ -43,13 +43,14 @@ export async function renderDailyPdf(agency: PdfAgency, r: DailyReport, filtersN
           <H2>Lojas programadas e visitas realizadas</H2>
           <PdfTable
             cols={[
-              { label: "Loja", width: "24%", render: (st: Stop) => `${st.storeName}${st.scheduleId ? "" : " (extra)"}` },
+              { label: "Loja", width: "19%", render: (st: Stop) => `${st.storeName}${st.scheduleId ? "" : st.visit?.origin === "portfolio" ? " (carteira)" : " (extra)"}` },
               { label: "Cidade", width: "11%", render: (st) => st.city },
               { label: "Promotor", width: "14%", render: (st) => st.promoterName },
               { label: "Prev.", width: "6%", render: (st) => st.plannedStart ?? "—" },
               { label: "Início", width: "6%", render: (st) => (st.visit ? fmtTime(st.visit.startedAt) : "—") },
               { label: "Fim", width: "6%", render: (st) => (st.visit?.finishedAt ? fmtTime(st.visit.finishedAt) : "—") },
-              { label: "Marcas", width: "17%", render: (st) => st.plannedBrands.map((b) => b.name).join(", ") },
+              { label: "Marcas", width: "14%", render: (st) => st.plannedBrands.map((b) => b.name).join(", ") },
+              { label: "Não atendidas", width: "8%", render: (st) => st.plannedBrands.filter((b) => !st.attendances.some((a) => a.brandId === b.id && a.status === "completed")).map((b) => b.name).join(", ") || "—" },
               { label: "Feitas", width: "5%", align: "right", render: (st) => `${st.brandsDone}/${st.brandsTotal}` },
               { label: "Situação", width: "11%", render: (st) => <Pill tone={STOP_BUCKET_TONE[st.bucket] as PdfTone}>{STOP_BUCKET_LABEL[st.bucket]}</Pill> },
             ]}

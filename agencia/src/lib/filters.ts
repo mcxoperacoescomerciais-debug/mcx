@@ -49,6 +49,18 @@ export function parseFilters(params: Params, defaultDays = 7): PanelFilters {
   };
 }
 
+/**
+ * Painéis do dia com período: padrão = hoje; link antigo com ?date= vira o
+ * período de um dia só. `date` passa a ser o último dia do período.
+ */
+export function parseDayRange(params: Params): PanelFilters {
+  const f = parseFilters(params, 1);
+  if (!one(params.from) && !one(params.to) && isIsoDate(one(params.date))) {
+    f.from = f.to = one(params.date);
+  }
+  return { ...f, date: f.to };
+}
+
 /** Monta a query string mantendo os filtros atuais e trocando alguns. */
 type QueryValues = Record<string, string | number | null | undefined>;
 export function withParams(base: QueryValues, patch: QueryValues = {}): string {

@@ -80,7 +80,7 @@ export interface LocalVisit {
   storeId: string;
   scheduleId: string | null;
   visitDate: string;
-  origin: "scheduled" | "extra";
+  origin: "scheduled" | "extra" | "portfolio";
   extraReason: string;
   status: VisitStatus;
   closeReason: string;
@@ -381,6 +381,8 @@ export interface StartVisitArgs {
   plannedBrandIds: string[];
   extraReason?: string;
   captureLocation: boolean;
+  /** Visita da carteira com meta (sem programação e sem justificativa). */
+  portfolio?: boolean;
 }
 
 export async function startVisit(args: StartVisitArgs): Promise<string> {
@@ -394,7 +396,7 @@ export async function startVisit(args: StartVisitArgs): Promise<string> {
     storeId: args.storeId,
     scheduleId: args.scheduleId,
     visitDate: todayIso(),
-    origin: args.scheduleId ? "scheduled" : "extra",
+    origin: args.scheduleId ? "scheduled" : args.portfolio ? "portfolio" : "extra",
     extraReason: args.extraReason ?? "",
     status: "in_progress",
     closeReason: "",

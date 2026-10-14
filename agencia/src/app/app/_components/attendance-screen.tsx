@@ -83,7 +83,7 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
 
   const stepDone: Record<StepId, boolean> = {
     antes: attendance.photos.filter((p) => p.kind === "before").length >= brand.minBeforePhotos || attendance.exceptionItems.includes("before_photo"),
-    execucao: brand.activities.length === 0 || attendance.activitiesDone.length === brand.activities.length,
+    execucao: brand.activities.every((x) => attendance.activitiesDone.includes(x)),
     depois: attendance.photos.filter((p) => p.kind === "after").length >= brand.minAfterPhotos || attendance.exceptionItems.includes("after_photo"),
     estoque: !brand.requireStock || tracked.every((p) => attendance.stock[p.id]) || attendance.exceptionItems.includes("stock"),
     validade: true,
@@ -217,7 +217,7 @@ function ExecutionStep({ visitId, attendance, activities, editable }: { visitId:
   return (
     <div>
       <h2 className="text-[13px] font-bold uppercase tracking-wide text-ink-2 mb-2">Execução do trabalho</h2>
-      <p className="text-[13px] text-muted mb-3">Marque o que foi feito. Depois registre o resultado na foto do depois.</p>
+      <p className="text-[13px] text-muted mb-3">Dê OK em <strong>todos</strong> os itens para poder finalizar. Depois registre o resultado na foto do depois.</p>
       {activities.length ? (
         <div className="bg-surface border border-line rounded-2xl divide-y divide-line overflow-hidden">
           {activities.map((act) => {
@@ -262,7 +262,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
   const after = attendance.photos.filter((p) => p.kind === "after");
   const ruptures = Object.values(attendance.ruptures);
   const excusable = missing.filter((m) => m.excusable);
-  const stepFor: Partial<Record<string, StepId>> = { before_photo: "antes", after_photo: "depois", stock: "estoque", damage_photo: "avaria" };
+  const stepFor: Partial<Record<string, StepId>> = { checklist: "execucao", before_photo: "antes", after_photo: "depois", stock: "estoque", damage_photo: "avaria" };
   const bands = cat.settings?.validityBands ?? DEFAULT_BANDS;
   const validities = Object.values(attendance.validities ?? {}).map((v) => ({ v, sev: classify(daysBetween(visit.visitDate, v.expiryDate), bands) }));
   const urgent = validities.filter((x) => x.sev === "expired" || x.sev === "critical").length;

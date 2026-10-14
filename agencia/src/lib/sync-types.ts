@@ -133,7 +133,7 @@ export const visitInput = z.object({
   storeId: id,
   scheduleId: id.nullable(),
   visitDate: isoDate,
-  origin: z.enum(["scheduled", "extra"]),
+  origin: z.enum(["scheduled", "extra", "portfolio"]),
   extraReason: shortText(500),
   status: z.enum(["in_progress", "completed", "closed_incomplete", "cancelled"]),
   closeReason: shortText(500),
@@ -247,8 +247,18 @@ export interface ServerVisit extends Omit<VisitInput, "attendances"> {
   attendances: ServerAttendance[];
 }
 
+/** Carteira com meta: o que o promotor deve fazer na semana e o que o servidor já recebeu. */
+export interface BootstrapPortfolio {
+  weekStart: string;
+  weekEnd: string;
+  targets: { storeId: string; brandId: string; perWeek: number; doneAttendanceIds: string[] }[];
+}
+
 export interface BootstrapPayload {
   user: { id: string; name: string; employment: string | null; mustChangePassword: boolean };
+  /** "route" = programação por dia; "portfolio" = carteira com meta semanal. */
+  workMode: "route" | "portfolio";
+  portfolio: BootstrapPortfolio | null;
   agency: { name: string; logoUrl: string | null };
   settings: {
     allowIncompleteVisit: boolean;

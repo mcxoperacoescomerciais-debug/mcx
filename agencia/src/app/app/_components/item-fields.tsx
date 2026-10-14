@@ -152,40 +152,87 @@ export function ExpiryField({ expiry, required, label = "Validade" }: { expiry: 
   );
 }
 
-/** Unidades: un e cx; kg só para produto fracionado (unidade kg no cadastro). */
-export function unitsFor(product: BootstrapProduct | undefined): ItemUnit[] {
-  return product?.unit === "kg" ? ["un", "cx", "kg"] : ["un", "cx"];
+/** Unidades que o promotor escolhe: só UNIDADE e CAIXA. */
+export function unitsFor(_product: BootstrapProduct | undefined): ItemUnit[] {
+  void _product;
+  return ["un", "cx"];
 }
 
-const UNIT_SHORT: Record<ItemUnit, string> = { un: "Unidade", cx: "Caixa", kg: "Kg" };
+/** Unidade inicial: a gravada, se for UN/CX; senão UNIDADE. */
+export function initialUnit(saved: ItemUnit | null | undefined): ItemUnit {
+  return saved === "cx" ? "cx" : "un";
+}
+
+const UNIT_SHORT: Record<ItemUnit, string> = { un: "UNIDADE", cx: "CAIXA", kg: "KG" };
 
 export function QuantityField({ value, onChange, unit, onUnit, units }: { value: string; onChange: (v: string) => void; unit: ItemUnit; onUnit: (u: ItemUnit) => void; units: ItemUnit[] }) {
   return (
     <div>
       <FieldLabel>Quantidade</FieldLabel>
-      <div className="flex gap-2">
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
-          inputMode="numeric"
-          placeholder="0"
-          className={clsx(inputClass, "!h-14 !text-[24px] font-semibold tnum w-28")}
-        />
-        <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${units.length}, minmax(0, 1fr))` }}>
-          {units.map((u) => (
-            <button
-              key={u}
-              type="button"
-              onClick={() => onUnit(u)}
-              aria-pressed={unit === u}
-              className={clsx("h-14 rounded-xl border text-[14px] font-semibold", unit === u ? "bg-brand-800 text-white border-brand-800" : "bg-surface border-line-strong text-ink")}
-            >
-              {UNIT_SHORT[u]}
-            </button>
-          ))}
-        </div>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        inputMode="numeric"
+        placeholder="0"
+        className={clsx(inputClass, "!h-14 !text-[24px] font-semibold tnum")}
+      />
+      <div className="grid grid-cols-2 gap-2 mt-2" role="radiogroup" aria-label="Unidade">
+        {units.map((u) => (
+          <button
+            key={u}
+            type="button"
+            role="radio"
+            aria-checked={unit === u}
+            onClick={() => onUnit(u)}
+            className={clsx(
+              "h-12 rounded-xl border-2 text-[15px] font-bold tracking-wide",
+              unit === u ? "bg-brand-800 text-white border-brand-800" : "bg-surface border-line-strong text-ink-2",
+            )}
+          >
+            {UNIT_SHORT[u]}
+          </button>
+        ))}
       </div>
     </div>
+  );
+}
+
+/** Centavos digitados → "1.234,56". A vírgula entra sozinha. */
+export function maskMoneyDigits(digits: string): string {
+  const d = digits.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 8);
+  if (!d) return "";
+  const cents = d.padStart(3, "0");
+  const int = cents.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${int},${cents.slice(-2)}`;
+}
+
+export function moneyDigitsToNumber(digits: string): number | null {
+  const d = digits.replace(/\D/g, "");
+  return d ? Number(d) / 100 : null;
+}
+
+export function numberToMoneyDigits(n: number | null | undefined): string {
+  return n === null || n === undefined ? "" : String(Math.round(n * 100));
+}
+
+/** Preço com vírgula automática (digite 1290 → 12,90). */
+export function PriceField({ digits, onChange, label = "Preço do KG (R$)", required = true }: { digits: string; onChange: (d: string) => void; label?: string; required?: boolean }) {
+  const missing = required && !digits;
+  return (
+    <label className="block">
+      <FieldLabel hint={required ? "obrigatório · só números" : "opcional · só números"}>{label}</FieldLabel>
+      <div className="relative">
+        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px] font-semibold text-muted">R$</span>
+        <input
+          value={maskMoneyDigits(digits)}
+          onChange={(e) => onChange(e.target.value.replace(/\D/g, "").replace(/^0+/, "").slice(0, 8))}
+          inputMode="numeric"
+          placeholder="0,00"
+          aria-invalid={missing}
+          className={clsx(inputClass, "!h-14 !text-[22px] font-semibold tnum !pl-12", missing && "!border-warn")}
+        />
+      </div>
+    </label>
   );
 }
 

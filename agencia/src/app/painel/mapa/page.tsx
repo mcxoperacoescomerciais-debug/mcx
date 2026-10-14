@@ -4,7 +4,7 @@ import { MapPinOff } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { mapData, suggestedStoreLocations } from "@/server/map";
-import { parseFilters } from "@/lib/filters";
+import { parseDayRange } from "@/lib/filters";
 import { fmtDate, fmtLongDate, fmtTime } from "@/lib/dates";
 import { PageHeader } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Mapa operacional" };
 
 export default async function MapPage({ searchParams }: PageProps<"/painel/mapa">) {
   const scope = await getScope();
-  const f = parseFilters(await searchParams);
+  const f = parseDayRange(await searchParams);
   const [{ stores, generatedAt }, options] = await Promise.all([mapData(scope, f), filterOptions(scope)]);
   const located = stores.filter((st) => st.lat != null);
   const missing = stores.filter((st) => st.lat == null);
@@ -30,12 +30,13 @@ export default async function MapPage({ searchParams }: PageProps<"/painel/mapa"
         title="Mapa operacional"
         subtitle={
           <span className="first-letter:uppercase inline-block">
-            {fmtLongDate(f.date)} · {located.length} loja(s) no mapa{missing.length ? ` · ${missing.length} sem localização` : ""} · dados de {fmtTime(generatedAt)}
+            {f.from === f.to ? fmtLongDate(f.from) : `${fmtDate(f.from)} a ${fmtDate(f.to)} (pior situação de cada loja no período)`} · {located.length} loja(s) no mapa{missing.length ? ` · ${missing.length} sem localização` : ""} · dados de {fmtTime(generatedAt)}
           </span>
         }
       />
       <FilterBar
-        fields={["date", "city", "chain", "brand", "promoter", "status"]}
+        range={{ from: f.from, to: f.to }}
+        fields={["period", "city", "chain", "brand", "promoter", "status"]}
         options={{ ...options, statuses: (Object.keys(MAP_STATUS_LABEL) as MapStatus[]).map((id) => ({ id, name: MAP_STATUS_LABEL[id] })) }}
         statusLabel="Todas as situações"
       />

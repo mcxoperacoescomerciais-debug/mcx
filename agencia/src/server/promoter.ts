@@ -18,16 +18,18 @@ import type {
   AttendanceInput,
   AttendanceSyncResult,
   BootstrapPayload,
+  BootstrapPortfolio,
   PromoterHistoryItem,
   ServerAttendance,
   ServerVisit,
   VisitInput,
   VisitSyncResult,
 } from "@/lib/sync-types";
-import type { AttendanceStatus } from "@/lib/domain";
+import { brandChecklist, type AttendanceStatus } from "@/lib/domain";
 import { classify } from "@/lib/validity";
 import { daysBetween } from "@/lib/dates";
 import { notifyCriticalAttendance } from "./whatsapp-alert";
+import { effectiveWorkMode, weekEnd, weekStart } from "@/lib/portfolio";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 
@@ -78,7 +80,8 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
   const db = await getDb();
   const promoterId = scope.userId;
   const today = todayIso();
-  const [user] = await db.select({ id: s.users.id, name: s.users.name, employment: s.users.employment, mustChangePassword: s.users.mustChangePassword }).from(s.users).where(eq(s.users.id, promoterId));
+  const [user] = await db.select({ id: s.users.id, name: s.users.name, employment: s.users.employment, mustChangePassword: s.users.mustChangePassword, workMode: s.users.workMode }).from(s.users).where(eq(s.users.id, promoterId));
+  const workMode = effectiveWorkMode(user.workMode, scope.settings.defaultWorkMode);
   const access = await promoterAccess(db, promoterId, scope.agencyId);
   const storeIds = [...access.keys()];
   const brandIds = [...new Set([...access.values()].flatMap((b) => [...b]))];
@@ -137,7 +140,8 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
 
   // Último levantamento de estoque das lojas programadas (referência na tela de estoque).
   const lastStock: BootstrapPayload["lastStock"] = {};
-  const scheduledStores = [...new Set(scheduleRows.map((r) => r.storeId))];
+  const targetStores = workMode === "portfolio" ? (await db.select({ storeId: s.visitTargets.storeId }).from(s.visitTargets).where(eq(s.visitTargets.promoterId, promoterId))).map((r) => r.storeId) : [];
+  const scheduledStores = [...new Set([...scheduleRows.map((r) => r.storeId), ...targetStores])];
   if (scheduledStores.length) {
     type Row = { store_id: string; product_id: string; state: string; quantity: number | null; unit: string; visit_date: string };
     const rows = await db.execute(sql`
@@ -154,8 +158,12 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
     }
   }
 
+  const portfolio = workMode === "portfolio" ? await portfolioForPromoter(db, promoterId, scope.agencyId, today, access) : null;
+
   return {
     user: { id: user.id, name: user.name, employment: user.employment, mustChangePassword: user.mustChangePassword },
+    workMode,
+    portfolio,
     agency: { name: scope.agencyName, logoUrl: scope.agencyLogoUrl },
     settings: {
       allowIncompleteVisit: scope.settings.allowIncompleteVisit,
@@ -175,7 +183,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
         requireStock: b.requireStock,
         rupturePhotoRequired: b.rupturePhotoRequired,
         allowGallery: b.allowGallery,
-        activities: b.activities,
+        activities: brandChecklist(b.activities),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
     stores: storeRows
@@ -206,6 +214,28 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
     visits,
     lastStock,
     serverTime: new Date().toISOString(),
+  };
+}
+
+/**
+ * Carteira da semana: metas (só de lojas e marcas autorizadas) e os atendimentos
+ * já concluídos na semana em cada loja × marca.
+ */
+async function portfolioForPromoter(db: DB, promoterId: string, agencyId: string, today: string, access: Map<string, Set<string>>): Promise<BootstrapPortfolio> {
+  const from = weekStart(today);
+  const to = weekEnd(today);
+  const targets = (await db.select().from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.agencyId, agencyId)))).filter((t) => access.get(t.storeId)?.has(t.brandId));
+  const done = targets.length
+    ? await db
+        .select({ id: s.attendances.id, storeId: s.visits.storeId, brandId: s.attendances.brandId })
+        .from(s.attendances)
+        .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+        .where(and(eq(s.visits.promoterId, promoterId), gte(s.visits.visitDate, from), sql`${s.visits.visitDate} <= ${to}`, inArray(s.attendances.status, ["completed", "correction_requested"])))
+    : [];
+  return {
+    weekStart: from,
+    weekEnd: to,
+    targets: targets.map((t) => ({ storeId: t.storeId, brandId: t.brandId, perWeek: t.perWeek, doneAttendanceIds: done.filter((d) => d.storeId === t.storeId && d.brandId === t.brandId).map((d) => d.id) })),
   };
 }
 
@@ -420,12 +450,17 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
         .where(and(eq(s.visits.scheduleId, input.scheduleId), ne(s.visits.id, input.id), ne(s.visits.status, "cancelled")));
       if (dup) throw new SyncError("conflict", "Esta loja já tem uma visita registrada para a programação de hoje.");
       plannedBrandIds = (await tx.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, sch.id))).map((r) => r.brandId);
+    } else if (input.origin === "portfolio") {
+      // Carteira com meta: o promotor escolhe o dia; não é visita extraordinária.
+      const [u] = await tx.select({ workMode: s.users.workMode }).from(s.users).where(eq(s.users.id, promoterId));
+      if (!existing && effectiveWorkMode(u?.workMode, scope.settings.defaultWorkMode) !== "portfolio") throw new SyncError("forbidden", "Você trabalha por roteiro: inicie a visita pela programação do dia.");
     } else {
       if (!existing && !scope.settings.allowExtraVisits) throw new SyncError("forbidden", "Visitas fora da programação não estão liberadas.");
       if (input.origin !== "extra" || (input.extraReason ?? "").length < 5) {
         throw new SyncError("invalid", "Visita fora da programação precisa de justificativa.");
       }
     }
+    const origin = input.scheduleId ? "scheduled" : input.origin === "portfolio" ? "portfolio" : "extra";
 
     const visitLocked = existing && existing.status !== "in_progress";
     if (!existing) {
@@ -437,8 +472,8 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
         scheduleId: input.scheduleId,
         visitDate: input.visitDate,
         status: "in_progress",
-        origin: input.scheduleId ? "scheduled" : "extra",
-        extraReason: input.scheduleId ? null : input.extraReason,
+        origin,
+        extraReason: origin === "extra" ? input.extraReason : null,
         startedAt: new Date(input.startedAt),
         lat: input.geo?.lat ?? null,
         lng: input.geo?.lng ?? null,
@@ -448,7 +483,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
         createdBy: promoterId,
         updatedBy: promoterId,
       });
-      await audit(actor, "visit", input.id, "started", { after: { storeId: input.storeId, scheduleId: input.scheduleId, origin: input.scheduleId ? "scheduled" : "extra" } }, tx);
+      await audit(actor, "visit", input.id, "started", { after: { storeId: input.storeId, scheduleId: input.scheduleId, origin } }, tx);
     } else if (!visitLocked) {
       await tx
         .update(s.visits)

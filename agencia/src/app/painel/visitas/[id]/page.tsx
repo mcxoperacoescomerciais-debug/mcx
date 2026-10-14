@@ -27,7 +27,7 @@ export default async function VisitPage({ params }: PageProps<"/painel/visitas/[
     <>
       <PageHeader
         eyebrow={
-          <Link href={`/painel/promotores/${d.promoterId}?date=${v.visitDate}`} className="hover:underline">
+          <Link href={`/painel/promotores/${d.promoterId}?date=${v.visitDate}`} target="_blank" className="hover:underline">
             {d.promoterName} · {fmtDate(v.visitDate)}
           </Link>
         }
@@ -110,7 +110,7 @@ export default async function VisitPage({ params }: PageProps<"/painel/visitas/[
               </dl>
               {a.exceptionItems.length ? <p className="text-[12.5px] text-warn font-medium">Exceção: {a.exceptionItems.map((i) => EXCEPTION_ITEM_LABEL[i]).join(", ")} — “{a.exceptionNote}”</p> : null}
               {a.status === "cancelled" ? <p className="text-[12.5px] text-warn font-medium">Cancelado: “{a.cancelReason}”</p> : null}
-              <Link href={`/painel/atendimentos/${a.id}`} className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700">
+              <Link href={`/painel/atendimentos/${a.id}`} target="_blank" className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700">
                 Abrir atendimento completo <ArrowRight className="size-3.5" />
               </Link>
             </SectionCard>

@@ -24,7 +24,7 @@ async function scopeOf(username: string): Promise<Scope> {
   const [u] = await db.select().from(s.users).where(eq(s.users.username, username));
   return auth.scopeForUser(u);
 }
-const day = (date = todayIso()) => ({ date, brand: null, chain: null, store: null, promoter: null, city: null, status: null });
+const day = (date = todayIso()) => ({ date, from: date, to: date, brand: null, chain: null, store: null, promoter: null, city: null, status: null });
 
 before(async () => {
   db = await memDb();

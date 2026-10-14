@@ -8,7 +8,7 @@ import "server-only";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
-import { getDayBoard } from "./operations";
+import { getRangeBoard } from "./operations";
 import { brandFilter, promoterFilter } from "./scope";
 import type { PanelFilters } from "@/lib/filters";
 import type { StopBucket } from "@/lib/domain";
@@ -42,9 +42,9 @@ export interface MapStore {
 
 const BUCKET_WEIGHT: Record<StopBucket, number> = { late: 0, missed: 1, in_progress: 2, pending: 3, exception: 4, completed: 5 };
 
-export async function mapData(scope: Scope, f: Pick<PanelFilters, "date" | "brand" | "chain" | "store" | "promoter" | "city" | "status">) {
+export async function mapData(scope: Scope, f: Pick<PanelFilters, "from" | "to" | "brand" | "chain" | "store" | "promoter" | "city" | "status">) {
   const db = await getDb();
-  const board = await getDayBoard(scope, f);
+  const board = await getRangeBoard(scope, f);
   const visitIds = board.stops.map((st) => st.visit?.id).filter((x): x is string => Boolean(x));
   const geo = visitIds.length
     ? await db

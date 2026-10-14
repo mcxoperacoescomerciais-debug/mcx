@@ -104,7 +104,7 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
                   <tr key={r.id} className="hover:bg-subtle">
                     <Td className="tnum whitespace-nowrap">{fmtDateTime(r.recordedAt).slice(0, 16)}</Td>
                     <Td>
-                      <Link href={`/painel/atendimentos/${r.attendanceId}`} className="font-semibold hover:underline">
+                      <Link href={`/painel/atendimentos/${r.attendanceId}`} target="_blank" className="font-semibold hover:underline">
                         {r.productName}
                       </Link>
                       <span className="block text-[11.5px] text-muted">SKU {r.sku}</span>
@@ -142,7 +142,7 @@ function Ranking({ title, subtitle, rows, hrefFor }: { title: string; subtitle?:
               <li key={r.id} className="grid grid-cols-[1fr_auto] gap-3 items-center text-[13px]">
                 <span className="truncate" title={r.name}>
                   {href ? (
-                    <Link href={href} className="hover:underline">
+                    <Link href={href} target="_blank" className="hover:underline">
                       {r.name}
                     </Link>
                   ) : (

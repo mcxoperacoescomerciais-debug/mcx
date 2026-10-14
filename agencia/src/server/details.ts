@@ -9,6 +9,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { brandFilter, canSeeBrand, canSeePromoter } from "./scope";
 import { trackedProducts } from "./promoter";
+import { brandChecklist } from "@/lib/domain";
 
 export async function getAttendanceDetail(scope: Scope, attendanceId: string) {
   const db = await getDb();
@@ -30,6 +31,7 @@ export async function getAttendanceDetail(scope: Scope, attendanceId: string) {
     .innerJoin(s.users, eq(s.users.id, s.visits.promoterId))
     .where(and(eq(s.attendances.id, attendanceId), eq(s.attendances.agencyId, scope.agencyId)));
   if (!row || !canSeeBrand(scope, row.attendance.brandId) || !canSeePromoter(scope, row.visit.promoterId)) return null;
+  row.brand.activities = brandChecklist(row.brand.activities);
 
   const tracked = await trackedProducts(db, row.store.id, row.brand.id);
   const [photos, stock, products, unregistered, ruptures, occurrences, corrections, history, reviewer, validities, damages] = await Promise.all([

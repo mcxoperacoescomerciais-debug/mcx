@@ -18,7 +18,7 @@ import { deleteValidity, discardUnsavedPhotos, saveValidity, uuid, type LocalAtt
 import { haptic, useCatalog } from "../_lib/hooks";
 import { Sheet, TextArea, toast } from "./primitives";
 import { PhotoCapture } from "./photo-capture";
-import { ExpiryField, expiryReady, FieldLabel, inputClass, ProductSearchList, QuantityField, SeverityPill, unitsFor, useExpiry } from "./item-fields";
+import { ExpiryField, expiryReady, FieldLabel, initialUnit, inputClass, moneyDigitsToNumber, numberToMoneyDigits, PriceField, ProductSearchList, QuantityField, SeverityPill, unitsFor, useExpiry } from "./item-fields";
 
 interface Props {
   visitId: string;
@@ -177,15 +177,14 @@ function ValiditySheet({
   const expiry = useExpiry(item?.expiryDate, visitDate, settings?.validityBands);
   const units = unitsFor(product);
   const [quantity, setQuantity] = useState(item ? String(item.quantity) : "");
-  const [unit, setUnit] = useState<ItemUnit>(item?.unit ?? (product.unit === "kg" ? "kg" : "un"));
-  const [price, setPrice] = useState(item?.price !== null && item?.price !== undefined ? item.price.toFixed(2).replace(".", ",") : "");
+  const [unit, setUnit] = useState<ItemUnit>(initialUnit(item?.unit));
+  const [price, setPrice] = useState(numberToMoneyDigits(item?.price));
   const [lot, setLot] = useState(item?.lot ?? "");
   const [note, setNote] = useState(item?.note ?? "");
   const photos = attendance.photos.filter((p) => p.validityId === id);
   const qty = Number(quantity);
-  const priceNum = price.trim() ? Number(price.replace(/\./g, "").replace(",", ".")) : null;
-  const priceInvalid = priceNum !== null && (!Number.isFinite(priceNum) || priceNum < 0);
-  const ready = expiryReady(expiry, true) && qty > 0 && !priceInvalid;
+  const priceNum = moneyDigitsToNumber(price);
+  const ready = expiryReady(expiry, true) && qty > 0 && priceNum !== null && priceNum > 0;
   const cancel = async () => {
     if (!attendance.validities?.[id]) await discardUnsavedPhotos(visitId, attendance.id, { validityId: id });
     onClose();
@@ -229,10 +228,7 @@ function ValiditySheet({
       <div className="space-y-4">
         <ExpiryField expiry={expiry} required />
         <QuantityField value={quantity} onChange={setQuantity} unit={unit} onUnit={setUnit} units={units} />
-        <label className="block">
-          <FieldLabel hint="preço na gôndola">Preço (R$)</FieldLabel>
-          <input value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d,.]/g, "").slice(0, 10))} inputMode="decimal" placeholder="0,00" className={clsx(inputClass, "tnum", priceInvalid && "!border-bad")} />
-        </label>
+        <PriceField digits={price} onChange={setPrice} />
         <label className="block">
           <FieldLabel hint="opcional">Lote</FieldLabel>
           <input value={lot} onChange={(e) => setLot(e.target.value.slice(0, 60))} className={clsx(inputClass, "uppercase")} />

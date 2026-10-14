@@ -7,12 +7,15 @@ import { matchesQuery } from "@/lib/rules";
 import { go, useCatalog, useLocal } from "../_lib/hooks";
 import { BottomTabs, Chip, Screen, TopBar } from "./primitives";
 import { useStartVisit } from "./visit-start";
+import { usePortfolio } from "../_lib/portfolio-progress";
+import { portfolioBrands } from "./portfolio";
 
 /** Só lojas autorizadas ao promotor (o servidor manda apenas essas). */
 export function StoresScreen() {
   const cat = useCatalog();
   const local = useLocal();
-  const { startScheduled, startExtra, sheets } = useStartVisit();
+  const { startScheduled, startExtra, startPortfolio, sheets } = useStartVisit();
+  const portfolio = usePortfolio();
   const [query, setQuery] = useState("");
   const [onlyToday, setOnlyToday] = useState(false);
   const todaySchedules = cat.schedules.filter((s) => s.date === cat.today);
@@ -87,6 +90,17 @@ export function StoresScreen() {
                 {visit ? (
                   <button type="button" onClick={() => go(`visita/${visit.id}`)} className="w-full h-12 rounded-xl border border-line-strong font-semibold text-[15px] text-brand-800 active:bg-canvas">
                     {visit.status === "in_progress" ? "Continuar visita" : "Ver visita de hoje"}
+                  </button>
+                ) : portfolio ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const st = portfolio.stores.find((x) => x.storeId === store.id);
+                      startPortfolio(store.id, st ? portfolioBrands(st) : store.brandIds);
+                    }}
+                    className="w-full h-12 rounded-xl bg-brand-800 text-white font-semibold text-[15px] active:bg-brand-900"
+                  >
+                    INICIAR VISITA
                   </button>
                 ) : schedule ? (
                   <button type="button" onClick={() => startScheduled(schedule)} className="w-full h-12 rounded-xl bg-brand-800 text-white font-semibold text-[15px] active:bg-brand-900">

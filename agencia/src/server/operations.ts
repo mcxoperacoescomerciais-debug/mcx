@@ -11,7 +11,7 @@ import { and, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
-import { minutesOfDay, todayIso } from "@/lib/dates";
+import { addDays, minutesOfDay, todayIso } from "@/lib/dates";
 import { stopBucket } from "@/lib/rules";
 import type { AttendanceStatus, StopBucket, VisitStatus } from "@/lib/domain";
 import type { PanelFilters } from "@/lib/filters";
@@ -322,6 +322,32 @@ export async function getDayBoard(scope: Scope, f: Pick<PanelFilters, "date" | "
       ruptureCount: rupt[0]?.total ?? 0,
     },
   };
+}
+
+/** Máximo de dias somados num período (painéis do dia com data inicial e final). */
+export const MAX_RANGE_DAYS = 62;
+
+/**
+ * O mesmo painel do dia somado num período (data inicial → final). Um dia só
+ * é exatamente o getDayBoard. Cada dia segue as regras dele (não realizada, atraso).
+ */
+export async function getRangeBoard(scope: Scope, f: Pick<PanelFilters, "from" | "to" | "brand" | "chain" | "store" | "promoter" | "city">): Promise<DayBoard & { from: string; to: string; days: number }> {
+  const days: string[] = [];
+  for (let d = f.from; d <= f.to && days.length < MAX_RANGE_DAYS; d = addDays(d, 1)) days.push(d);
+  const boards: DayBoard[] = [];
+  // Poucos dias por vez: não abre dezenas de consultas simultâneas no banco.
+  for (let i = 0; i < days.length; i += 4) boards.push(...(await Promise.all(days.slice(i, i + 4).map((date) => getDayBoard(scope, { ...f, date })))));
+  const last = boards[boards.length - 1];
+  if (boards.length === 1) return { ...last, from: f.from, to: f.to, days: 1 };
+  const stops = boards.flatMap((b) => b.stops.map((st) => ({ ...st, key: `${b.date}:${st.key}` })));
+  const kpis = { ...last.kpis };
+  for (const k of Object.keys(kpis) as (keyof DayBoard["kpis"])[]) kpis[k] = boards.reduce((n, b) => n + b.kpis[k], 0);
+  kpis.promotersScheduled = new Set(stops.filter((st) => st.scheduleId).map((st) => st.promoterId)).size;
+  kpis.promotersActive = new Set(stops.filter((st) => st.visit).map((st) => st.promoterId)).size;
+  const buckets = { ...last.buckets };
+  for (const k of Object.keys(buckets) as StopBucket[]) buckets[k] = boards.reduce((n, b) => n + b.buckets[k], 0);
+  const lastSyncAt = boards.reduce<Date | null>((m, b) => (b.lastSyncAt && (!m || b.lastSyncAt > m) ? b.lastSyncAt : m), null);
+  return { date: f.to, generatedAt: new Date(), stops, kpis, buckets, lastSyncAt, from: f.from, to: f.to, days: boards.length };
 }
 
 /** Opções dos filtros globais (só o que está no escopo do usuário). */

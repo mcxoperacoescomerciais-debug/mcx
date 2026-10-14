@@ -12,6 +12,8 @@ import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TO
 import { BottomTabs, Notice, Screen, SectionTitle, SyncPill } from "./primitives";
 import { useStartVisit } from "./visit-start";
 import type { BootstrapSchedule } from "@/lib/sync-types";
+import { usePortfolio } from "../_lib/portfolio-progress";
+import { PortfolioHeader, PortfolioList, portfolioBrands } from "./portfolio";
 
 function greeting(): string {
   const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", hourCycle: "h23" }).format(new Date()));
@@ -21,7 +23,9 @@ function greeting(): string {
 export function HomeScreen() {
   const local = useLocal();
   const cat = useCatalog();
-  const { startScheduled, sheets } = useStartVisit();
+  const { startScheduled, startPortfolio, sheets } = useStartVisit();
+  const portfolio = usePortfolio();
+  const startStore = (st: Parameters<typeof portfolioBrands>[0]) => startPortfolio(st.storeId, portfolioBrands(st));
   const user = local.bootstrap!.user;
   const today = cat.today;
 
@@ -88,6 +92,13 @@ export function HomeScreen() {
           <h1 className="text-[24px] font-semibold mt-2 leading-tight">
             {greeting()}, {user.name.split(" ")[0]}
           </h1>
+          {portfolio ? (
+            <>
+              <p className="text-[14px] text-brand-200 mt-0.5">{local.bootstrap!.agency.name} · sua carteira da semana</p>
+              <PortfolioHeader p={portfolio} onStart={startStore} />
+            </>
+          ) : (
+          <>
           <p className="text-[14px] text-brand-200 mt-0.5">
             {local.bootstrap!.agency.name} · {stops.length ? `${stops.length} ${stops.length === 1 ? "loja programada" : "lojas programadas"} hoje` : "sem programação hoje"}
           </p>
@@ -115,6 +126,8 @@ export function HomeScreen() {
               </Button>
             )}
           </div>
+          </>
+          )}
         </div>
       </header>
 
@@ -174,6 +187,15 @@ export function HomeScreen() {
         </>
       ) : null}
 
+      {portfolio ? (
+        <>
+          <SectionTitle>Minha carteira da semana</SectionTitle>
+          <div className="px-4">
+            <PortfolioList p={portfolio} onStart={startStore} />
+          </div>
+        </>
+      ) : (
+      <>
       <SectionTitle>Roteiro de hoje</SectionTitle>
       <div className="px-4 space-y-3">
         {stops.length === 0 ? (
@@ -203,6 +225,8 @@ export function HomeScreen() {
           </div>
         </>
       ) : null}
+      </>
+      )}
 
       <McxFooter variant="dark" className="mt-8 mb-2" />
       {sheets}

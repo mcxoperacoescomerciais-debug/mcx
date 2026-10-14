@@ -37,9 +37,14 @@ export const VISIT_STATUS_TONE: Record<VisitStatus, Tone> = {
   cancelled: "muted",
 };
 
-export const VISIT_ORIGINS = ["scheduled", "extra"] as const;
+export const VISIT_ORIGINS = ["scheduled", "extra", "portfolio"] as const;
 export type VisitOrigin = (typeof VISIT_ORIGINS)[number];
-export const VISIT_ORIGIN_LABEL: Record<VisitOrigin, string> = { scheduled: "Programada", extra: "Extraordinária" };
+export const VISIT_ORIGIN_LABEL: Record<VisitOrigin, string> = { scheduled: "Programada", extra: "Extraordinária", portfolio: "Carteira" };
+
+/** Forma de trabalho do promotor: roteiro com dia certo ou carteira com meta semanal. */
+export const WORK_MODES = ["route", "portfolio"] as const;
+export type WorkMode = (typeof WORK_MODES)[number];
+export const WORK_MODE_LABEL: Record<WorkMode, string> = { route: "Roteiro (dia certo)", portfolio: "Carteira com meta semanal" };
 
 // ───────────────────────────── Atendimento por marca ─────────────────────────────
 
@@ -143,6 +148,8 @@ export const STOCK_STATE_TONE: Record<StockDisplayState, Tone> = {
 
 export const UNITS = ["un", "pct", "cx", "fd", "kg", "dp"] as const;
 export type Unit = (typeof UNITS)[number];
+/** Unidades do cadastro de produto: só UNIDADE e CAIXA (as outras ficam só para dados antigos). */
+export const PRODUCT_UNITS = ["un", "cx"] as const satisfies readonly Unit[];
 /** Unidades que o promotor escolhe ao contar o estoque (além da unidade do produto). */
 export const STOCK_COUNT_UNITS = ["un", "cx"] as const satisfies readonly Unit[];
 export const UNIT_LABEL: Record<Unit, string> = {
@@ -341,3 +348,14 @@ export const ISSUE_REVIEW_LABEL: Record<IssueReviewStatus | "open", string> = {
 
 export const CORRECTION_STATUSES = ["open", "answered", "cancelled"] as const;
 export type CorrectionStatus = (typeof CORRECTION_STATUSES)[number];
+
+// ───────────────────────────── Checklist da execução ─────────────────────────────
+
+/** Item fixo do checklist de toda marca. */
+export const PRICE_CHECK_ACTIVITY = "Conferir preços";
+
+/** Checklist da marca: "Conferir preços" sempre primeiro (se a marca já não tiver um item de preço). */
+export function brandChecklist(activities: string[]): string[] {
+  const list = activities.map((a) => a.trim()).filter(Boolean);
+  return list.some((a) => /pre[çc]o/i.test(a)) ? list : [PRICE_CHECK_ACTIVITY, ...list];
+}

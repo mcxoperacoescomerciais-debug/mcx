@@ -16,11 +16,11 @@ import type { MapStatus, MapStore } from "@/server/map";
 
 export const MAP_STATUS_COLOR: Record<MapStatus, string> = {
   completed: "#1f7a4d",
-  exception: "#b7791f",
+  exception: "#ffd60a", // concluída com exceção: amarelo vibrante
   in_progress: "#1d5ea6",
-  late: "#c0392b",
-  missed: "#7b1d1d",
-  pending: "#8a8f98",
+  late: "#ff8c00",
+  missed: "#ff1a1a", // não realizada: vermelho vibrante
+  pending: "#000000", // pendente: preto
   unscheduled: "#ffffff",
 };
 export const MAP_STATUS_LABEL: Record<MapStatus, string> = { ...STOP_BUCKET_LABEL, unscheduled: "Sem programação no dia" };
@@ -47,7 +47,7 @@ function popupHtml(st: MapStore): string {
         <div style="margin-top:2px"><span style="font-weight:600">${esc(STOP_BUCKET_LABEL[x.bucket])}</span></div>
         <ul style="margin:4px 0 0 16px;padding:0">${brands || "<li>Sem marcas previstas</li>"}</ul>
         ${where ? `<div style="color:#555;margin-top:4px;font-size:11.5px">${esc(where)}</div>` : ""}
-        ${x.visit ? `<a href="/painel/visitas/${esc(x.visit.id)}" style="display:inline-block;margin-top:4px;font-weight:600">Abrir visita →</a>` : ""}
+        ${x.visit ? `<a href="/painel/visitas/${esc(x.visit.id)}" target="_blank" style="display:inline-block;margin-top:4px;font-weight:600">Abrir visita →</a>` : ""}
       </div>`;
     })
     .join("");
@@ -56,7 +56,7 @@ function popupHtml(st: MapStore): string {
     <div style="color:#555">${esc([st.chain, st.address, st.city].filter(Boolean).join(" · "))}</div>
     <div style="margin-top:4px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${MAP_STATUS_COLOR[st.status]};border:1.5px solid #0c323a;margin-right:5px"></span>${esc(MAP_STATUS_LABEL[st.status])}</div>
     ${stops}
-    <a href="/painel/lojas/${esc(st.id)}" style="display:inline-block;margin-top:6px;color:#555">Histórico da loja</a>
+    <a href="/painel/lojas/${esc(st.id)}" target="_blank" style="display:inline-block;margin-top:6px;color:#555">Histórico da loja</a>
   </div>`;
 }
 
@@ -85,7 +85,7 @@ export function OperationsMap({ stores }: { stores: MapStore[] }) {
         const color = MAP_STATUS_COLOR[st.status];
         const icon = L.divIcon({
           className: "",
-          html: `<span style="display:block;width:18px;height:18px;border-radius:50%;background:${color};border:3px solid #0c323a;box-shadow:0 1px 3px rgba(0,0,0,.35)"></span>`,
+          html: `<span style="display:block;width:18px;height:18px;border-radius:50%;background:${color};border:3px solid ${st.status === "pending" ? "#ffffff" : "#0c323a"};box-shadow:0 1px 3px rgba(0,0,0,.35)"></span>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9],
         });

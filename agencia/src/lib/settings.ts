@@ -5,7 +5,7 @@
  *
  * Os padrões são as escolhas mais SEGURAS quando a agência ainda não decidiu.
  */
-import { DEFAULT_ISSUE_PRIORITY, ISSUE_KINDS, type IssueKind } from "./domain";
+import { DEFAULT_ISSUE_PRIORITY, ISSUE_KINDS, WORK_MODES, type IssueKind, type WorkMode } from "./domain";
 import { DEFAULT_BANDS, type SeverityBands } from "./validity";
 
 /** Alerta de validade crítica no WhatsApp da gestão (CallMeBot). Um por agência. */
@@ -40,6 +40,8 @@ export interface AgencySettings {
   /** Faixas de validade (dias para vencer) — "Crítico até" também define o alerta. */
   validityBands: SeverityBands;
   alerts: AlertSettings;
+  /** Forma de trabalho padrão dos promotores (cada promotor pode ter a sua no cadastro). */
+  defaultWorkMode: WorkMode;
 }
 
 export const DEFAULT_SETTINGS: AgencySettings = {
@@ -54,6 +56,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   issuePriority: DEFAULT_ISSUE_PRIORITY,
   validityBands: DEFAULT_BANDS,
   alerts: { bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "" },
+  defaultWorkMode: "route",
 };
 
 export function mergeSettings(raw: unknown): AgencySettings {
@@ -85,5 +88,6 @@ export function mergeSettings(raw: unknown): AgencySettings {
       whatsappPhone: typeof r.alerts?.whatsappPhone === "string" ? r.alerts.whatsappPhone : "",
       whatsappApiKey: typeof r.alerts?.whatsappApiKey === "string" ? r.alerts.whatsappApiKey : "",
     },
+    defaultWorkMode: (WORK_MODES as readonly string[]).includes(r.defaultWorkMode as string) ? (r.defaultWorkMode as WorkMode) : DEFAULT_SETTINGS.defaultWorkMode,
   };
 }

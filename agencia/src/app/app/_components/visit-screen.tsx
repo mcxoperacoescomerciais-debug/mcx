@@ -69,7 +69,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
         <div className="bg-surface border border-line rounded-2xl p-4">
           <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge tone={STOP_STATUS_TONE[status]}>{STOP_STATUS_LABEL[status]}</StatusBadge>
-            {visit.origin === "extra" ? <StatusBadge tone="muted" icon={false}>Extraordinária</StatusBadge> : null}
+            {visit.origin === "extra" ? <StatusBadge tone="muted" icon={false}>Extraordinária</StatusBadge> : visit.origin === "portfolio" ? <StatusBadge tone="info" icon={false}>Carteira da semana</StatusBadge> : null}
             <span className="ml-auto text-[13px] text-muted tnum">
               {done}/{slots.length} marcas
             </span>

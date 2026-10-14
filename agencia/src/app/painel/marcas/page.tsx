@@ -21,8 +21,8 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
   const scope = await getScope();
   const f = parseFilters(await searchParams);
   const options = await filterOptions(scope);
-  const brand = options.brands.find((b) => b.id === f.brand) ?? options.brands[0];
-  if (!brand) {
+  const brand = options.brands.find((b) => b.id === f.brand) ?? null;
+  if (!options.brands.length) {
     return (
       <>
         <PageHeader title="Atendimentos por marca" subtitle="Execução de cada marca no período" />
@@ -30,16 +30,17 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
       </>
     );
   }
-  const r = await brandExecution(scope, { ...f, brand: brand.id });
-  const qs = withParams({ brand: brand.id, from: f.from, to: f.to, chain: f.chain, city: f.city, promoter: f.promoter });
+  const r = await brandExecution(scope, { ...f, brand: brand?.id ?? null });
+  const qs = withParams({ brand: brand?.id, from: f.from, to: f.to, chain: f.chain, city: f.city, promoter: f.promoter });
 
   return (
     <>
       <PageHeader
-        eyebrow="Atendimentos por marca"
-        title={brand.name}
-        subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · previsto pela programação × realizado em loja`}
+        eyebrow={brand ? "Atendimentos por marca" : undefined}
+        title={brand ? brand.name : "Atendimentos por marca"}
+        subtitle={`${brand ? "" : "Todas as marcas · "}${fmtDate(f.from)} a ${fmtDate(f.to)} · previsto pela programação × realizado em loja`}
         actions={
+          brand ? (
           <>
             <LinkButton variant="secondary" href={`/api/reports/brand${withParams({ brand: brand.id, from: f.from, to: f.to, format: "pdf" })}`} prefetch={false}>
               <FileDown className="size-4" /> PDF
@@ -48,6 +49,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
               <FileDown className="size-4" /> Excel
             </LinkButton>
           </>
+          ) : undefined
         }
       />
       <FilterBar fields={["period", "brand", "chain", "city", "promoter"]} options={options} range={{ from: f.from, to: f.to }} />
@@ -66,7 +68,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
           label="Pendências"
           value={r.issues.length}
           tone={r.issues.length ? "warning" : "success"}
-          sub="Desta marca no período"
+          sub={brand ? "Desta marca no período" : "Das marcas no período"}
           href={`/painel/pendencias${qs}`}
           icon={<ShieldAlert className="size-4" />}
         />
@@ -78,7 +80,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
 
       {r.issues.length ? (
         <SectionCard
-          title="Pendências da marca"
+          title={brand ? "Pendências da marca" : "Pendências das marcas"}
           className="mt-6"
           action={
             <Link href={`/painel/pendencias${qs}`} className="text-[13px] font-semibold text-brand-700 inline-flex items-center gap-1">
@@ -89,7 +91,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
           <ul className="divide-y divide-line border-t border-line">
             {r.issues.slice(0, 5).map((i) => (
               <li key={i.key}>
-                <Link href={i.href} className="flex items-center gap-3 px-5 py-2.5 hover:bg-subtle">
+                <Link href={i.href} target="_blank" className="flex items-center gap-3 px-5 py-2.5 hover:bg-subtle">
                   <Badge tone={i.priority <= 2 ? "danger" : "warning"}>{ISSUE_KIND_LABEL[i.kind]}</Badge>
                   <span className="text-[13px] truncate">
                     {i.storeName} · {i.promoterName}
@@ -107,6 +109,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
             <thead>
               <tr>
                 <Th>Data</Th>
+                {brand ? null : <Th>Marca</Th>}
                 <Th>Loja</Th>
                 <Th>Promotor</Th>
                 <Th>Horário</Th>
@@ -120,6 +123,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
               {r.attendances.slice(0, LIMIT).map((a) => (
                 <tr key={a.id} className="hover:bg-subtle">
                   <Td className="tnum whitespace-nowrap">{fmtDate(a.date)}</Td>
+                  {brand ? null : <Td className="font-semibold">{a.brandName}</Td>}
                   <Td>
                     <span className="font-semibold">{a.storeName}</span>
                     <span className="block text-[11.5px] text-muted">{a.city}</span>
@@ -140,7 +144,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
                     {a.ruptures || "—"}
                   </Td>
                   <Td align="right">
-                    <Link href={`/painel/atendimentos/${a.id}`} className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700 hover:underline">
+                    <Link href={`/painel/atendimentos/${a.id}`} target="_blank" className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700 hover:underline">
                       Abrir <ArrowRight className="size-3.5" />
                     </Link>
                   </Td>
@@ -149,7 +153,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
             </tbody>
           </Table>
         ) : (
-          <EmptyState title="Nenhum atendimento desta marca no período" />
+          <EmptyState title={brand ? "Nenhum atendimento desta marca no período" : "Nenhum atendimento no período"} />
         )}
         {r.attendances.length > LIMIT ? <p className="px-5 py-3 text-[12.5px] text-muted">Mostrando os {LIMIT} mais recentes de {r.attendances.length}. Use o Excel para a lista completa.</p> : null}
       </SectionCard>

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { getScope, requireRole } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
-import { EMPLOYMENT_LABEL, ROLE_LABEL } from "@/lib/domain";
+import { EMPLOYMENT_LABEL, ROLE_LABEL, WORK_MODE_LABEL } from "@/lib/domain";
 import { PageHeader, inputClass, selectClass } from "@/components/ui";
 import { SectionCard } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
@@ -68,6 +68,13 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
               <select name="employment" defaultValue={user?.employment ?? "freelancer"} className={selectClass}>
                 <option value="fixed">{EMPLOYMENT_LABEL.fixed}</option>
                 <option value="freelancer">{EMPLOYMENT_LABEL.freelancer}</option>
+              </select>
+            </Labeled>
+            <Labeled label="Forma de trabalho (promotor)">
+              <select name="workMode" defaultValue={user?.workMode ?? ""} className={selectClass}>
+                <option value="">Padrão da agência ({WORK_MODE_LABEL[scope.settings.defaultWorkMode]})</option>
+                <option value="route">{WORK_MODE_LABEL.route}</option>
+                <option value="portfolio">{WORK_MODE_LABEL.portfolio}</option>
               </select>
             </Labeled>
             <Labeled label="Região / roteiro">

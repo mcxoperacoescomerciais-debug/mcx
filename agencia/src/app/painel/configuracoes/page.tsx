@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getScope, requireRole } from "@/server/auth";
-import { ISSUE_KIND_LABEL, ISSUE_KINDS } from "@/lib/domain";
+import { ISSUE_KIND_LABEL, ISSUE_KINDS, WORK_MODE_LABEL } from "@/lib/domain";
 import { PageHeader, inputClass } from "@/components/ui";
 import { SectionCard } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
@@ -22,6 +22,14 @@ export default async function SettingsPage() {
           <SectionCard title="Agência" bodyClass="px-5 pb-5 space-y-3">
             <Row label="Nome exibido nos relatórios">
               <input name="agencyName" defaultValue={scope.agencyName} className={inputClass} />
+            </Row>
+          </SectionCard>
+          <SectionCard title="Forma de trabalho dos promotores" subtitle="Roteiro: o promotor recebe as lojas de cada dia. Carteira: recebe a meta de visitas por semana em cada marca de cada loja e escolhe o dia." bodyClass="px-5 pb-5">
+            <Row label="Padrão da agência (cada promotor pode ter outra forma no cadastro)">
+              <select name="defaultWorkMode" defaultValue={st.defaultWorkMode} className={inputClass}>
+                <option value="route">{WORK_MODE_LABEL.route}</option>
+                <option value="portfolio">{WORK_MODE_LABEL.portfolio}</option>
+              </select>
             </Row>
           </SectionCard>
           <SectionCard title="Regras de campo" bodyClass="px-5 pb-5 space-y-3">

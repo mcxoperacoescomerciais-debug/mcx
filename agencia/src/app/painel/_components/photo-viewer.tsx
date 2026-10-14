@@ -82,15 +82,22 @@ export function BeforeAfter({ before, after, compact = false }: { before: Viewer
   );
 }
 
-export function Gallery({ photos }: { photos: ViewerPhoto[] }) {
+export function Gallery({ photos, wall = false }: { photos: ViewerPhoto[]; wall?: boolean }) {
   const [index, setIndex] = useState<number | null>(null);
   if (!photos.length) return null;
   return (
     <>
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-        {photos.map((p, i) => (
-          <PhotoTile key={p.id} photo={p} onOpen={() => setIndex(i)} className="aspect-square" />
-        ))}
+      <div className={wall ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3" : "grid grid-cols-3 sm:grid-cols-5 gap-2"}>
+        {photos.map((p, i) =>
+          wall ? (
+            <figure key={p.id} className="min-w-0">
+              <PhotoTile photo={p} onOpen={() => setIndex(i)} className="aspect-[3/4] w-full" />
+              {p.caption ? <figcaption className="mt-1.5 text-[11.5px] leading-snug text-ink-2 line-clamp-2">{p.caption}</figcaption> : null}
+            </figure>
+          ) : (
+            <PhotoTile key={p.id} photo={p} onOpen={() => setIndex(i)} className="aspect-square" />
+          ),
+        )}
       </div>
       {index !== null ? <Lightbox photos={photos} index={index} onIndex={setIndex} onClose={() => setIndex(null)} /> : null}
     </>

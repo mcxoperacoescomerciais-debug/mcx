@@ -103,9 +103,9 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
     void (async () => {
       const { afterPhotoFiles } = await import("../_lib/photo-stamp");
       const files = await afterPhotoFiles(attendance.photos, {
-        brand: brand?.name ?? "",
         store: store?.name ?? "",
-        address: [store?.address, store?.city].filter(Boolean).join(" · "),
+        city: [store?.city, store?.state].filter(Boolean).join(" - "),
+        promoter: bootstrap?.user.name ?? "",
       }).catch(() => []);
       if (!cancelled) setPhotos({ key: afterKey, files });
     })();
@@ -113,7 +113,7 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refaz só quando as fotos do depois mudam
-  }, [afterKey, brand?.name, store?.name]);
+  }, [afterKey, store?.name, bootstrap?.user.name]);
   const photoFiles = photos?.key === afterKey ? photos.files : null;
   const ready = Boolean(file) && photoFiles !== null;
   const isLocal = file !== null && file === localFile;

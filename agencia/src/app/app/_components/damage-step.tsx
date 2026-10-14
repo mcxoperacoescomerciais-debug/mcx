@@ -15,7 +15,7 @@ import { deleteDamage, discardUnsavedPhotos, saveDamage, uuid, type LocalAttenda
 import { haptic, useCatalog } from "../_lib/hooks";
 import { Chip, Notice, Sheet, TextArea, toast } from "./primitives";
 import { PhotoCapture } from "./photo-capture";
-import { ExpiryField, expiryReady, FieldLabel, inputClass, ProductSearchList, QuantityField, unitsFor, useExpiry } from "./item-fields";
+import { ExpiryField, expiryReady, FieldLabel, inputClass, ProductSearchList, initialUnit, QuantityField, unitsFor, useExpiry } from "./item-fields";
 
 interface Props {
   visitId: string;
@@ -148,7 +148,7 @@ function DamageSheet({
   const [kind, setKind] = useState<DamageKind | null>(item?.kind ?? null);
   const units = unitsFor(product);
   const [quantity, setQuantity] = useState(item ? String(item.quantity) : "");
-  const [unit, setUnit] = useState<ItemUnit>(item?.unit ?? (product.unit === "kg" ? "kg" : "un"));
+  const [unit, setUnit] = useState<ItemUnit>(initialUnit(item?.unit));
   const expiry = useExpiry(item?.expiryDate, visitDate, settings?.validityBands);
   const [lot, setLot] = useState(item?.lot ?? "");
   const [note, setNote] = useState(item?.note ?? "");

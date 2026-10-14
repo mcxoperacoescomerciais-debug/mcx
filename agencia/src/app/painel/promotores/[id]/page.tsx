@@ -30,7 +30,7 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
   const from = typeof raw.from === "string" ? f.from : addDays(f.date, -13);
   const to = typeof raw.to === "string" ? f.to : f.date;
   const [board, visits, options] = await Promise.all([
-    getDayBoard(scope, { ...f, promoter: id }),
+    getDayBoard(scope, { ...f, date: to, promoter: id }),
     listVisits(scope, { ...f, from, to, promoter: id }),
     filterOptions(scope),
   ]);
@@ -49,9 +49,9 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
         }
         subtitle={[p.employment ? EMPLOYMENT_LABEL[p.employment] : null, p.region, p.internalCode, manager ? `gestor: ${manager.name}` : null, p.status === "inactive" ? "inativo" : null].filter(Boolean).join(" · ")}
       />
-      <FilterBar fields={["date", "brand"]} options={options} />
+      <FilterBar range={{ from, to }} fields={["period", "brand"]} options={options} />
 
-      <SectionCard title={<span className="first-letter:uppercase inline-block">Roteiro de {fmtLongDate(f.date)}</span>} subtitle={summary ? `${summary.completed} de ${summary.scheduled} loja(s) concluída(s) · ${summary.attendancesDone}/${summary.attendancesTotal} marca(s)` : undefined}>
+      <SectionCard title={<span className="first-letter:uppercase inline-block">Roteiro de {fmtLongDate(to)}</span>} subtitle={summary ? `${summary.completed} de ${summary.scheduled} loja(s) concluída(s) · ${summary.attendancesDone}/${summary.attendancesTotal} marca(s)` : undefined}>
         {board.stops.length ? (
           <Table>
             <thead>
@@ -71,7 +71,7 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
                   <Td className="text-muted tnum">{st.scheduleId ? i + 1 : "extra"}</Td>
                   <Td>
                     {st.visit ? (
-                      <Link href={`/painel/visitas/${st.visit.id}`} className="font-semibold hover:underline">
+                      <Link href={`/painel/visitas/${st.visit.id}`} target="_blank" className="font-semibold hover:underline">
                         {st.storeName}
                       </Link>
                     ) : (
@@ -90,7 +90,7 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
                           const a = st.attendances.find((x) => x.brandId === b);
                           const name = a?.brandName ?? st.plannedBrands.find((x) => x.id === b)?.name;
                           return a ? (
-                            <Link key={b} href={`/painel/atendimentos/${a.id}`}>
+                            <Link key={b} href={`/painel/atendimentos/${a.id}`} target="_blank">
                               <StatusBadge tone={ATTENDANCE_STATUS_TONE[a.status]} size="sm">
                                 {name}
                               </StatusBadge>
@@ -135,7 +135,7 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
                 <tr key={v.id} className="hover:bg-subtle">
                   <Td className="tnum whitespace-nowrap">{fmtDate(v.date)}</Td>
                   <Td>
-                    <Link href={`/painel/visitas/${v.id}`} className="font-semibold hover:underline">
+                    <Link href={`/painel/visitas/${v.id}`} target="_blank" className="font-semibold hover:underline">
                       {v.storeName}
                     </Link>
                     <span className="block text-[11.5px] text-muted">{v.city}</span>
@@ -146,7 +146,7 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
                   <Td>
                     <div className="flex flex-wrap gap-1">
                       {v.attendances.map((a) => (
-                        <Link key={a.id} href={`/painel/atendimentos/${a.id}`} title={ATTENDANCE_STATUS_LABEL[a.status]}>
+                        <Link key={a.id} href={`/painel/atendimentos/${a.id}`} target="_blank" title={ATTENDANCE_STATUS_LABEL[a.status]}>
                           <StatusBadge tone={ATTENDANCE_STATUS_TONE[a.status]} size="sm">
                             {a.brandName}
                           </StatusBadge>

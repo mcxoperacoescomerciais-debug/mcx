@@ -54,6 +54,7 @@ import type {
   ValidityLocation,
   VisitOrigin,
   VisitStatus,
+  WorkMode,
 } from "../../lib/domain";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -114,6 +115,8 @@ export const users = pgTable(
     allBrands: boolean("all_brands").notNull().default(true),
     /** Gestor: só os promotores sob sua responsabilidade (`manager_id`)? */
     teamOnly: boolean("team_only").notNull().default(false),
+    /** Promotor: "route" (roteiro com dia certo) ou "portfolio" (carteira com meta semanal). null = padrão da agência. */
+    workMode: text("work_mode").$type<WorkMode>(),
     /** Equipe MCX: administra todas as agências (nunca definido pela tela da agência). */
     platform: boolean("platform").notNull().default(false),
     status: text("status").$type<"active" | "inactive">().notNull().default("active"),
@@ -133,6 +136,7 @@ export const users = pgTable(
     index("users_agency_role_idx").on(t.agencyId, t.role),
     check("users_role_ck", sql`${t.role} in ('admin','manager','promoter')`),
     check("users_employment_ck", sql`${t.employment} is null or ${t.employment} in ('fixed','freelancer')`),
+    check("users_work_mode_ck", sql`${t.workMode} is null or ${t.workMode} in ('route','portfolio')`),
   ],
 );
 
@@ -277,6 +281,29 @@ export const userBrands = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.brandId] }), index("user_brands_brand_idx").on(t.brandId)],
+);
+
+/**
+ * Carteira com meta: quantas visitas por SEMANA o promotor deve fazer em cada
+ * marca de cada loja. O dia é escolha do promotor.
+ */
+export const visitTargets = pgTable(
+  "visit_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    promoterId: uuid("promoter_id").notNull().references(() => users.id),
+    storeId: uuid("store_id").notNull().references(() => stores.id),
+    brandId: uuid("brand_id").notNull().references(() => brands.id),
+    perWeek: integer("per_week").notNull(),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [
+    uniqueIndex("visit_targets_uq").on(t.promoterId, t.storeId, t.brandId),
+    index("visit_targets_agency_idx").on(t.agencyId),
+    check("visit_targets_per_week_ck", sql`${t.perWeek} between 1 and 14`),
+  ],
 );
 
 // ───────────────────────────── Roteiros e programação ─────────────────────────────

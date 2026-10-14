@@ -10,7 +10,7 @@ import type { Scope } from "./auth";
 import { hashPassword } from "./auth";
 import { audit, diffFields } from "./audit";
 import { productNameKey } from "@/lib/rules";
-import { UNITS, type Employment, type Role, type Unit } from "@/lib/domain";
+import { PRODUCT_UNITS, type WorkMode, type Employment, type Role, type Unit } from "@/lib/domain";
 import { mergeSettings, type AgencySettings } from "@/lib/settings";
 import type { ActionResult } from "./manager";
 
@@ -208,7 +208,7 @@ export interface ProductInput {
 export function validateProduct(i: ProductInput): string | null {
   if (i.name.trim().length < 3) return "Nome do produto muito curto.";
   if (!i.sku.trim()) return "Informe o SKU/código.";
-  if (!UNITS.includes(i.unit)) return "Unidade inválida.";
+  if (!(PRODUCT_UNITS as readonly Unit[]).includes(i.unit)) return "Unidade inválida: use unidade ou caixa.";
   const ean = (i.ean ?? "").replace(/\D/g, "");
   if (ean && ![8, 12, 13, 14].includes(ean.length)) return "EAN deve ter 8, 12, 13 ou 14 dígitos.";
   return null;
@@ -264,6 +264,8 @@ export interface UserInput {
   phone: string | null;
   internalCode: string | null;
   employment: Employment | null;
+  /** undefined = não altera (importação de planilha). */
+  workMode?: WorkMode | null;
   region: string | null;
   managerId: string | null;
   status: "active" | "inactive";
@@ -290,6 +292,7 @@ export async function saveUser(scope: Scope, i: UserInput): Promise<ActionResult
     phone: clean(i.phone),
     internalCode: clean(i.internalCode),
     employment: i.role === "promoter" ? i.employment ?? "freelancer" : null,
+    workMode: i.role === "promoter" ? i.workMode : null,
     region: clean(i.region),
     managerId: i.role === "promoter" ? i.managerId : null,
     status: i.status,

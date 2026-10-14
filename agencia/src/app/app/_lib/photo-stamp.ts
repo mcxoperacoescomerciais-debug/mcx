@@ -1,15 +1,15 @@
 /**
- * Fotos do depois para enviar no grupo junto com o PDF: cópia da foto com uma
- * faixa de identificação (marca, loja, endereço, data e hora), como as fotos
+ * Fotos do depois para enviar no grupo junto com o PDF: cópia da foto com um
+ * rodapé de identificação (loja, cidade, data e hora, promotor), como as fotos
  * "carimbadas" que as agências já usam. A foto original não é alterada.
  */
 import { fmtDateTime } from "@/lib/dates";
 import { getPhotoBlob, type LocalPhoto } from "./local-store";
 
 export interface StampInfo {
-  brand: string;
   store: string;
-  address: string;
+  city: string;
+  promoter: string;
 }
 
 async function photoBlob(p: LocalPhoto): Promise<Blob | null> {
@@ -52,7 +52,7 @@ export async function afterPhotoFiles(photos: LocalPhoto[], info: StampInfo): Pr
   for (const [i, p] of after.entries()) {
     const blob = await photoBlob(p);
     if (!blob) continue;
-    const stamped = await stamp(blob, [`${info.brand} · Depois`, info.store, info.address, fmtDateTime(p.takenAt)].filter(Boolean)).catch(() => blob);
+    const stamped = await stamp(blob, [info.store.toUpperCase(), info.city, fmtDateTime(p.takenAt), info.promoter ? `Promotor: ${info.promoter}` : ""].filter(Boolean)).catch(() => blob);
     files.push(new File([stamped], `Depois_${i + 1}_${safe(info.store)}.jpg`, { type: "image/jpeg" }));
   }
   return files;

@@ -15,10 +15,10 @@ import {
   Users,
 } from "lucide-react";
 import { getScope } from "@/server/auth";
-import { getDayBoard } from "@/server/operations";
+import { getRangeBoard } from "@/server/operations";
 import { listIssues } from "@/server/issues";
-import { parseFilters, withParams } from "@/lib/filters";
-import { fmtAgo, fmtLongDate, fmtTime, todayIso } from "@/lib/dates";
+import { parseDayRange, withParams } from "@/lib/filters";
+import { fmtAgo, fmtDate, fmtLongDate, fmtTime, todayIso } from "@/lib/dates";
 import { pct } from "@/lib/rules";
 import { ISSUE_KIND_LABEL } from "@/lib/domain";
 import { Badge, EmptyState, LinkButton, PageHeader } from "@/components/ui";
@@ -40,11 +40,12 @@ const REPORTS = [
 
 export default async function OverviewPage({ searchParams }: PageProps<"/painel">) {
   const scope = await getScope();
-  const f = parseFilters(await searchParams);
+  const f = parseDayRange(await searchParams);
   const day = { ...f, brand: null, chain: null, store: null, promoter: null, city: null };
-  const [board, issues] = await Promise.all([getDayBoard(scope, day), listIssues(scope, { ...day, from: f.date, to: f.date })]);
+  const [board, issues] = await Promise.all([getRangeBoard(scope, day), listIssues(scope, { ...day, from: f.from, to: f.to })]);
   const k = board.kpis;
-  const dateQs = (extra: Record<string, string | null> = {}) => withParams({ date: f.date === todayIso() ? null : f.date }, extra);
+  const today = f.from === todayIso() && f.to === todayIso();
+  const dateQs = (extra: Record<string, string | null> = {}) => withParams(today ? {} : { from: f.from, to: f.to }, extra);
   const unreviewed = issues.filter((i) => !i.review).length;
 
   return (
@@ -54,7 +55,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
         title="Visão geral"
         subtitle={
           <>
-            <span className="first-letter:uppercase inline-block">{fmtLongDate(f.date)}</span> · dados de {fmtTime(board.generatedAt)}
+            <span className="first-letter:uppercase inline-block">{f.from === f.to ? fmtLongDate(f.from) : `${fmtDate(f.from)} a ${fmtDate(f.to)}`}</span> · dados de {fmtTime(board.generatedAt)}
             {board.lastSyncAt ? ` · último registro recebido ${fmtAgo(board.lastSyncAt)}` : " · nenhum registro recebido nesta data"}
           </>
         }
@@ -69,7 +70,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
           </>
         }
       />
-      <FilterBar fields={["date"]} options={{}} />
+      <FilterBar range={{ from: f.from, to: f.to }} fields={["period"]} options={{}} />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
@@ -99,7 +100,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
           value={issues.length}
           tone={issues.length ? "warning" : "success"}
           sub={issues.length ? `${unreviewed} ainda não analisada(s)` : "Nada exige ação"}
-          href={`/painel/pendencias${withParams({ from: f.date, to: f.date })}`}
+          href={`/painel/pendencias${withParams({ from: f.from, to: f.to })}`}
           icon={<ShieldAlert className="size-4" />}
         />
       </div>
@@ -110,7 +111,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
           title="Pendências prioritárias"
           subtitle="As mais urgentes do dia"
           action={
-            <Link href={`/painel/pendencias${withParams({ from: f.date, to: f.date })}`} className="text-[13px] font-semibold text-brand-700 inline-flex items-center gap-1">
+            <Link href={`/painel/pendencias${withParams({ from: f.from, to: f.to })}`} className="text-[13px] font-semibold text-brand-700 inline-flex items-center gap-1">
               Ver todas <ArrowRight className="size-3.5" />
             </Link>
           }
@@ -119,7 +120,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
             <ul className="divide-y divide-line border-t border-line">
               {issues.slice(0, 5).map((i) => (
                 <li key={i.key}>
-                  <Link href={i.href} className="flex items-start gap-3 px-5 py-3 hover:bg-subtle">
+                  <Link href={i.href} target="_blank" className="flex items-start gap-3 px-5 py-3 hover:bg-subtle">
                     <Badge tone={i.priority <= 2 ? "danger" : i.priority <= 4 ? "warning" : "neutral"} className="mt-0.5 shrink-0">
                       {ISSUE_KIND_LABEL[i.kind]}
                     </Badge>
@@ -145,7 +146,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
               const Icon = r.icon;
               return (
                 <li key={r.href}>
-                  <Link href={`${r.href}${r.href === "/painel/pendencias" ? withParams({ from: f.date, to: f.date }) : dateQs()}`} className="flex items-center gap-3 px-2.5 py-2.5 rounded-xl hover:bg-subtle">
+                  <Link href={`${r.href}${r.href === "/painel/pendencias" ? withParams({ from: f.from, to: f.to }) : dateQs()}`} className="flex items-center gap-3 px-2.5 py-2.5 rounded-xl hover:bg-subtle">
                     <span className="size-9 rounded-lg bg-brand-50 text-brand-800 grid place-items-center shrink-0">
                       <Icon className="size-4" />
                     </span>

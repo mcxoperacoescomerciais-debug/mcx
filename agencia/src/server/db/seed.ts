@@ -445,7 +445,8 @@ async function seedPlatformDemo(db: DB, hash: string, afId: string): Promise<voi
     // Logo é opcional na demonstração.
   }
 
-  const [etros] = await db.insert(s.agencies).values({ name: "ETROS", slug: "etros" }).returning();
+  // A ETROS trabalha por carteira com meta semanal (sem dia certo).
+  const [etros] = await db.insert(s.agencies).values({ name: "ETROS", slug: "etros", settings: { defaultWorkMode: "portfolio" } }).returning();
   const E = etros.id;
   const [admin] = await db.insert(s.users).values({ agencyId: E, role: "admin", name: "Administrador ETROS", username: "etros", passwordHash: hash }).returning();
   const [brand] = await db
@@ -474,14 +475,6 @@ async function seedPlatformDemo(db: DB, hash: string, afId: string): Promise<voi
     .returning();
   await db.insert(s.userStores).values(storeIds.map((storeId) => ({ userId: carla.id, storeId })));
   await db.insert(s.userBrands).values({ userId: carla.id, brandId: brand.id });
-  const today = todayIso();
-  if (weekdayOf(today) !== 0) {
-    for (const [seq, storeId] of storeIds.entries()) {
-      const [sch] = await db
-        .insert(s.schedules)
-        .values({ agencyId: E, promoterId: carla.id, storeId, date: today, seq, plannedStart: seq ? "14:00" : "09:00", createdBy: admin.id })
-        .returning({ id: s.schedules.id });
-      await db.insert(s.scheduleBrands).values({ scheduleId: sch.id, brandId: brand.id });
-    }
-  }
+  // Carteira da Carla: 2 visitas por semana na 1ª loja e 1 na 2ª.
+  await db.insert(s.visitTargets).values(storeIds.map((storeId, i) => ({ agencyId: E, promoterId: carla.id, storeId, brandId: brand.id, perWeek: i === 0 ? 2 : 1, createdBy: admin.id })));
 }

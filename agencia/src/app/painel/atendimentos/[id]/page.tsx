@@ -73,7 +73,7 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
       <PageHeader
         eyebrow={
           <span className="flex items-center gap-1 flex-wrap">
-            <Link href={`/painel/visitas/${d.visit.id}`} className="hover:underline">
+            <Link href={`/painel/visitas/${d.visit.id}`} target="_blank" className="hover:underline">
               Visita · {d.store.name}
             </Link>
             <ChevronRight className="size-3" /> Atendimento da marca

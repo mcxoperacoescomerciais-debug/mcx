@@ -156,10 +156,10 @@ function StockRow({
 }) {
   const entry = attendance.stock[p.id];
   const rupture = Object.values(attendance.ruptures).find((r) => r.productId === p.id);
-  const unitOptions: Unit[] = (STOCK_COUNT_UNITS as readonly Unit[]).includes(p.unit) ? [...STOCK_COUNT_UNITS] : [p.unit, ...STOCK_COUNT_UNITS];
+  const unitOptions: Unit[] = [...STOCK_COUNT_UNITS];
   const savedQty = entry?.state === "quantity" && entry.quantity !== null ? String(entry.quantity) : "";
   const [qty, setQty] = useState(savedQty);
-  const [unit, setUnit] = useState<Unit>((entry?.unit as Unit | null | undefined) ?? p.unit);
+  const [unit, setUnit] = useState<Unit>(countUnit(entry?.unit, p.unit));
   // Valor salvo mudou por fora (folha de opções, ruptura): o campo acompanha.
   const [lastSaved, setLastSaved] = useState(savedQty);
   if (savedQty !== lastSaved) {
@@ -298,9 +298,9 @@ function StockSheet({
   onSave: (state: StockState, quantity: number | null, note: string, unit: Unit) => Promise<void>;
   onClear: () => Promise<void>;
 }) {
-  // Unidade da contagem: unidade ou caixa (e a unidade do cadastro, se for outra — ex.: pacote).
-  const unitOptions: Unit[] = (STOCK_COUNT_UNITS as readonly Unit[]).includes(product.unit) ? [...STOCK_COUNT_UNITS] : [product.unit, ...STOCK_COUNT_UNITS];
-  const [unit, setUnit] = useState<Unit>((current?.unit as Unit | null | undefined) ?? product.unit);
+  // Unidade da contagem: só unidade ou caixa.
+  const unitOptions: Unit[] = [...STOCK_COUNT_UNITS];
+  const [unit, setUnit] = useState<Unit>(countUnit(current?.unit, product.unit));
   const [qty, setQty] = useState(current?.state === "quantity" && current.quantity !== null ? String(current.quantity) : "");
   const [note, setNote] = useState(current?.note ?? "");
   const [showNote, setShowNote] = useState(Boolean(current?.note));
@@ -417,4 +417,10 @@ function UnregisteredSheet({ onClose, onSave }: { onClose: () => void; onSave: (
       </div>
     </Sheet>
   );
+}
+
+/** Só UNIDADE ou CAIXA: o que foi gravado, senão a do cadastro (caixa) ou unidade. */
+function countUnit(saved: string | null | undefined, productUnit: Unit): Unit {
+  if (saved === "un" || saved === "cx") return saved;
+  return productUnit === "cx" ? "cx" : "un";
 }
