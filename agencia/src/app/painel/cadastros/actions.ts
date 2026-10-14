@@ -149,6 +149,8 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
           whatsappPhone: normalizePhones(str(fd, "alert_phone")),
           // A chave nunca volta para a tela: vazio mantém a atual; "apagar" remove.
           whatsappApiKey: str(fd, "alert_apikey").toLowerCase() === "apagar" ? "" : str(fd, "alert_apikey") || scope.settings.alerts.whatsappApiKey,
+          // Só a equipe MCX liga/desliga o aviso de armazenamento.
+          storageReport: scope.platform ? bool(fd, "alert_storage") : scope.settings.alerts.storageReport,
         },
       }),
     ),
@@ -163,6 +165,16 @@ function normalizePhones(raw: string): string {
     .filter(Boolean)
     .map((d) => "+" + (d.startsWith("55") && d.length >= 12 ? d : "55" + d))
     .join(",");
+}
+
+/** Equipe MCX: envia agora o relatório de armazenamento (o mesmo da segunda-feira). */
+export async function storageReportNowAction(_: FormState, _fd: FormData): Promise<FormState> {
+  void _fd;
+  const scope = await getScope();
+  if (!scope.platform) return { ok: false, error: "Somente a equipe MCX." };
+  const { runStorageCheck } = await import("@/server/storage-alert");
+  const r = await runStorageCheck(new Date(), { force: true });
+  return r.sent.length ? { ok: true, message: "Aviso de armazenamento enviado. Confira o WhatsApp." } : { ok: false, error: "Nada enviado: ligue o aviso de armazenamento acima, salve e confira número e chave." };
 }
 
 export async function testWhatsAppAction(_: FormState, _fd: FormData): Promise<FormState> {

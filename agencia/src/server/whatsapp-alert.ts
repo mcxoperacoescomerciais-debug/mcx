@@ -25,7 +25,7 @@ import type { AgencySettings } from "@/lib/settings";
 
 export const LINK_DAYS = 30;
 
-function recipients(st: AgencySettings): { phone: string; apikey: string }[] {
+export function recipients(st: AgencySettings): { phone: string; apikey: string }[] {
   const phoneList = st.alerts.whatsappPhone || process.env.ALERT_WHATSAPP_PHONE || "";
   const keyList = st.alerts.whatsappApiKey || process.env.ALERT_WHATSAPP_APIKEY || "";
   const phones = phoneList.split(",").map((p) => p.trim()).filter(Boolean);
@@ -96,7 +96,7 @@ export async function buildAlertMessage(scope: Pick<Scope, "agencyId" | "agencyN
   return { text, items: items.length };
 }
 
-async function sendCallMeBot(phone: string, apikey: string, text: string): Promise<void> {
+export async function sendCallMeBot(phone: string, apikey: string, text: string): Promise<void> {
   const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&apikey=${encodeURIComponent(apikey)}&text=${encodeURIComponent(text)}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
   const body = await res.text();
