@@ -5,7 +5,7 @@ import { ISSUE_KIND_LABEL, ISSUE_KINDS, WORK_MODE_LABEL } from "@/lib/domain";
 import { PageHeader, inputClass } from "@/components/ui";
 import { SectionCard } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
-import { saveSettingsAction, storageReportNowAction, testWhatsAppAction } from "../cadastros/actions";
+import { saveSettingsAction, testWhatsAppAction } from "../cadastros/actions";
 import { SEVERITY_COLOR } from "@/lib/validity";
 
 export const metadata: Metadata = { title: "Configurações" };
@@ -92,14 +92,6 @@ export default async function SettingsPage() {
               <input name="alert_apikey" type="password" autoComplete="off" placeholder={st.alerts.whatsappApiKey ? "••••••• (salva)" : "ex.: 1234567"} className={inputClass} />
             </Row>
             <p className="text-[12px] text-muted">Sem número e chave, nenhum alerta é enviado. Depois de salvar, use “Enviar mensagem de teste” abaixo.</p>
-            {scope.platform ? (
-              <Check
-                name="alert_storage"
-                checked={st.alerts.storageReport}
-                label="Equipe MCX: este número também recebe o aviso de armazenamento"
-                help="Toda segunda às 8h: espaço usado pelas fotos e pelo banco de dados frente ao limite do plano, com alerta extra ao passar de 80% e de 100%."
-              />
-            ) : null}
           </SectionCard>
           <SectionCard title="Prioridade das pendências" subtitle="1 = mais urgente. Define a ordem da Central de pendências." bodyClass="px-5 pb-5">
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2">
@@ -117,11 +109,6 @@ export default async function SettingsPage() {
         <ActionForm action={testWhatsAppAction} hidden={{}} submitLabel="Enviar mensagem de teste no WhatsApp" resetOnSuccess={false}>
           <p className="text-[13px] text-ink-2">Envia uma mensagem de teste para o(s) número(s) salvo(s) no alerta de validade desta agência.</p>
         </ActionForm>
-        {scope.platform ? (
-          <ActionForm action={storageReportNowAction} hidden={{}} submitLabel="Enviar aviso de armazenamento agora" variant="secondary" resetOnSuccess={false} className="mt-4">
-            <p className="text-[13px] text-ink-2">Equipe MCX: envia já o relatório de espaço das fotos e do banco (o mesmo que chega toda segunda às 8h).</p>
-          </ActionForm>
-        ) : null}
       </div>
     </>
   );

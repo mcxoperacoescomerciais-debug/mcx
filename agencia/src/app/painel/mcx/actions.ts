@@ -65,3 +65,20 @@ export async function agencyLogoAction(_: FormState, fd: FormData): Promise<Form
   if (r.ok) revalidatePath("/painel", "layout");
   return r;
 }
+
+/** Aviso de armazenamento (WhatsApp da MCX, não de uma agência). */
+export async function saveStorageAlertAction(_: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePlatform();
+  const { saveStorageAlertConfig } = await import("@/server/storage-alert");
+  const r = await saveStorageAlertConfig(user.id, { phone: str(fd, "phone"), apikey: str(fd, "apikey"), enabled: fd.get("enabled") === "on" });
+  if (r.ok) revalidatePath("/painel/mcx/armazenamento");
+  return r;
+}
+
+export async function storageReportNowAction(_: FormState, _fd: FormData): Promise<FormState> {
+  void _fd;
+  await requirePlatform();
+  const { runStorageCheck } = await import("@/server/storage-alert");
+  const r = await runStorageCheck(new Date(), { force: true });
+  return r.sent.length ? { ok: true, message: "Aviso enviado. Confira o WhatsApp." } : { ok: false, error: "Nada enviado: ligue o aviso, salve e confira o número e a chave." };
+}

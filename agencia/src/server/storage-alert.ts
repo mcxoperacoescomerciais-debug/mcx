@@ -7,7 +7,7 @@
  * padrão 0,5 GB). Envia:
  *   - toda segunda-feira: o relatório da semana (com o crescimento e a previsão);
  *   - em qualquer dia: alerta ao passar de 80% e de 100% (no máximo 1 por semana por nível).
- * Quem recebe: os números das Configurações com "aviso de armazenamento" ligado.
+ * Quem recebe: o WhatsApp configurado na área da MCX (MCX › Armazenamento), não o de uma agência.
  * O controle do que já foi enviado fica na auditoria (entidade "storage").
  * É chamado uma vez por dia (GitHub Actions → /api/cron/storage) e pode ser
  * chamado de novo sem duplicar mensagens.
@@ -94,18 +94,47 @@ async function platformAgencyId(): Promise<string | null> {
   return p?.id ?? null;
 }
 
-/** Números que recebem o aviso (Configurações com o aviso de armazenamento ligado). */
-async function storageRecipients() {
+async function platformSettings() {
   const db = await getDb();
-  const agencies = await db.select({ settings: s.agencies.settings }).from(s.agencies).where(eq(s.agencies.status, "active"));
-  const seen = new Set<string>();
-  const out: { phone: string; apikey: string }[] = [];
-  for (const a of agencies) {
-    const st = mergeSettings(a.settings);
-    if (!st.alerts.storageReport) continue;
-    for (const r of recipients(st)) if (!seen.has(r.phone)) seen.add(r.phone) && out.push(r);
-  }
-  return out;
+  const [p] = await db.select({ id: s.agencies.id, settings: s.agencies.settings }).from(s.agencies).where(eq(s.agencies.kind, "platform"));
+  return p ? { id: p.id, raw: (p.settings ?? {}) as Record<string, unknown>, settings: mergeSettings(p.settings) } : null;
+}
+
+/** Números que recebem o aviso: os da MCX, com o aviso ligado. */
+async function storageRecipients() {
+  const p = await platformSettings();
+  if (!p || !p.settings.alerts.storageReport || !p.settings.alerts.whatsappPhone) return [];
+  return recipients(p.settings);
+}
+
+/** Configuração do aviso na área da MCX (a chave nunca volta para a tela). */
+export async function getStorageAlertConfig() {
+  const p = await platformSettings();
+  const a = p?.settings.alerts;
+  return { phone: a?.whatsappPhone ?? "", hasKey: Boolean(a?.whatsappApiKey), enabled: Boolean(a?.storageReport) };
+}
+
+function normalizePhones(raw: string): string {
+  return raw
+    .split(",")
+    .map((x) => x.replace(/\D/g, ""))
+    .filter(Boolean)
+    .map((d) => "+" + (d.startsWith("55") && d.length >= 12 ? d : "55" + d))
+    .join(",");
+}
+
+export async function saveStorageAlertConfig(userId: string, i: { phone: string; apikey: string; enabled: boolean }): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const p = await platformSettings();
+  if (!p) return { ok: false, error: "Plataforma não encontrada." };
+  const phone = normalizePhones(i.phone);
+  const apikey = i.apikey.trim().toLowerCase() === "apagar" ? "" : i.apikey.trim() || p.settings.alerts.whatsappApiKey;
+  if (i.enabled && (!phone || !apikey)) return { ok: false, error: "Para ligar o aviso, informe o número e a chave do CallMeBot." };
+  const raw = p.raw as { alerts?: Record<string, unknown> };
+  const next = { ...raw, alerts: { ...(raw.alerts ?? {}), whatsappPhone: phone, whatsappApiKey: apikey, storageReport: i.enabled } };
+  const db = await getDb();
+  await db.update(s.agencies).set({ settings: next, updatedAt: new Date() }).where(eq(s.agencies.id, p.id));
+  await audit({ agencyId: p.id, userId }, "storage", "armazenamento", "config_saved", { after: { phone, enabled: i.enabled } });
+  return { ok: true, message: i.enabled ? "Aviso de armazenamento ligado." : "Configuração salva (aviso desligado)." };
 }
 
 export async function runStorageCheck(now = new Date(), opts: { force?: boolean } = {}): Promise<{ sent: string[]; usage: StorageUsage }> {

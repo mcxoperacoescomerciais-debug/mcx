@@ -13,6 +13,7 @@ import {
   ChevronDown,
   FileText,
   Globe2,
+  HardDrive,
   History,
   KeyRound,
   LayoutDashboard,
@@ -75,6 +76,7 @@ const SETTINGS: NavItem[] = [
 const MCX_NAV: NavItem[] = [
   { href: "/painel/mcx", label: "Visão geral (todas)", icon: Globe2 },
   { href: "/painel/mcx/agencias", label: "Agências", icon: Building },
+  { href: "/painel/mcx/armazenamento", label: "Armazenamento", icon: HardDrive },
 ];
 
 function isActive(pathname: string, item: NavItem) {
