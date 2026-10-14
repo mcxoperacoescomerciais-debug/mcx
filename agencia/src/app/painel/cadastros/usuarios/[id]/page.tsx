@@ -103,7 +103,8 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
               </select>
             </Labeled>
             <Labeled label={user ? "Nova senha (deixe vazio para manter)" : "Senha inicial"}>
-              <input name="password" type="password" required={!user} autoComplete="new-password" className={inputClass} />
+              {/* Visível enquanto digita: evita salvar uma senha com erro de digitação. */}
+              <input name="password" type="text" required={!user} autoComplete="off" autoCapitalize="none" spellCheck={false} className={inputClass} />
             </Labeled>
           </div>
           <label className="inline-flex items-center gap-1.5 text-[13px]">

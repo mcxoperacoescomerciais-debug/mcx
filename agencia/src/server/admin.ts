@@ -312,8 +312,10 @@ export async function saveUser(scope: Scope, i: UserInput): Promise<ActionResult
             ...values,
             updatedAt: new Date(),
             updatedBy: scope.userId,
-            // Senha nova também libera o bloqueio por tentativas erradas.
-            ...(i.password ? { passwordHash: await hashPassword(i.password), mustChangePassword: i.role !== "promoter", failedLogins: 0, lockedUntil: null } : {}),
+            ...(i.password ? { passwordHash: await hashPassword(i.password), mustChangePassword: i.role !== "promoter" } : {}),
+            // Salvar o cadastro libera o bloqueio por tentativas erradas.
+            failedLogins: 0,
+            lockedUntil: null,
             // Desativar ou trocar senha derruba as sessões abertas. Registros históricos permanecem.
             ...(deactivating || i.password ? { sessionVersion: before.sessionVersion + 1 } : {}),
             ...(deactivating ? { deactivatedAt: new Date() } : i.status === "active" ? { deactivatedAt: null } : {}),
