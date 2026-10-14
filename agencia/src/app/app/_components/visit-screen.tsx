@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtDuration, fmtTime } from "@/lib/dates";
-import { addPlannedBrand, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
+import { addPlannedBrand, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useVisit } from "../_lib/hooks";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
 import { Notice, Screen, SectionTitle, Sheet, TextArea, toast, TopBar } from "./primitives";
@@ -42,11 +42,18 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
   const shareAttendance = shareId ? visit.attendances[shareId] : undefined;
   const done = slots.filter((s) => isDoneStatus(s.status)).length;
   const status = stopStatus(visit);
+  // Rede com mais de um mix (ex.: ABC VAREJO/PLUS/CASH): na 1ª visita o promotor diz o formato da loja.
+  const pendingMix = open ? allSlots.map((s) => ({ brandId: s.brandId, options: cat.mixOptions(visit.storeId, s.brandId) })).filter((x) => x.options.length) : [];
 
   async function openBrand(brandId: string) {
     const slot = slots.find((s) => s.brandId === brandId);
     if (slot?.attendance) return go(`visita/${visitId}/marca/${slot.attendance.id}`);
     if (!open) return;
+    if (pendingMix.some((x) => x.brandId === brandId)) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      toast("Escolha primeiro o tipo da loja.", "warn");
+      return;
+    }
     if (!slot) await addPlannedBrand(visitId, brandId);
     const id = await startAttendance(visitId, brandId);
     haptic(20);
@@ -114,6 +121,32 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
           </Notice>
         ) : null}
       </div>
+
+      {pendingMix.map(({ brandId, options }) => (
+        <section key={brandId} className="mx-4 mt-4 rounded-2xl border-2 border-brand-600 bg-brand-50 p-4">
+          <h2 className="font-semibold text-[16px] text-brand-900">Qual é o tipo desta loja {store?.chainName ?? ""}?</h2>
+          <p className="text-[13px] text-ink-2 mt-1">
+            Escolha uma vez: fica salvo para os próximos atendimentos. Define os produtos de <strong>{cat.brandById.get(brandId)?.name}</strong> que você vai conferir.
+          </p>
+          <div className="grid gap-2 mt-3">
+            {options.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  void chooseStoreMix(visitId, brandId, m.id);
+                  haptic(20);
+                  toast(`Loja salva como ${m.name}.`);
+                }}
+                className="h-14 rounded-xl bg-surface border-2 border-line-strong px-4 flex items-center justify-between font-bold text-[16px] text-brand-900 active:bg-canvas"
+              >
+                {m.name}
+                <span className="text-[12.5px] font-medium text-muted">{m.productIds.length} produtos</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
 
       <SectionTitle>Marcas desta loja</SectionTitle>
       <div className="px-4 space-y-2.5">

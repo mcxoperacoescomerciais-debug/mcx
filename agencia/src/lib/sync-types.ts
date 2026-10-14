@@ -148,6 +148,8 @@ export const visitInput = z.object({
     })
     .nullable(),
   notes: shortText(1000),
+  /** Formato (mix) escolhido pelo promotor para a loja, por marca (ex.: ABC PLUS). */
+  mixChoices: z.array(z.object({ brandId: id, mixId: id })).max(20).optional(),
   /** Só os atendimentos alterados desde a última sincronização. */
   attendances: z.array(attendanceInput).max(60),
 });
@@ -207,6 +209,7 @@ export interface BootstrapStore {
   district: string | null;
   city: string;
   state: string;
+  chainId: string | null;
   /** Marcas que ESTE promotor pode atender nesta loja. */
   brandIds: string[];
 }
@@ -274,6 +277,10 @@ export interface BootstrapPayload {
   products: BootstrapProduct[];
   /** storeId → produtos acompanhados (só lojas com lista própria; demais = todos da marca). */
   storeProducts: Record<string, string[]>;
+  /** Mixes por formato (só redes com mais de um mix da marca: o promotor escolhe na 1ª visita). */
+  mixes: { id: string; chainId: string; brandId: string; name: string; productIds: string[] }[];
+  /** storeId → brandId → mix já definido para a loja. */
+  storeMixes: Record<string, Record<string, string>>;
   schedules: BootstrapSchedule[];
   visits: ServerVisit[];
   /** Último levantamento de estoque por loja/produto (referência para o promotor). */

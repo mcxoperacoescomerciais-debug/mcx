@@ -90,6 +90,8 @@ export interface LocalVisit {
   notes: string;
   /** Marcas previstas (programação) — extraordinária: as escolhidas pelo promotor. */
   plannedBrandIds: string[];
+  /** Formato da loja escolhido nesta visita (marca → mix), ex.: ABC PLUS. */
+  mixChoices?: Record<string, string>;
   attendances: Record<string, LocalAttendance>;
   rev: number;
   syncedRev: number;
@@ -349,6 +351,11 @@ async function mergeServerVisits(serverVisits: ServerVisit[], bootstrap: Bootstr
 
 export function uuid(): string {
   return crypto.randomUUID();
+}
+
+/** Promotor escolhe o formato da loja (ex.: ABC PLUS) na 1ª visita; vai junto na sincronização. */
+export function chooseStoreMix(visitId: string, brandId: string, mixId: string): Promise<void> {
+  return bumpVisit(visitId, (v) => ({ ...v, mixChoices: { ...(v.mixChoices ?? {}), [brandId]: mixId } }));
 }
 
 function bumpVisit(visitId: string, fn: (v: LocalVisit) => LocalVisit): Promise<void> {
@@ -771,6 +778,7 @@ function toVisitInput(v: LocalVisit): VisitInput {
     finishedAt: v.finishedAt,
     geo: v.geo,
     notes: v.notes || null,
+    mixChoices: Object.entries(v.mixChoices ?? {}).map(([brandId, mixId]) => ({ brandId, mixId })),
     attendances: Object.values(v.attendances).filter(attendanceDirty).map(toAttendanceInput),
   };
 }

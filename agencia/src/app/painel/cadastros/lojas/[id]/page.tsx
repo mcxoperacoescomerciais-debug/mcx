@@ -8,7 +8,9 @@ import { getDb, schema as s } from "@/server/db";
 import { PageHeader } from "@/components/ui";
 import { SectionCard } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
-import { storeProductsAction } from "../../actions";
+import { storeMixAction, storeProductsAction } from "../../actions";
+import { storeMixOptions } from "@/server/mixes";
+import { selectClass } from "@/components/ui";
 import { StoreForm } from "../store-form";
 
 export const metadata: Metadata = { title: "Cadastro da loja" };
@@ -34,6 +36,7 @@ export default async function StoreAdminPage({ params }: PageProps<"/painel/cada
       .where(eq(s.userStores.storeId, id)),
   ]);
   const brandIds = storeBrands.map((b) => b.brandId);
+  const mixOptions = await storeMixOptions(scope, id);
   const trackedSet = new Set(tracked.map((t) => t.productId));
 
   return (
@@ -46,6 +49,29 @@ export default async function StoreAdminPage({ params }: PageProps<"/painel/cada
             Promotores autorizados ({promoters.length}): {promoters.map((p) => p.name).join(", ") || "nenhum"} — ajuste em Cadastros › Usuários.
           </p>
         </SectionCard>
+        {mixOptions.length ? (
+          <SectionCard title="Tipo da loja (mix)" subtitle="A rede tem mais de um mix. Sem tipo definido, o promotor escolhe no primeiro atendimento; aqui você confere ou troca." bodyClass="px-5 pb-5 space-y-4">
+            {mixOptions.map((g) => (
+              <ActionForm key={g.brandId} action={storeMixAction} hidden={{ storeId: id, brandId: g.brandId }} submitLabel="Aplicar tipo" variant="secondary" resetOnSuccess={false}>
+                <label className="block">
+                  <span className="text-[13px] font-semibold text-ink-2">
+                    {g.brandName} · {g.chosenId ? `atual: ${g.options.find((o) => o.id === g.chosenId)?.name}` : "ainda não definido (o promotor escolhe)"}
+                  </span>
+                  <select name="mixId" defaultValue={g.chosenId ?? ""} required className={selectClass + " mt-1"}>
+                    <option value="" disabled>
+                      Escolha o tipo
+                    </option>
+                    {g.options.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name} ({o.products} produtos)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </ActionForm>
+            ))}
+          </SectionCard>
+        ) : null}
         <SectionCard title="Produtos acompanhados nesta loja" subtitle="Sem seleção = todos os produtos ativos da marca. Marque só os que a loja trabalha para reduzir o formulário do promotor." bodyClass="px-5 pb-5 space-y-5">
           {brands
             .filter((b) => brandIds.includes(b.id))

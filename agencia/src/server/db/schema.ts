@@ -261,6 +261,38 @@ export const storeProducts = pgTable(
   (t) => [primaryKey({ columns: [t.storeId, t.productId] }), index("store_products_product_idx").on(t.productId)],
 );
 
+/**
+ * Mixes de uma marca por formato de loja numa rede (ex.: ABC VAREJO, PLUS,
+ * CASH). Quando a rede tem mais de um, o promotor escolhe o formato da loja no
+ * primeiro atendimento; a escolha vira a lista da loja (`store_products`).
+ */
+export const productMixes = pgTable(
+  "product_mixes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    chainId: uuid("chain_id").notNull().references(() => chains.id),
+    brandId: uuid("brand_id").notNull().references(() => brands.id),
+    name: text("name").notNull(),
+    productIds: jsonb("product_ids").$type<string[]>().notNull().default([]),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("product_mixes_uq").on(t.chainId, t.brandId, sql`lower(${t.name})`)],
+);
+
+/** Formato (mix) escolhido para a loja em cada marca. */
+export const storeMixes = pgTable(
+  "store_mixes",
+  {
+    storeId: uuid("store_id").notNull().references(() => stores.id),
+    brandId: uuid("brand_id").notNull().references(() => brands.id),
+    mixId: uuid("mix_id").notNull().references(() => productMixes.id),
+    chosenBy: uuid("chosen_by"),
+    chosenAt: ts("chosen_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.brandId] })],
+);
+
 /** Lojas autorizadas para o promotor. */
 export const userStores = pgTable(
   "user_stores",

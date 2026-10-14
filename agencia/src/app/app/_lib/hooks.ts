@@ -9,7 +9,7 @@ export function useLocal(): LocalState {
 }
 
 export function useCatalog() {
-  const { bootstrap } = useLocal();
+  const { bootstrap, visits } = useLocal();
   return useMemo(() => {
     const brands = bootstrap?.brands ?? [];
     const stores = bootstrap?.stores ?? [];
@@ -20,9 +20,31 @@ export function useCatalog() {
       if (!productsByBrand.has(p.brandId)) productsByBrand.set(p.brandId, []);
       productsByBrand.get(p.brandId)!.push(p);
     }
-    /** Produtos acompanhados (lista própria da loja ou todos os ativos da marca). */
+    // Formato da loja (mix) escolhido neste aparelho e ainda não confirmado pelo servidor.
+    const localMix = new Map<string, string>();
+    for (const v of Object.values(visits)) for (const [b, m] of Object.entries(v.mixChoices ?? {})) localMix.set(`${v.storeId}:${b}`, m);
+    const mixes = bootstrap?.mixes ?? [];
+    const serverMix = bootstrap?.storeMixes ?? {};
+    /** Formatos a escolher (ex.: ABC VAREJO/PLUS/CASH) — vazio quando a loja já tem o seu. */
+    const mixOptions = (storeId: string, brandId: string) => {
+      const chainId = stores.find((s) => s.id === storeId)?.chainId;
+      const opts = mixes.filter((m) => m.chainId === chainId && m.brandId === brandId);
+      if (opts.length < 2 || serverMix[storeId]?.[brandId] || localMix.has(`${storeId}:${brandId}`)) return [];
+      return opts;
+    };
+    const mixName = (storeId: string, brandId: string): string | null => {
+      const id = localMix.get(`${storeId}:${brandId}`) ?? serverMix[storeId]?.[brandId];
+      return mixes.find((m) => m.id === id)?.name ?? null;
+    };
+    /** Produtos acompanhados (lista própria da loja, mix escolhido no aparelho, ou todos os ativos da marca). */
     const trackedProducts = (storeId: string, brandId: string): BootstrapProduct[] => {
       const all = productsByBrand.get(brandId) ?? [];
+      const chosen = localMix.get(`${storeId}:${brandId}`);
+      if (chosen && !serverMix[storeId]?.[brandId]) {
+        const ids = mixes.find((m) => m.id === chosen)?.productIds ?? [];
+        const own = all.filter((p) => ids.includes(p.id));
+        if (own.length) return own;
+      }
       const custom = storeProducts[storeId];
       if (!custom) return all;
       const own = all.filter((p) => custom.includes(p.id));
@@ -41,9 +63,11 @@ export function useCatalog() {
       productById: new Map<string, BootstrapProduct>(products.map((p) => [p.id, p])),
       productsByBrand,
       trackedProducts,
+      mixOptions,
+      mixName,
       scheduleById: new Map<string, BootstrapSchedule>((bootstrap?.schedules ?? []).map((s) => [s.id, s])),
     };
-  }, [bootstrap]);
+  }, [bootstrap, visits]);
 }
 
 export function useVisit(visitId: string): LocalVisit | undefined {

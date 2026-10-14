@@ -29,6 +29,7 @@ import { brandChecklist, type AttendanceStatus } from "@/lib/domain";
 import { classify } from "@/lib/validity";
 import { daysBetween } from "@/lib/dates";
 import { notifyCriticalAttendance } from "./whatsapp-alert";
+import { applyPromoterMixChoices, mixesForStores } from "./mixes";
 import { effectiveWorkMode, weekEnd, weekStart } from "@/lib/portfolio";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
@@ -93,6 +94,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
             id: s.stores.id,
             name: s.stores.name,
             chainName: s.chains.name,
+            chainId: s.stores.chainId,
             code: s.stores.code,
             address: s.stores.address,
             district: s.stores.district,
@@ -158,6 +160,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
     }
   }
 
+  const mixInfo = await mixesForStores(db, storeIds, brandIds);
   const portfolio = workMode === "portfolio" ? await portfolioForPromoter(db, promoterId, scope.agencyId, today, access) : null;
 
   return {
@@ -201,6 +204,8 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
       unit: p.unit,
     })),
     storeProducts,
+    mixes: mixInfo.mixes,
+    storeMixes: mixInfo.chosen,
     schedules: scheduleRows.map((r) => ({
       id: r.id,
       date: r.date,
@@ -461,6 +466,9 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
       }
     }
     const origin = input.scheduleId ? "scheduled" : input.origin === "portfolio" ? "portfolio" : "extra";
+
+    // Formato da loja escolhido no aparelho (1ª visita): vale se a loja ainda não tem.
+    await applyPromoterMixChoices(tx, input.storeId, input.mixChoices ?? [], allowedBrands, promoterId, scope.agencyId);
 
     const visitLocked = existing && existing.status !== "in_progress";
     if (!existing) {
