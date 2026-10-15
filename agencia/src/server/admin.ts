@@ -271,8 +271,9 @@ export interface UserInput {
   status: "active" | "inactive";
   allBrands: boolean;
   teamOnly: boolean;
-  brandIds: string[];
-  storeIds: string[];
+  /** undefined = não altera (promotor: as lojas e marcas vêm das atribuições). */
+  brandIds?: string[];
+  storeIds?: string[];
   password: string | null;
 }
 
@@ -333,10 +334,10 @@ export async function saveUser(scope: Scope, i: UserInput): Promise<ActionResult
         await audit(actor(scope), "user", id, "created", { after: values }, tx);
       }
       // Autorizações: marcas (promotor e gestor restrito) e lojas (promotor).
-      const brandIds = i.role === "promoter" || (i.role === "manager" && !i.allBrands) ? [...new Set(i.brandIds)] : [];
-      const storeIds = i.role === "promoter" ? [...new Set(i.storeIds)] : [];
       const prevBrands = (await tx.select().from(s.userBrands).where(eq(s.userBrands.userId, id!))).map((r) => r.brandId).sort();
       const prevStores = (await tx.select().from(s.userStores).where(eq(s.userStores.userId, id!))).map((r) => r.storeId).sort();
+      const brandIds = i.brandIds === undefined ? prevBrands : i.role === "promoter" || (i.role === "manager" && !i.allBrands) ? [...new Set(i.brandIds)] : [];
+      const storeIds = i.storeIds === undefined ? prevStores : i.role === "promoter" ? [...new Set(i.storeIds)] : [];
       if (JSON.stringify(prevBrands) !== JSON.stringify([...brandIds].sort())) {
         await tx.delete(s.userBrands).where(eq(s.userBrands.userId, id!));
         if (brandIds.length) await tx.insert(s.userBrands).values(brandIds.map((b) => ({ userId: id!, brandId: b })));

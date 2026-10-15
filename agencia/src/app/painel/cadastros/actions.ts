@@ -104,8 +104,9 @@ export async function saveUserAction(_: FormState, fd: FormData): Promise<FormSt
     status: str(fd, "status") === "inactive" ? "inactive" : "active",
     allBrands: str(fd, "allBrands") !== "restricted",
     teamOnly: bool(fd, "teamOnly"),
-    brandIds: all(fd, "brandIds"),
-    storeIds: all(fd, "storeIds"),
+    // Promotor: lojas e marcas são definidas nas atribuições (abaixo do cadastro), não aqui.
+    brandIds: role === "promoter" ? undefined : all(fd, "brandIds"),
+    storeIds: role === "promoter" ? undefined : [],
     password: str(fd, "password") || null,
   });
   done(r);
@@ -194,4 +195,12 @@ export async function importAction(_: ImportState, fd: FormData): Promise<Import
     console.error("[import]", err);
     return { error: "Não foi possível ler o arquivo. Use .xlsx ou .csv com cabeçalho na primeira linha." };
   }
+}
+
+/** Cadastro do promotor: marcas, dias e vezes numa loja (substitui as da loja; vazio = tira a loja). */
+export async function saveAssignmentAction(promoterId: string, storeId: string, rows: { brandId: string; perWeek: number; period: "week" | "fortnight" | "month"; weekdays: number[] }[]) {
+  const { saveStoreAssignment } = await import("@/server/portfolio");
+  const r = await saveStoreAssignment(await getScope(), promoterId, storeId, rows);
+  if (r.ok) revalidatePath(`/painel/cadastros/usuarios/${promoterId}`);
+  return r;
 }

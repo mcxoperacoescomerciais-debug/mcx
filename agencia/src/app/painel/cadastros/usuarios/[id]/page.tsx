@@ -10,6 +10,8 @@ import { SectionCard } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
 import { CheckList } from "../../../_components/check-list";
 import { saveUserAction } from "../../actions";
+import { listAssignments } from "@/server/portfolio";
+import { PromoterAssignments } from "./promoter-assignments";
 
 export const metadata: Metadata = { title: "Usuário" };
 
@@ -25,7 +27,7 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
   const [brands, stores, managers, ub, us] = await Promise.all([
     db.select({ id: s.brands.id, name: s.brands.name }).from(s.brands).where(eq(s.brands.agencyId, scope.agencyId)).orderBy(asc(s.brands.name)),
     db
-      .select({ id: s.stores.id, name: s.stores.name, city: s.stores.city, chain: s.chains.name })
+      .select({ id: s.stores.id, name: s.stores.name, code: s.stores.code, city: s.stores.city, chain: s.chains.name })
       .from(s.stores)
       .leftJoin(s.chains, eq(s.chains.id, s.stores.chainId))
       .where(and(eq(s.stores.agencyId, scope.agencyId), eq(s.stores.status, "active")))
@@ -35,6 +37,13 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
     user ? db.select().from(s.userStores).where(eq(s.userStores.userId, user.id)) : Promise.resolve([]),
   ]);
   const brandIds = ub.map((x) => x.brandId);
+  const [storeBrandRows, assignments] = user?.role === "promoter"
+    ? await Promise.all([
+        db.select({ storeId: s.storeBrands.storeId, brandId: s.brands.id, brandName: s.brands.name }).from(s.storeBrands).innerJoin(s.brands, and(eq(s.brands.id, s.storeBrands.brandId), eq(s.brands.status, "active"))).where(eq(s.brands.agencyId, scope.agencyId)),
+        listAssignments(scope, user.id),
+      ])
+    : [[], []];
+  const storeOptions = stores.map((st) => ({ id: st.id, name: st.name, code: st.code, chain: st.chain, city: st.city, brands: storeBrandRows.filter((r) => r.storeId === st.id).map((r) => ({ id: r.brandId, name: r.brandName })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")) }));
 
   return (
     <>
@@ -110,11 +119,20 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
           <label className="inline-flex items-center gap-1.5 text-[13px]">
             <input type="checkbox" name="teamOnly" defaultChecked={user?.teamOnly ?? false} /> Gestor vê só os promotores sob sua responsabilidade
           </label>
-          <CheckList name="brandIds" label="Marcas autorizadas (promotor) / visíveis (gestor restrito)" items={brands} selected={brandIds} />
-          <CheckList name="storeIds" label="Lojas autorizadas (promotor)" items={stores.map((st) => ({ id: st.id, name: st.name, hint: [st.chain, st.city].filter(Boolean).join(" · ") }))} selected={us.map((x) => x.storeId)} />
+          {user?.role !== "promoter" ? <CheckList name="brandIds" label="Marcas visíveis (gestor restrito a marcas, ex.: cliente)" items={brands} selected={brandIds} /> : null}
           <p className="text-[12px] text-muted">Na troca de senha ou desativação, todas as sessões abertas do usuário são encerradas. O usuário troca a senha inicial no primeiro acesso.</p>
         </ActionForm>
       </SectionCard>
+      {user?.role === "promoter" ? (
+        <SectionCard
+          className="mt-6"
+          title="Lojas, marcas, dias e vezes"
+          subtitle="Selecione a loja, escolha as marcas que ele atende nela e, para cada marca, os dias e quantas vezes. É isso que gera a programação, a carteira e as metas dele."
+          bodyClass="px-5 pb-5"
+        >
+          <PromoterAssignments promoterId={user.id} stores={storeOptions} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
+        </SectionCard>
+      ) : null}
     </>
   );
 }
