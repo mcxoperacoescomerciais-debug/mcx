@@ -1,5 +1,5 @@
 # Aviso de armazenamento do MCX Campo no WhatsApp da equipe MCX.
-# Roda todo dia às 8h (Brasília): o sistema manda o relatório às segundas e,
+# Roda todo dia às 8h (Brasília): o sistema manda o relatório do dia e,
 # em qualquer dia, o alerta ao passar de 80% e de 100% (sem repetir mensagens).
 name: Aviso de armazenamento
 

@@ -42,11 +42,11 @@ describe("aviso de armazenamento", () => {
     const [platform] = await db.select().from(s.agencies).where(eq(s.agencies.kind, "platform"));
     await db.update(s.agencies).set({ settings: { alerts: { whatsappPhone: "5531999998888", whatsappApiKey: "123", storageReport: true } } }).where(eq(s.agencies.id, platform.id));
     const first = await alert.runStorageCheck();
-    assert.deepEqual(first.sent, ["weekly_report"]);
-    assert.match(sentTexts.at(-1)!, /armazenamento da semana/);
+    assert.deepEqual(first.sent, ["daily_report"]);
+    assert.match(sentTexts.at(-1)!, /armazenamento de hoje/);
     const again = await alert.runStorageCheck();
     assert.deepEqual(again.sent, [], "não duplica");
     const forced = await alert.runStorageCheck(new Date(), { force: true });
-    assert.deepEqual(forced.sent, ["weekly_report"], "botão 'enviar agora' sempre envia");
+    assert.deepEqual(forced.sent, ["daily_report"], "botão 'enviar agora' sempre envia");
   });
 });

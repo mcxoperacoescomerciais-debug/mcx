@@ -45,7 +45,7 @@ export default async function StoragePage() {
           <p className="text-[12px] text-muted">Limites do plano gratuito do Supabase. Ao migrar as fotos para o Cloudflare R2, o limite das fotos passa a 10 GB.</p>
         </SectionCard>
 
-        <SectionCard title="Aviso no WhatsApp da MCX" subtitle="Toda segunda às 8h: o relatório da semana (uso, crescimento e previsão). Em qualquer dia: alerta ao passar de 80% e de 100%." bodyClass="px-5 pb-5 space-y-4">
+        <SectionCard title="Aviso no WhatsApp da MCX" subtitle="Todo dia às 8h: o relatório (uso, crescimento e previsão). Alerta extra ao passar de 80% e de 100%." bodyClass="px-5 pb-5 space-y-4">
           <ActionForm action={saveStorageAlertAction} hidden={{}} submitLabel="Salvar" resetOnSuccess={false}>
             <label className="block">
               <span className="text-[13px] font-semibold text-ink-2">Número do WhatsApp (com DDD; vários: separe por vírgula)</span>
@@ -60,7 +60,7 @@ export default async function StoragePage() {
             </label>
           </ActionForm>
           <ActionForm action={storageReportNowAction} hidden={{}} submitLabel="Enviar aviso agora" variant="secondary" resetOnSuccess={false}>
-            <p className="text-[13px] text-ink-2">Envia já o relatório (o mesmo da segunda-feira) para conferir se está chegando.</p>
+            <p className="text-[13px] text-ink-2">Envia já o relatório (o mesmo das 8h) para conferir se está chegando.</p>
           </ActionForm>
         </SectionCard>
       </div>

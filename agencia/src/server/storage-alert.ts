@@ -5,7 +5,7 @@
  * arquivos registrados) e do banco de dados, frente aos limites do plano
  * (STORAGE_PHOTOS_LIMIT_GB, padrão 1 GB = Supabase grátis; STORAGE_DB_LIMIT_GB,
  * padrão 0,5 GB). Envia:
- *   - toda segunda-feira: o relatório da semana (com o crescimento e a previsão);
+ *   - todo dia às 8h: o relatório do dia (com o crescimento desde o último e a previsão);
  *   - em qualquer dia: alerta ao passar de 80% e de 100% (no máximo 1 por semana por nível).
  * Quem recebe: o WhatsApp configurado na área da MCX (MCX › Armazenamento), não o de uma agência.
  * O controle do que já foi enviado fica na auditoria (entidade "storage").
@@ -13,7 +13,7 @@
  * chamado de novo sem duplicar mensagens.
  */
 import "server-only";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import { audit } from "./audit";
 import { mergeSettings } from "@/lib/settings";
@@ -58,29 +58,28 @@ export async function measureStorage(): Promise<StorageUsage> {
 const fmt = (b: number) => (b >= GB ? `${String(Number((b / GB).toFixed(2))).replace(".", ",")} GB` : `${Math.round(b / 1024 ** 2)} MB`);
 const pctOf = (u: number, l: number) => Math.round((u / l) * 100);
 
-/** Dia da semana em São Paulo (1 = segunda). */
-function weekdaySp(now: Date): number {
-  const d = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(now);
-  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(d);
+/** Data (aaaa-mm-dd) em São Paulo. */
+function daySp(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
 }
 
 export function storageMessage(u: StorageUsage, prev: { photosBytes: number; at: Date } | null, alertLevel: 0 | 80 | 100): string {
   const pPct = pctOf(u.photosBytes, u.photosLimit);
   const dPct = pctOf(u.dbBytes, u.dbLimit);
   const lines = [
-    alertLevel === 100 ? "🚨 *MCX Campo · limite de armazenamento atingido*" : alertLevel === 80 ? "⚠️ *MCX Campo · armazenamento acima de 80%*" : "📦 *MCX Campo · armazenamento da semana*",
+    alertLevel === 100 ? "🚨 *MCX Campo · limite de armazenamento atingido*" : alertLevel === 80 ? "⚠️ *MCX Campo · armazenamento acima de 80%*" : "📦 *MCX Campo · armazenamento de hoje*",
     "",
     `*Fotos:* ${fmt(u.photosBytes)} de ${fmt(u.photosLimit)} (${pPct}%)${u.photosEstimated ? " · estimado" : ""}`,
     `*Banco de dados:* ${fmt(u.dbBytes)} de ${fmt(u.dbLimit)} (${dPct}%)`,
   ];
   if (prev) {
     const growth = u.photosBytes - prev.photosBytes;
-    const weeks = Math.max(1, (Date.now() - prev.at.getTime()) / (7 * 86_400_000));
-    const perWeek = growth / weeks;
-    lines.push(`*Na semana:* ${growth >= 0 ? "+" : ""}${fmt(Math.abs(growth))} em fotos`);
-    if (perWeek > 0 && u.photosBytes < u.photosLimit) {
-      const left = Math.ceil((u.photosLimit - u.photosBytes) / perWeek);
-      lines.push(`*Previsão:* no ritmo atual, o limite das fotos chega em ~${left} semana(s).`);
+    const days = Math.max(1, (Date.now() - prev.at.getTime()) / 86_400_000);
+    const perDay = growth / days;
+    lines.push(`*Desde o último aviso:* ${growth >= 0 ? "+" : "−"}${fmt(Math.abs(growth))} em fotos`);
+    if (perDay > 0 && u.photosBytes < u.photosLimit) {
+      const left = Math.ceil((u.photosLimit - u.photosBytes) / perDay);
+      lines.push(`*Previsão:* no ritmo atual, o limite das fotos chega em ~${left} dia(s).`);
     }
   }
   if (alertLevel === 100) lines.push("", "Novas fotos podem deixar de ser salvas. Hora de migrar as fotos (Cloudflare R2) ou ampliar o plano.");
@@ -155,7 +154,7 @@ export async function runStorageCheck(now = new Date(), opts: { force?: boolean 
   const [lastWeekly] = await db
     .select()
     .from(s.auditLogs)
-    .where(and(eq(s.auditLogs.agencyId, agencyId), eq(s.auditLogs.entity, "storage"), eq(s.auditLogs.action, "weekly_report")))
+    .where(and(eq(s.auditLogs.agencyId, agencyId), eq(s.auditLogs.entity, "storage"), inArray(s.auditLogs.action, ["daily_report", "weekly_report"])))
     .orderBy(desc(s.auditLogs.createdAt))
     .limit(1);
   const prev = lastWeekly ? { photosBytes: Number((lastWeekly.after as { photosBytes?: number } | null)?.photosBytes ?? 0), at: lastWeekly.createdAt } : null;
@@ -171,9 +170,9 @@ export async function runStorageCheck(now = new Date(), opts: { force?: boolean 
     if (errors.length) console.error("[aviso armazenamento]", errors);
   };
 
-  // Relatório semanal: segunda-feira (ou o primeiro de todos, ou forçado pelo botão de teste).
-  const weeklyDue = opts.force || !lastWeekly || (weekdaySp(now) === 1 && lastWeekly.createdAt < weekAgo);
-  if (weeklyDue) await send(storageMessage(usage, prev, 0), "weekly_report");
+  // Relatório diário: uma vez por dia (ou forçado pelo botão "Enviar aviso agora").
+  const dailyDue = opts.force || !lastWeekly || daySp(lastWeekly.createdAt) !== daySp(now);
+  if (dailyDue) await send(storageMessage(usage, prev, 0), "daily_report");
 
   // Alerta de limite: o maior nível atingido, uma vez por semana por nível.
   const pct = Math.max(usage.photosBytes / usage.photosLimit, usage.dbBytes / usage.dbLimit) * 100;
