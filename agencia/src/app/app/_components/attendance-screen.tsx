@@ -26,7 +26,6 @@ import { missingFor } from "../_lib/derive";
 import { Chip, Notice, Screen, Sheet, TextArea, toast, TopBar } from "./primitives";
 import { PhotoCapture, PhotoThumb } from "./photo-capture";
 import { StockStep } from "./stock-step";
-import { ValidityStep } from "./validity-step";
 import { DamageStep } from "./damage-step";
 import { daysBetween } from "@/lib/dates";
 import { classify, DEFAULT_BANDS, SEVERITY_LABEL } from "@/lib/validity";
@@ -37,15 +36,14 @@ const STEPS = [
   { id: "antes", label: "Antes" },
   { id: "execucao", label: "Execução" },
   { id: "depois", label: "Depois" },
-  { id: "estoque", label: "Estoque e ruptura" },
-  { id: "validade", label: "Validade" },
+  { id: "estoque", label: "Estoque, ruptura e validade" },
   { id: "avaria", label: "Avaria" },
   { id: "ocorrencias", label: "Ocorrências" },
   { id: "revisao", label: "Revisão" },
 ] as const;
 type StepId = (typeof STEPS)[number]["id"];
 /** Etapas sem mínimo obrigatório: não ganham o "check" verde só por estarem vazias. */
-const OPTIONAL_STEPS = new Set<StepId>(["validade", "avaria", "ocorrencias"]);
+const OPTIONAL_STEPS = new Set<StepId>(["avaria", "ocorrencias"]);
 
 export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: string; attendanceId: string; step?: string }) {
   const visit = useVisit(visitId);
@@ -86,7 +84,6 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
     execucao: brand.activities.every((x) => attendance.activitiesDone.includes(x)),
     depois: attendance.photos.filter((p) => p.kind === "after").length >= brand.minAfterPhotos || attendance.exceptionItems.includes("after_photo"),
     estoque: !brand.requireStock || tracked.every((p) => attendance.stock[p.id]) || attendance.exceptionItems.includes("stock"),
-    validade: true,
     avaria: Object.values(attendance.damages ?? {}).every((d) => attendance.photos.some((p) => p.damageId === d.id)),
     ocorrencias: true,
     revisao: status === "completed" || status === "awaiting_sync",
@@ -182,13 +179,12 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
         ) : current === "estoque" ? (
           <StockStep
             visitId={visitId}
+            visitDate={visit.visitDate}
             storeId={visit.storeId}
             attendance={attendance}
             products={tracked}
             editable={editable}
           />
-        ) : current === "validade" ? (
-          <ValidityStep visitId={visitId} visitDate={visit.visitDate} attendance={attendance} brand={brand} products={tracked} editable={editable} />
         ) : current === "avaria" ? (
           <DamageStep visitId={visitId} visitDate={visit.visitDate} attendance={attendance} brand={brand} products={tracked} editable={editable} />
         ) : current === "ocorrencias" ? (
@@ -324,7 +320,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
       </section>
 
       <section className="bg-surface border border-line rounded-2xl p-4">
-        <button type="button" onClick={() => goStep("validade")} className="w-full text-left">
+        <button type="button" onClick={() => goStep("estoque")} className="w-full text-left">
           <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Validades ({validities.length})</h3>
           {validities.length ? (
             <p className="text-[14px]">

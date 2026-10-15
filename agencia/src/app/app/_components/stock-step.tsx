@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { MoreHorizontal, PackagePlus, PackageX, Search, Trash2 } from "lucide-react";
+import { CalendarClock, MoreHorizontal, PackagePlus, PackageX, Search, Trash2 } from "lucide-react";
+import { ProductSheet } from "./product-sheet";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
 import { STOCK_COUNT_UNITS, STOCK_STATE_SHORT, STOCK_STATE_TONE, UNIT_LABEL, type StockState, type Unit } from "@/lib/domain";
@@ -14,17 +15,19 @@ import { Chip, Notice, Sheet, TextArea, toast } from "./primitives";
 
 interface Props {
   visitId: string;
+  visitDate: string;
   storeId: string;
   attendance: LocalAttendance;
   products: BootstrapProduct[];
   editable: boolean;
 }
 
-export function StockStep({ visitId, storeId, attendance, products, editable }: Props) {
+export function StockStep({ visitId, visitDate, storeId, attendance, products, editable }: Props) {
   const { lastStock } = useCatalog();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
   const [editing, setEditing] = useState<BootstrapProduct | null>(null);
+  const [detail, setDetail] = useState<BootstrapProduct | null>(null);
   const [addingUnregistered, setAddingUnregistered] = useState(false);
   const informed = products.filter((p) => attendance.stock[p.id]).length;
 
@@ -39,12 +42,12 @@ export function StockStep({ visitId, storeId, attendance, products, editable }: 
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-[13px] font-bold uppercase tracking-wide text-ink-2">Relatório de estoque</h2>
+        <h2 className="text-[13px] font-bold uppercase tracking-wide text-ink-2">Estoque, ruptura e validade</h2>
         <span className={clsx("text-[12px] font-semibold rounded-full px-2 py-0.5", informed === products.length ? "bg-ok-bg text-ok" : "bg-warn-bg text-warn")}>
           {informed}/{products.length} informados
         </span>
       </div>
-      <p className="text-[13px] text-muted mb-3">Digite a quantidade na linha do produto e escolha unidade ou caixa. Em falta na gôndola: toque em RUPTURA. Campo vazio fica “pendente” — nunca vira zero.</p>
+      <p className="text-[13px] text-muted mb-3">Toque no produto para tratar tudo de uma vez: ruptura, quantidade na área de vendas e as validades (área de vendas e estoque). Para só contar, digite a quantidade na linha.</p>
 
       {products.length > 6 ? (
         <label className="relative block mb-2">
@@ -80,6 +83,7 @@ export function StockStep({ visitId, storeId, attendance, products, editable }: 
             prev={lastStock[storeId]?.[p.id]}
             editable={editable}
             onMore={() => setEditing(p)}
+            onOpen={() => setDetail(p)}
           />
         ))}
         {list.length === 0 ? <p className="px-4 py-6 text-center text-[14px] text-muted">Nenhum produto neste filtro.</p> : null}
@@ -124,6 +128,7 @@ export function StockStep({ visitId, storeId, attendance, products, editable }: 
           }}
         />
       ) : null}
+      {detail ? <ProductSheet visitId={visitId} visitDate={visitDate} attendance={attendance} product={detail} onClose={() => setDetail(null)} /> : null}
       {addingUnregistered ? (
         <UnregisteredSheet
           onClose={() => setAddingUnregistered(false)}
@@ -146,6 +151,7 @@ function StockRow({
   prev,
   editable,
   onMore,
+  onOpen,
 }: {
   visitId: string;
   attendance: LocalAttendance;
@@ -153,7 +159,9 @@ function StockRow({
   prev: { state: string; quantity: number | null; unit?: string; date: string } | undefined;
   editable: boolean;
   onMore: () => void;
+  onOpen: () => void;
 }) {
+  const validities = Object.values(attendance.validities ?? {}).filter((v) => v.productId === p.id).length;
   const entry = attendance.stock[p.id];
   const rupture = Object.values(attendance.ruptures).find((r) => r.productId === p.id);
   const unitOptions: Unit[] = [...STOCK_COUNT_UNITS];
@@ -199,14 +207,17 @@ function StockRow({
   return (
     <div className={clsx("px-4 py-3", rupture && "bg-bad-bg/40")}>
       <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
+        <button type="button" disabled={!editable} onClick={onOpen} className="flex-1 min-w-0 text-left">
           <p className="text-[15px] font-semibold leading-snug">{p.name}</p>
           <p className="text-[12px] text-muted mt-0.5">
             SKU {p.sku}
             {p.package ? ` · ${p.package}` : ""}
             {prev ? ` · última: ${prev.state === "quantity" ? `${prev.quantity} ${prev.unit ?? p.unit}` : (STOCK_STATE_SHORT[prev.state as StockState] ?? "—")} (${fmtDate(prev.date).slice(0, 5)})` : ""}
           </p>
-        </div>
+          <span className={clsx("inline-flex items-center gap-1 mt-1 text-[12px] font-semibold rounded-md px-1.5 py-0.5", validities ? "bg-info-bg text-info" : "text-brand-700")}>
+            <CalendarClock className="size-3.5" /> {validities ? `${validities} validade(s)` : "Validades e mais"} ›
+          </span>
+        </button>
         {editable ? (
           <button type="button" onClick={onMore} aria-label="Mais opções" className="size-9 -mr-2 grid place-items-center rounded-lg text-muted active:bg-canvas">
             <MoreHorizontal className="size-5" />
