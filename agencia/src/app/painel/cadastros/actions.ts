@@ -107,6 +107,7 @@ export async function saveUserAction(_: FormState, fd: FormData): Promise<FormSt
     // Promotor: lojas e marcas são definidas nas atribuições (abaixo do cadastro), não aqui.
     brandIds: role === "promoter" ? undefined : all(fd, "brandIds"),
     storeIds: role === "promoter" ? undefined : [],
+    permissions: fd.get("permissionsSet") ? all(fd, "permissions") : undefined,
     password: str(fd, "password") || null,
   });
   done(r);

@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { effectivePermissions, PANELS, panelForPath } from "@/lib/permissions";
 import { activeAgencyId, getScope, logout, requireRole, STAFF } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { asc, eq, inArray } from "drizzle-orm";
@@ -14,6 +16,14 @@ async function logoutAction() {
 export default async function PanelLayout({ children }: LayoutProps<"/painel">) {
   const user = await requireRole(STAFF);
   const db = await getDb();
+  // Perfis: a equipe MCX vê tudo; gestor e supervisor, só os painéis liberados.
+  const allowed = user.platform ? null : effectivePermissions(user.role, user.permissions);
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const panel = panelForPath(pathname);
+  if (allowed && panel && !allowed.has(panel.key)) {
+    const first = PANELS.find((p) => allowed.has(p.key));
+    redirect(first && first.key !== panel.key ? first.paths[0] : "/painel/senha");
+  }
   // Equipe MCX: pode estar sem agência escolhida (visão MCX) ou dentro de uma.
   const agencyId = await activeAgencyId(user);
   const scope = agencyId ? await getScope() : null;
@@ -34,6 +44,8 @@ export default async function PanelLayout({ children }: LayoutProps<"/painel">) 
       agency={scope ? { id: scope.agencyId, name: scope.agencyName, logoUrl: scope.agencyLogoUrl } : null}
       platform={user.platform ? { agencies, enter: enterAgencyAction, leave: leaveAgencyAction } : null}
       fullScope={scope ? scope.brandIds === null : true}
+      allowed={allowed ? [...allowed] : null}
+      owner={user.platformRole === "owner"}
       scopeNote={user.platform ? "Equipe MCX" : scopeNote}
       logout={logoutAction}
     >

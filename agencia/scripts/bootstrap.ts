@@ -34,7 +34,7 @@ async function main() {
   if (username) {
     const [user] = await db.select().from(s.users).where(sql`lower(${s.users.username}) = ${username}`);
     if (user && (!user.platform || user.agencyId !== platform.id)) {
-      await db.update(s.users).set({ platform: true, role: "admin", agencyId: platform.id, managerId: null, updatedAt: new Date() }).where(eq(s.users.id, user.id));
+      await db.update(s.users).set({ platform: true, platformRole: "owner", role: "admin", agencyId: platform.id, managerId: null, updatedAt: new Date() }).where(eq(s.users.id, user.id));
       await db.delete(s.userBrands).where(eq(s.userBrands.userId, user.id));
       await db.delete(s.userStores).where(eq(s.userStores.userId, user.id));
       console.log(`Usuário ${username} agora é da equipe ${platform.name} (vê todas as agências).`);
@@ -45,6 +45,7 @@ async function main() {
         agencyId: platform.id,
         role: "admin",
         platform: true,
+        platformRole: "owner",
         name: process.env.ADMIN_NAME?.trim() || "Administrador",
         username,
         passwordHash: await bcrypt.hash(password, 12),

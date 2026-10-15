@@ -10,6 +10,21 @@ import type { FormState } from "../actions";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
+/** Equipe MCX (só o Dono). */
+export async function createMasterAction(_: FormState, fd: FormData): Promise<FormState> {
+  const { createMaster } = await import("@/server/platform-team");
+  const r = await createMaster(await requirePlatform(), { name: str(fd, "name"), username: str(fd, "username"), password: String(fd.get("password") ?? "") });
+  if (r.ok) revalidatePath("/painel/mcx/equipe");
+  return r;
+}
+
+export async function setMasterStatusAction(_: FormState, fd: FormData): Promise<FormState> {
+  const { setMasterStatus } = await import("@/server/platform-team");
+  const r = await setMasterStatus(await requirePlatform(), str(fd, "id"), str(fd, "status") === "inactive" ? "inactive" : "active");
+  if (r.ok) revalidatePath("/painel/mcx/equipe");
+  return r;
+}
+
 /** Entra no painel de uma agência (tudo o que for visto/feito é dela). */
 export async function enterAgencyAction(fd: FormData): Promise<void> {
   const user = await requirePlatform();

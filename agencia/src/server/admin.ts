@@ -12,6 +12,7 @@ import { audit, diffFields } from "./audit";
 import { productNameKey } from "@/lib/rules";
 import { PRODUCT_UNITS, type WorkMode, type Employment, type Role, type Unit } from "@/lib/domain";
 import { mergeSettings, type AgencySettings } from "@/lib/settings";
+import { PANEL_KEYS } from "@/lib/permissions";
 import type { ActionResult } from "./manager";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
@@ -274,6 +275,8 @@ export interface UserInput {
   /** undefined = não altera (promotor: as lojas e marcas vêm das atribuições). */
   brandIds?: string[];
   storeIds?: string[];
+  /** Painéis liberados (perfis); undefined = não altera. */
+  permissions?: string[];
   password: string | null;
 }
 
@@ -299,6 +302,7 @@ export async function saveUser(scope: Scope, i: UserInput): Promise<ActionResult
     status: i.status,
     allBrands: i.role === "manager" ? i.allBrands : true,
     teamOnly: i.role === "manager" ? i.teamOnly : false,
+    ...(i.permissions !== undefined ? { permissions: i.role === "promoter" ? null : [...new Set(i.permissions.filter((k) => PANEL_KEYS.includes(k)))] } : {}),
   };
   let id = i.id;
   try {

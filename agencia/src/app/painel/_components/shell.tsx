@@ -1,5 +1,7 @@
 "use client";
 
+import { panelForPath } from "@/lib/permissions";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -14,6 +16,7 @@ import {
   FileText,
   Globe2,
   HardDrive,
+  UserCog,
   History,
   KeyRound,
   LayoutDashboard,
@@ -77,6 +80,7 @@ const MCX_NAV: NavItem[] = [
   { href: "/painel/mcx", label: "Visão geral (todas)", icon: Globe2 },
   { href: "/painel/mcx/agencias", label: "Agências", icon: Building },
   { href: "/painel/mcx/armazenamento", label: "Armazenamento", icon: HardDrive },
+  { href: "/painel/mcx/equipe", label: "Equipe MCX", icon: UserCog },
 ];
 
 function isActive(pathname: string, item: NavItem) {
@@ -105,15 +109,22 @@ function NavItemLink({ item, active, onNavigate, compact }: { item: NavItem; act
   );
 }
 
-function NavLinks({ role, fullScope, mcx, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; onNavigate?: () => void }) {
+function NavLinks({ role, fullScope, mcx, perms, owner, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; perms: string[] | null; owner: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const allowed = (i: NavItem) => (!i.roles || i.roles.includes(role)) && (!i.fullScope || fullScope);
+  const allowed = (i: NavItem) => {
+    if (perms) {
+      // Perfis: só os painéis liberados para a pessoa.
+      const panel = panelForPath(i.href);
+      if (panel && !perms.includes(panel.key)) return false;
+    }
+    return (!i.roles || i.roles.includes(role)) && (!i.fullScope || fullScope);
+  };
   if (mcx) {
     return (
       <nav>
         <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-200/60">MCX</p>
         <ul className="space-y-0.5">
-          {MCX_NAV.map((item) => (
+          {MCX_NAV.filter((i) => owner || i.href !== "/painel/mcx/equipe").map((item) => (
             <NavItemLink key={item.href} item={item} active={isActive(pathname, item)} onNavigate={onNavigate} />
           ))}
         </ul>
@@ -211,6 +222,8 @@ export function PanelShell({
   agency,
   platform,
   fullScope,
+  allowed,
+  owner,
   scopeNote,
   logout,
   children,
@@ -219,6 +232,8 @@ export function PanelShell({
   agency: { id: string; name: string; logoUrl: string | null } | null;
   platform: PlatformProps | null;
   fullScope: boolean;
+  allowed: string[] | null;
+  owner: boolean;
   scopeNote: string | null;
   logout: () => Promise<void>;
   children: ReactNode;
@@ -231,7 +246,7 @@ export function PanelShell({
     <>
       {platform ? <AgencySwitcher platform={platform} current={mcx ? null : agency?.id ?? null} onNavigate={onNavigate} /> : null}
       <div className="flex-1 overflow-y-auto">
-        <NavLinks role={user.role} fullScope={fullScope} mcx={mcx} onNavigate={onNavigate} />
+        <NavLinks role={user.role} fullScope={fullScope} mcx={mcx} perms={allowed} owner={owner} onNavigate={onNavigate} />
       </div>
       <UserBox name={user.name} role={user.role} scopeNote={scopeNote} logout={logout} />
       <McxFooter className="mt-3" />

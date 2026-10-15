@@ -18,7 +18,10 @@ export async function proxy(request: NextRequest) {
   if (!session) return NextResponse.redirect(new URL("/login", request.url));
   if (pathname.startsWith("/painel") && session.role === "promoter") return NextResponse.redirect(new URL("/app", request.url));
   if (pathname.startsWith("/app") && session.role !== "promoter") return NextResponse.redirect(new URL("/painel", request.url));
-  return NextResponse.next();
+  // O layout do painel confere o acesso por página (perfis) a partir da rota.
+  const headers = new Headers(request.headers);
+  headers.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {

@@ -42,7 +42,7 @@ before(async () => {
   admin = await import("../src/server/admin");
   for (const a of await db.select().from(s.agencies)) agency[a.slug] = a.id;
   const u = await userRow("mcx");
-  mcx = { id: u.id, agencyId: u.agencyId, role: u.role, platform: u.platform, name: u.name, username: u.username, mustChangePassword: false };
+  mcx = { id: u.id, agencyId: u.agencyId, role: u.role, platform: u.platform, platformRole: "owner", permissions: null, name: u.name, username: u.username, mustChangePassword: false };
 });
 
 const f = () => ({ date: todayIso(), brand: null, chain: null, store: null, promoter: null, city: null });

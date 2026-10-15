@@ -12,6 +12,7 @@ import { CheckList } from "../../../_components/check-list";
 import { saveUserAction } from "../../actions";
 import { listAssignments } from "@/server/portfolio";
 import { PromoterAssignments } from "./promoter-assignments";
+import { RolePicker } from "./role-picker";
 
 export const metadata: Metadata = { title: "Usuário" };
 
@@ -50,14 +51,8 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
       <PageHeader eyebrow={<Link href="/painel/cadastros/usuarios" className="hover:underline">Usuários</Link>} title={user?.name ?? "Novo usuário"} subtitle={user ? `${ROLE_LABEL[user.role]} · ${user.username}` : "Promotor, gestor ou administrador"} />
       <SectionCard title="Dados e permissões" subtitle="Dados pessoais limitados ao necessário para a operação (LGPD). O app do promotor não exibe dados pessoais de outras pessoas." bodyClass="px-5 pb-5">
         <ActionForm action={saveUserAction} hidden={{ id: user?.id ?? "" }} submitLabel={user ? "Salvar usuário" : "Criar usuário"} resetOnSuccess={false}>
+          <RolePicker initialRole={user?.role ?? "promoter"} initialPermissions={user?.permissions ?? null} isNew={!user} />
           <div className="grid md:grid-cols-3 gap-3">
-            <Labeled label="Perfil">
-              <select name="role" defaultValue={user?.role ?? "promoter"} className={selectClass}>
-                <option value="promoter">Promotor</option>
-                <option value="manager">Gestor da operação</option>
-                <option value="admin">Administrador</option>
-              </select>
-            </Labeled>
             <Labeled label="Nome completo">
               <input name="name" required defaultValue={user?.name} className={inputClass} />
             </Labeled>

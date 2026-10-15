@@ -120,6 +120,10 @@ export const users = pgTable(
     workMode: text("work_mode").$type<WorkMode>(),
     /** Equipe MCX: administra todas as agências (nunca definido pela tela da agência). */
     platform: boolean("platform").notNull().default(false),
+    /** Equipe MCX: "owner" (Dono: cadastra a equipe) ou "master". */
+    platformRole: text("platform_role").$type<"owner" | "master">(),
+    /** Painéis liberados (src/lib/permissions.ts); null = padrão do perfil. */
+    permissions: jsonb("permissions").$type<string[]>(),
     status: text("status").$type<"active" | "inactive">().notNull().default("active"),
     passwordHash: text("password_hash").notNull(),
     mustChangePassword: boolean("must_change_password").notNull().default(false),

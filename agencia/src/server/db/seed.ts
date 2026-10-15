@@ -436,7 +436,7 @@ export async function seedDemoIfEmpty(db: DB): Promise<void> {
  */
 async function seedPlatformDemo(db: DB, hash: string, afId: string): Promise<void> {
   const [platform] = await db.insert(s.agencies).values({ name: "MCX", slug: "mcx-plataforma", kind: "platform" }).returning();
-  await db.insert(s.users).values({ agencyId: platform.id, role: "admin", platform: true, name: "Equipe MCX", username: "mcx", passwordHash: hash });
+  await db.insert(s.users).values({ agencyId: platform.id, role: "admin", platform: true, platformRole: "owner", name: "Equipe MCX", username: "mcx", passwordHash: hash });
   try {
     const { readFileSync } = await import("node:fs");
     const png = readFileSync(`${process.cwd()}/public/af_logo.png`);

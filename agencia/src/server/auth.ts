@@ -32,6 +32,10 @@ export interface SessionUser {
   role: Role;
   /** Equipe MCX: entra em qualquer agência pelo seletor do painel. */
   platform: boolean;
+  /** Equipe MCX: Dono (cadastra a equipe) ou Master. */
+  platformRole: "owner" | "master" | null;
+  /** Painéis liberados; null = padrão do perfil. */
+  permissions: string[] | null;
   name: string;
   username: string;
   mustChangePassword: boolean;
@@ -79,6 +83,8 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
       agencyStatus: s.agencies.status,
       sessionVersion: s.users.sessionVersion,
       mustChangePassword: s.users.mustChangePassword,
+      platformRole: s.users.platformRole,
+      permissions: s.users.permissions,
     })
     .from(s.users)
     .innerJoin(s.agencies, eq(s.agencies.id, s.users.agencyId))
@@ -91,6 +97,8 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     agencyId: user.agencyId,
     role: user.role,
     platform: user.platform,
+    platformRole: user.platform ? (user.platformRole ?? "master") : null,
+    permissions: user.permissions ?? null,
     name: user.name,
     username: user.username,
     mustChangePassword: user.mustChangePassword,

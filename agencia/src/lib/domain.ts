@@ -9,8 +9,8 @@
 export const ROLES = ["admin", "manager", "promoter"] as const;
 export type Role = (typeof ROLES)[number];
 export const ROLE_LABEL: Record<Role, string> = {
-  admin: "Administrador",
-  manager: "Gestor da operação",
+  admin: "Gestor da agência",
+  manager: "Supervisor",
   promoter: "Promotor",
 };
 
