@@ -241,7 +241,7 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
       }
       if (report.errors.length > errorsBefore) continue;
       const [existing] = await db
-        .select({ id: s.users.id, role: s.users.role, managerId: s.users.managerId, agencyId: s.users.agencyId })
+        .select({ id: s.users.id, role: s.users.role, managerId: s.users.managerId, agencyId: s.users.agencyId, employment: s.users.employment, region: s.users.region })
         .from(s.users)
         .where(sql`lower(${s.users.username}) = ${r.usuario.toLowerCase()}`);
       // Usuário é único no sistema todo (todas as agências usam o mesmo login).
@@ -270,14 +270,15 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
         email: r.email || null,
         phone: r.telefone || null,
         internalCode: r.codigo_interno || null,
-        employment: /fixo/i.test(r.vinculo ?? "") ? "fixed" : "freelancer",
-        region: r.regiao || null,
+        employment: r.vinculo ? (/fixo/i.test(r.vinculo) ? "fixed" : "freelancer") : (existing?.employment ?? "freelancer"),
+        region: r.regiao || existing?.region || null,
         managerId: existing?.managerId ?? null,
         status: "active",
         allBrands: true,
         teamOnly: false,
-        brandIds,
-        storeIds,
+        // Promotor que já existe: coluna vazia = mantém o que ele já tem (a reimportação não apaga lojas).
+        brandIds: existing && !r.marcas?.trim() ? undefined : brandIds,
+        storeIds: existing && !r.lojas?.trim() ? undefined : storeIds,
         password: r.senha_inicial || null,
         workMode: /carteira/i.test(r.forma_trabalho ?? "") ? "portfolio" : /roteiro/i.test(r.forma_trabalho ?? "") ? "route" : undefined,
       });
