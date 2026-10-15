@@ -25,12 +25,12 @@ import type {
   VisitInput,
   VisitSyncResult,
 } from "@/lib/sync-types";
-import { brandChecklist, type AttendanceStatus } from "@/lib/domain";
+import { brandChecklist, type AttendanceStatus, type WorkMode } from "@/lib/domain";
 import { classify } from "@/lib/validity";
 import { daysBetween } from "@/lib/dates";
 import { notifyCriticalAttendance } from "./whatsapp-alert";
 import { applyPromoterMixChoices, mixesForStores } from "./mixes";
-import { effectiveWorkMode, weekEnd, weekStart } from "@/lib/portfolio";
+import { effectiveWorkMode, periodWindow, weekEnd, weekStart } from "@/lib/portfolio";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 
@@ -57,6 +57,14 @@ export async function promoterAccess(db: DB | Tx, promoterId: string, agencyId: 
     .where(eq(s.userBrands.userId, promoterId));
   const ok = new Set(authorized.map((a) => a.brandId));
   for (const set of map.values()) for (const b of [...set]) if (!ok.has(b)) set.delete(b);
+  // Atribuições (loja × marca): onde existem, valem só as marcas atribuídas naquela loja.
+  const targets = await db.select({ storeId: s.visitTargets.storeId, brandId: s.visitTargets.brandId }).from(s.visitTargets).where(eq(s.visitTargets.promoterId, promoterId));
+  const byStore = new Map<string, Set<string>>();
+  for (const t of targets) byStore.set(t.storeId, (byStore.get(t.storeId) ?? new Set()).add(t.brandId));
+  for (const [storeId, set] of map) {
+    const assigned = byStore.get(storeId);
+    if (assigned) for (const b of [...set]) if (!assigned.has(b)) set.delete(b);
+  }
   return map;
 }
 
@@ -161,7 +169,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
   }
 
   const mixInfo = await mixesForStores(db, storeIds, brandIds);
-  const portfolio = workMode === "portfolio" ? await portfolioForPromoter(db, promoterId, scope.agencyId, today, access) : null;
+  const portfolio = await portfolioForPromoter(db, promoterId, scope.agencyId, today, access, workMode);
 
   return {
     user: { id: user.id, name: user.name, employment: user.employment, mustChangePassword: user.mustChangePassword },
@@ -226,21 +234,38 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
  * Carteira da semana: metas (só de lojas e marcas autorizadas) e os atendimentos
  * já concluídos na semana em cada loja × marca.
  */
-async function portfolioForPromoter(db: DB, promoterId: string, agencyId: string, today: string, access: Map<string, Set<string>>): Promise<BootstrapPortfolio> {
-  const from = weekStart(today);
-  const to = weekEnd(today);
-  const targets = (await db.select().from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.agencyId, agencyId)))).filter((t) => access.get(t.storeId)?.has(t.brandId));
+async function portfolioForPromoter(db: DB, promoterId: string, agencyId: string, today: string, access: Map<string, Set<string>>, workMode: WorkMode): Promise<BootstrapPortfolio | null> {
+  // Carteira = atribuições sem dia fixo (quem tem dia fixo recebe pela programação). Em modo carteira, todas.
+  const targets = (await db.select().from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.agencyId, agencyId)))).filter(
+    (t) => access.get(t.storeId)?.has(t.brandId) && (workMode === "portfolio" || t.weekdays.length === 0),
+  );
+  if (!targets.length) return null;
+  const windows = targets.map((t) => periodWindow(today, t.period));
+  const from = windows.reduce((m, w) => (w.from < m ? w.from : m), weekStart(today));
+  const to = windows.reduce((m, w) => (w.to > m ? w.to : m), weekEnd(today));
   const done = targets.length
     ? await db
-        .select({ id: s.attendances.id, storeId: s.visits.storeId, brandId: s.attendances.brandId })
+        .select({ id: s.attendances.id, storeId: s.visits.storeId, brandId: s.attendances.brandId, date: sql<string>`${s.visits.visitDate}::text` })
         .from(s.attendances)
         .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
         .where(and(eq(s.visits.promoterId, promoterId), gte(s.visits.visitDate, from), sql`${s.visits.visitDate} <= ${to}`, inArray(s.attendances.status, ["completed", "correction_requested"])))
     : [];
   return {
-    weekStart: from,
-    weekEnd: to,
-    targets: targets.map((t) => ({ storeId: t.storeId, brandId: t.brandId, perWeek: t.perWeek, doneAttendanceIds: done.filter((d) => d.storeId === t.storeId && d.brandId === t.brandId).map((d) => d.id) })),
+    weekStart: weekStart(today),
+    weekEnd: weekEnd(today),
+    targets: targets.map((t) => {
+      const w = periodWindow(today, t.period);
+      return {
+        storeId: t.storeId,
+        brandId: t.brandId,
+        perWeek: t.perWeek,
+        period: t.period,
+        weekdays: t.weekdays,
+        windowFrom: w.from,
+        windowTo: w.to,
+        doneAttendanceIds: done.filter((d) => d.storeId === t.storeId && d.brandId === t.brandId && d.date >= w.from && d.date <= w.to).map((d) => d.id),
+      };
+    }),
   };
 }
 
@@ -458,7 +483,11 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
     } else if (input.origin === "portfolio") {
       // Carteira com meta: o promotor escolhe o dia; não é visita extraordinária.
       const [u] = await tx.select({ workMode: s.users.workMode }).from(s.users).where(eq(s.users.id, promoterId));
-      if (!existing && effectiveWorkMode(u?.workMode, scope.settings.defaultWorkMode) !== "portfolio") throw new SyncError("forbidden", "Você trabalha por roteiro: inicie a visita pela programação do dia.");
+      if (!existing && effectiveWorkMode(u?.workMode, scope.settings.defaultWorkMode) !== "portfolio") {
+        // Promotor de roteiro: vale se a loja tem atribuição sem dia fixo (só a quantidade).
+        const free = await tx.select({ weekdays: s.visitTargets.weekdays }).from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.storeId, input.storeId)));
+        if (!free.some((t) => t.weekdays.length === 0)) throw new SyncError("forbidden", "Você trabalha por roteiro: inicie a visita pela programação do dia.");
+      }
     } else {
       if (!existing && !scope.settings.allowExtraVisits) throw new SyncError("forbidden", "Visitas fora da programação não estão liberadas.");
       if (input.origin !== "extra" || (input.extraReason ?? "").length < 5) {

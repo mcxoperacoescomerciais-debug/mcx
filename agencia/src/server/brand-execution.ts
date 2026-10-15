@@ -10,6 +10,7 @@ import { listVisits } from "./history";
 import { listIssues } from "./issues";
 import { brandFilter, promoterFilter } from "./scope";
 import type { PanelFilters } from "@/lib/filters";
+import { expectedInRange } from "@/lib/portfolio";
 
 export async function brandExecution(scope: Scope, f: PanelFilters) {
   const db = await getDb();
@@ -31,6 +32,24 @@ export async function brandExecution(scope: Scope, f: PanelFilters) {
         f.city ? eq(s.stores.city, f.city) : undefined,
       ),
     );
+  // Previsto = o que foi ATRIBUÍDO (vezes por semana/quinzena/mês × dias do período); sem atribuições, a programação.
+  const targets = await db
+    .select({ perWeek: s.visitTargets.perWeek, period: s.visitTargets.period })
+    .from(s.visitTargets)
+    .innerJoin(s.stores, eq(s.stores.id, s.visitTargets.storeId))
+    .innerJoin(s.users, eq(s.users.id, s.visitTargets.promoterId))
+    .where(
+      and(
+        eq(s.visitTargets.agencyId, scope.agencyId),
+        eq(s.users.status, "active"),
+        f.brand ? eq(s.visitTargets.brandId, f.brand) : brandFilter(scope, s.visitTargets.brandId),
+        promoterFilter(scope, s.visitTargets.promoterId),
+        f.promoter ? eq(s.visitTargets.promoterId, f.promoter) : undefined,
+        f.chain ? eq(s.stores.chainId, f.chain) : undefined,
+        f.city ? eq(s.stores.city, f.city) : undefined,
+      ),
+    );
+  const fromTargets = Math.round(targets.reduce((n, t) => n + expectedInRange(t.perWeek, t.period, f.from, f.to), 0));
   const [visits, issues] = await Promise.all([listVisits(scope, f, 5000), listIssues(scope, f)]);
   const attendances = visits
     .flatMap((v) => v.attendances.map((a) => ({ ...a, date: v.date, storeId: v.storeId, storeName: v.storeName, city: v.city, promoterName: v.promoterName })))
@@ -39,7 +58,8 @@ export async function brandExecution(scope: Scope, f: PanelFilters) {
   const daily = new Map<string, number>();
   for (const a of completed) daily.set(a.date, (daily.get(a.date) ?? 0) + 1);
   return {
-    planned: planned?.n ?? 0,
+    planned: targets.length ? fromTargets : (planned?.n ?? 0),
+    plannedSource: targets.length ? ("assignments" as const) : ("schedule" as const),
     attendances,
     completed: completed.length,
     storesServed: new Set(completed.map((a) => a.storeId)).size,

@@ -25,6 +25,7 @@ export function HomeScreen() {
   const cat = useCatalog();
   const { startScheduled, startPortfolio, sheets } = useStartVisit();
   const portfolio = usePortfolio();
+  // Tela da carteira: quem trabalha por carteira, ou quem só tem atribuições sem dia fixo hoje.
   const startStore = (st: Parameters<typeof portfolioBrands>[0]) => startPortfolio(st.storeId, portfolioBrands(st));
   const user = local.bootstrap!.user;
   const today = cat.today;
@@ -43,6 +44,7 @@ export function HomeScreen() {
     return [...scheduled, ...extras];
   }, [local.visits, cat.schedules, today]);
 
+  const portfolioHome = portfolio && (local.bootstrap!.workMode === "portfolio" || !stops.length) ? portfolio : null;
   const tomorrow = cat.schedules.filter((s) => s.date > today);
   const corrections = Object.values(local.visits).flatMap((v) =>
     Object.values(v.attendances)
@@ -92,10 +94,10 @@ export function HomeScreen() {
           <h1 className="text-[24px] font-semibold mt-2 leading-tight">
             {greeting()}, {user.name.split(" ")[0]}
           </h1>
-          {portfolio ? (
+          {portfolioHome ? (
             <>
               <p className="text-[14px] text-brand-200 mt-0.5">{local.bootstrap!.agency.name} · sua carteira da semana</p>
-              <PortfolioHeader p={portfolio} onStart={startStore} />
+              <PortfolioHeader p={portfolioHome} onStart={startStore} />
             </>
           ) : (
           <>
@@ -187,11 +189,11 @@ export function HomeScreen() {
         </>
       ) : null}
 
-      {portfolio ? (
+      {portfolioHome ? (
         <>
           <SectionTitle>Minha carteira da semana</SectionTitle>
           <div className="px-4">
-            <PortfolioList p={portfolio} onStart={startStore} />
+            <PortfolioList p={portfolioHome} onStart={startStore} />
           </div>
         </>
       ) : (
@@ -222,6 +224,14 @@ export function HomeScreen() {
                 </div>
               ))}
             </div>
+          </div>
+        </>
+      ) : null}
+      {portfolio ? (
+        <>
+          <SectionTitle>Carteira (sem dia fixo)</SectionTitle>
+          <div className="px-4">
+            <PortfolioList p={portfolio} onStart={startStore} />
           </div>
         </>
       ) : null}

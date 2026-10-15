@@ -4,12 +4,14 @@
  */
 import { useMemo } from "react";
 import { todayIso } from "@/lib/dates";
-import { targetStatus, weekEnd, weekStart, weekTotals, type TargetStatus, type WeekTotals } from "@/lib/portfolio";
+import { periodWindow, targetStatus, weekEnd, weekStart, weekTotals, type TargetPeriod, type TargetStatus, type WeekTotals } from "@/lib/portfolio";
 import { useLocal } from "./hooks";
 
 export interface PortfolioBrandRow {
   brandId: string;
+  /** Vezes por período. */
   perWeek: number;
+  period: TargetPeriod;
   done: number;
   status: TargetStatus;
 }
@@ -33,28 +35,31 @@ export interface PortfolioProgress {
 
 export function usePortfolio(): PortfolioProgress | null {
   const local = useLocal();
-  const p = local.bootstrap?.workMode === "portfolio" ? local.bootstrap.portfolio : null;
+  const p = local.bootstrap?.portfolio ?? null;
   return useMemo(() => {
     if (!p) return null;
     const today = todayIso();
     const from = weekStart(today);
     const to = weekEnd(today);
-    // Virou a semana sem sinal: o que o servidor contou era da semana anterior.
-    const serverValid = p.weekStart === from;
-    const localDone = new Map<string, Set<string>>();
+    // Atendimentos finalizados neste celular (com a data), por loja × marca.
+    const localDone = new Map<string, { id: string; date: string }[]>();
     for (const v of Object.values(local.visits)) {
-      if (v.status === "cancelled" || v.visitDate < from || v.visitDate > to) continue;
+      if (v.status === "cancelled") continue;
       for (const a of Object.values(v.attendances)) {
         if (a.status !== "completed" && a.status !== "correction_requested") continue;
         const key = `${v.storeId}:${a.brandId}`;
-        if (!localDone.has(key)) localDone.set(key, new Set());
-        localDone.get(key)!.add(a.id);
+        localDone.set(key, [...(localDone.get(key) ?? []), { id: a.id, date: v.visitDate }]);
       }
     }
     const byStore = new Map<string, PortfolioBrandRow[]>();
     for (const t of p.targets) {
-      const ids = new Set([...(serverValid ? t.doneAttendanceIds : []), ...(localDone.get(`${t.storeId}:${t.brandId}`) ?? [])]);
-      const row = { brandId: t.brandId, perWeek: t.perWeek, done: ids.size, status: targetStatus(t.perWeek, ids.size, today) };
+      const period = t.period ?? "week";
+      const w = periodWindow(today, period);
+      // Virou o período sem sinal: o que o servidor contou era do período anterior.
+      const serverValid = (t.windowFrom ?? p.weekStart) === w.from;
+      const mine = (localDone.get(`${t.storeId}:${t.brandId}`) ?? []).filter((x) => x.date >= w.from && x.date <= w.to).map((x) => x.id);
+      const ids = new Set([...(serverValid ? t.doneAttendanceIds : []), ...mine]);
+      const row = { brandId: t.brandId, perWeek: t.perWeek, period, done: ids.size, status: targetStatus(t.perWeek, ids.size, today, period) };
       byStore.set(t.storeId, [...(byStore.get(t.storeId) ?? []), row]);
     }
     const stores: PortfolioStore[] = [...byStore.entries()].map(([storeId, rows]) => ({

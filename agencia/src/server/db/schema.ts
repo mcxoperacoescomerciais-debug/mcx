@@ -56,6 +56,7 @@ import type {
   VisitStatus,
   WorkMode,
 } from "../../lib/domain";
+import type { TargetPeriod } from "../../lib/portfolio";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 const timestamps = {
@@ -327,14 +328,20 @@ export const visitTargets = pgTable(
     promoterId: uuid("promoter_id").notNull().references(() => users.id),
     storeId: uuid("store_id").notNull().references(() => stores.id),
     brandId: uuid("brand_id").notNull().references(() => brands.id),
+    /** Vezes por período (ver `period`). Nome histórico: "per_week". */
     perWeek: integer("per_week").notNull(),
+    /** week = por semana; fortnight = a cada 2 semanas (quinzenal); month = por mês. */
+    period: text("period").$type<TargetPeriod>().notNull().default("week"),
+    /** Dias fixos (0 = domingo … 6 = sábado). Vazio = sem dia fixo: o promotor escolhe (só a quantidade). */
+    weekdays: jsonb("weekdays").$type<number[]>().notNull().default([]),
     ...timestamps,
     ...authorship,
   },
   (t) => [
     uniqueIndex("visit_targets_uq").on(t.promoterId, t.storeId, t.brandId),
     index("visit_targets_agency_idx").on(t.agencyId),
-    check("visit_targets_per_week_ck", sql`${t.perWeek} between 1 and 14`),
+    check("visit_targets_per_week_ck", sql`${t.perWeek} between 1 and 31`),
+    check("visit_targets_period_ck", sql`${t.period} in ('week','fortnight','month')`),
   ],
 );
 

@@ -37,7 +37,10 @@ export async function allowedBrands(promoterId: string, storeId: string): Promis
     .innerJoin(s.userBrands, and(eq(s.userBrands.brandId, s.storeBrands.brandId), eq(s.userBrands.userId, promoterId)))
     .innerJoin(s.brands, and(eq(s.brands.id, s.storeBrands.brandId), eq(s.brands.status, "active")))
     .where(eq(s.storeBrands.storeId, storeId));
-  return rows.map((r) => r.id);
+  // Atribuições na loja: só as marcas atribuídas ao promotor ali.
+  const assigned = await db.select({ id: s.visitTargets.brandId }).from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.storeId, storeId)));
+  const set = new Set(assigned.map((a) => a.id));
+  return rows.map((r) => r.id).filter((id) => !set.size || set.has(id));
 }
 
 export async function listDaySchedules(scope: Scope, date: string, promoterId: string | null) {
@@ -205,6 +208,11 @@ export async function generateFromRoutes(scope: Scope, from: string, to: string)
       }
     }
   }
+  // Atribuições com dias fixos (cadastro do promotor) também geram programação.
+  const { generateFromAssignments } = await import("./portfolio");
+  const fromAssignments = await generateFromAssignments(scope, from, to);
+  created += fromAssignments.created;
+  skipped += fromAssignments.skipped;
   await audit({ agencyId: scope.agencyId, userId: scope.userId }, "schedule", `${from}..${to}`, "generated_from_routes", { after: { created, skipped } });
   return { ok: true, message: `${created} programação(ões) criada(s); ${skipped} já existia(m) ou não puderam ser criadas.` };
 }

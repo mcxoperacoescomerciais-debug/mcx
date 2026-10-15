@@ -13,7 +13,17 @@ function done(r: Awaited<ReturnType<typeof pf.saveTarget>>): FormState {
 }
 
 export async function saveTargetAction(_: FormState, fd: FormData): Promise<FormState> {
-  return done(await pf.saveTarget(await getScope(), { promoterId: str(fd, "promoterId"), storeId: str(fd, "storeId"), brandId: str(fd, "brandId"), perWeek: Number(str(fd, "perWeek")) }));
+  const period = (["week", "fortnight", "month"] as const).find((p) => p === str(fd, "period")) ?? "week";
+  return done(
+    await pf.saveTarget(await getScope(), {
+      promoterId: str(fd, "promoterId"),
+      storeId: str(fd, "storeId"),
+      brandId: str(fd, "brandId"),
+      perWeek: Number(str(fd, "perWeek")),
+      period,
+      weekdays: fd.getAll("weekdays").map(Number),
+    }),
+  );
 }
 
 export async function deleteTargetAction(_: FormState, fd: FormData): Promise<FormState> {

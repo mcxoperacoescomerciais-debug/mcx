@@ -55,7 +55,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
       <FilterBar fields={["period", "brand", "chain", "city", "promoter"]} options={options} range={{ from: f.from, to: f.to }} />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <KpiCard label="Atendimentos previstos" value={r.planned} sub="Marca prevista na programação" icon={<ClipboardList className="size-4" />} />
+        <KpiCard label="Atendimentos previstos" value={r.planned} sub={r.plannedSource === "assignments" ? "Pelas atribuições (vezes por semana × período)" : "Marca prevista na programação"} icon={<ClipboardList className="size-4" />} />
         <KpiCard
           label="Atendimentos concluídos"
           value={r.completed}

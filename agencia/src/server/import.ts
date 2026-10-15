@@ -12,7 +12,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { saveChain, saveProduct, saveStore, saveUser, validateProduct } from "./admin";
 import { saveTarget } from "./portfolio";
-import { importMix, importRoutes } from "./import-extra";
+import { importMix, importRoutes, parseWeekdays } from "./import-extra";
 import { parseCoords, productNameKey } from "@/lib/rules";
 import type { Unit } from "@/lib/domain";
 
@@ -20,7 +20,7 @@ export const TEMPLATES = {
   produtos: ["marca", "nome", "sku", "ean", "categoria", "variante", "embalagem", "unidade", "status"],
   lojas: ["rede", "nome", "codigo", "cnpj", "endereco", "bairro", "cidade", "uf", "marcas", "latitude", "longitude"],
   promotores: ["nome", "usuario", "senha_inicial", "vinculo", "forma_trabalho", "regiao", "codigo_interno", "email", "telefone", "marcas", "lojas"],
-  metas: ["promotor", "loja", "marca", "visitas_semana"],
+  metas: ["promotor", "loja", "marca", "vezes", "periodo", "dias"],
   mix: ["rede", "mix", "loja", "marca", "sku", "descricao"],
   roteiros: ["promotor", "dias", "loja", "horario", "roteiro"],
 } as const;
@@ -32,7 +32,7 @@ export const TEMPLATE_HELP: Record<ImportKind, string> = {
   promotores: "vinculo: fixo ou freelancer. marcas = identificadores separados por vírgula. lojas = códigos ou nomes das lojas separados por “;”. A senha inicial deve ser trocada no primeiro acesso. forma_trabalho: roteiro ou carteira (vazio = padrão da agência).",
   mix: "Uma linha por produto. Para o mix de um FORMATO da rede (ex.: ABC VAREJO, PLUS, CASH): preencha rede + mix e deixe loja vazia — quando a rede tem mais de um formato, o promotor escolhe o da loja no primeiro atendimento. Para a lista de UMA loja: preencha loja (código ou nome). marca = identificador; sku = código do produto; descricao é só para conferência.",
   roteiros: "Uma linha por loja do roteiro, na ordem da visita. promotor = usuário; dias = SEG/QUI, TER/SEX, SEG/QUA/SEX…; loja = código ou nome; horario (opcional) = 08:00; roteiro (opcional) = nome — sem nome, um roteiro por promotor + dias. Depois gere a programação em Programação › Gerar a partir dos roteiros.",
-  metas: "Carteira com meta semanal. promotor = usuário do promotor. loja = código ou nome da loja. marca = identificador ou nome da marca. visitas_semana = quantas visitas por semana (1 a 14). Se a meta já existir, ela é atualizada. A loja e a marca passam a ser autorizadas ao promotor.",
+  metas: "ATRIBUIÇÕES (planilha padrão): uma linha por promotor × loja × marca. promotor = usuário do promotor; loja = código ou nome da loja; marca = identificador ou nome; vezes = quantas visitas no período; periodo = semana (padrão), quinzena ou mês; dias = dias fixos (ex.: SEG/QUI) — vazio = sem dia fixo, o promotor escolhe e só a quantidade conta. É isso que define a programação, a carteira e as metas. Se a atribuição já existir, é atualizada; a loja e a marca passam a ser autorizadas ao promotor.",
 };
 
 const norm = (v: string) =>
@@ -100,7 +100,7 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
     report.errors.push({ line: 0, message: "Máximo de 5.000 linhas por arquivo." });
     return report;
   }
-  const required: Record<ImportKind, string[]> = { produtos: ["nome", "sku"], lojas: ["nome", "cidade"], promotores: ["nome", "usuario"], metas: ["promotor", "loja", "marca", "visitas_semana"], mix: ["marca", "sku"], roteiros: ["promotor", "dias", "loja"] };
+  const required: Record<ImportKind, string[]> = { produtos: ["nome", "sku"], lojas: ["nome", "cidade"], promotores: ["nome", "usuario"], metas: ["promotor", "loja", "marca"], mix: ["marca", "sku"], roteiros: ["promotor", "dias", "loja"] };
   const missing = required[kind].filter((h) => rows.length && !(h in rows[0]));
   if (missing.length) {
     report.errors.push({ line: 1, message: `Colunas obrigatórias ausentes: ${missing.join(", ")}. Baixe o modelo.` });
@@ -201,9 +201,13 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
       else if (existing) report.updated++;
       else report.created++;
     } else if (kind === "metas") {
-      const perWeek = Number((r.visitas_semana ?? "").replace(",", "."));
-      if (!Number.isInteger(perWeek) || perWeek < 1 || perWeek > 14) {
-        report.errors.push({ line, message: `visitas_semana “${r.visitas_semana ?? ""}” inválido (use 1 a 14).` });
+      const weekdays = parseWeekdays(r.dias ?? "");
+      const rawTimes = (r.vezes ?? r.visitas_semana ?? "").trim();
+      const perWeek = rawTimes ? Number(rawTimes.replace(",", ".")) : weekdays.length;
+      const per = (r.periodo ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+      const period = /quinz/.test(per) ? ("fortnight" as const) : /mes|mens/.test(per) ? ("month" as const) : ("week" as const);
+      if (!Number.isInteger(perWeek) || perWeek < 1 || perWeek > (period === "month" ? 31 : 14)) {
+        report.errors.push({ line, message: `vezes “${rawTimes}” inválido (informe quantas visitas no período, ou os dias).` });
         continue;
       }
       const [promoter] = await db.select({ id: s.users.id, role: s.users.role }).from(s.users).where(and(eq(s.users.agencyId, scope.agencyId), sql`lower(${s.users.username}) = ${(r.promotor ?? "").trim().toLowerCase()}`));
@@ -219,7 +223,7 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
         else report.created++;
         continue;
       }
-      const res = await saveTarget(scope, { promoterId: promoter.id, storeId: stores[0].id, brandId: brandIds[0], perWeek });
+      const res = await saveTarget(scope, { promoterId: promoter.id, storeId: stores[0].id, brandId: brandIds[0], perWeek, period, weekdays });
       if (!res.ok) report.errors.push({ line, message: res.error });
       else if (prev) report.updated++;
       else report.created++;

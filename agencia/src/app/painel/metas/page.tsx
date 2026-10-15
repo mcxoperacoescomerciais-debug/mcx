@@ -9,7 +9,7 @@ import { parseFilters, withParams } from "@/lib/filters";
 import { addDays, fmtDate, todayIso } from "@/lib/dates";
 import { pct } from "@/lib/rules";
 import { WORK_MODE_LABEL } from "@/lib/domain";
-import { TARGET_STATUS_LABEL, TARGET_STATUS_TONE, weekStart } from "@/lib/portfolio";
+import { frequencyLabel, TARGET_STATUS_LABEL, TARGET_STATUS_TONE, weekdaysLabel, weekStart } from "@/lib/portfolio";
 import { EmptyState, PageHeader, Progress, StatusBadge, inputClass, selectClass } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
 import { KpiCard, SectionCard, Table, Td, Th } from "../_components/widgets";
@@ -111,7 +111,12 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
                         <span className="font-semibold">{r.storeName}</span>
                         <span className="block text-[11.5px] text-muted">{r.city}</span>
                       </Td>
-                      <Td>{r.brandName}</Td>
+                      <Td>
+                        {r.brandName}
+                        <span className="block text-[11.5px] text-muted">
+                          {frequencyLabel(r.perWeek, r.period)} · {weekdaysLabel(r.weekdays)}
+                        </span>
+                      </Td>
                       <Td align="right" className="whitespace-nowrap">
                         <span className="tnum font-semibold">
                           {r.done}/{r.perWeek}
@@ -173,12 +178,29 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
                   ))}
                 </select>
                 <label className="block">
-                  <span className="text-[13px] font-semibold text-ink-2">Visitas por semana</span>
-                  <input name="perWeek" type="number" min={1} max={14} defaultValue={1} required className={inputClass + " mt-1"} />
+                  <span className="text-[13px] font-semibold text-ink-2">Quantas visitas</span>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <input name="perWeek" type="number" min={1} max={31} defaultValue={1} required className={inputClass} />
+                    <select name="period" defaultValue="week" className={selectClass}>
+                      <option value="week">por semana</option>
+                      <option value="fortnight">por quinzena</option>
+                      <option value="month">por mês</option>
+                    </select>
+                  </div>
                 </label>
+                <fieldset>
+                  <legend className="text-[13px] font-semibold text-ink-2">Dias fixos (opcional — sem marcar = só a quantidade)</legend>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d, i) => (
+                      <label key={d} className="inline-flex items-center gap-1 text-[13px] border border-line-strong rounded-lg px-2 h-8">
+                        <input type="checkbox" name="weekdays" value={i + 1} /> {d}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               </ActionForm>
               <p className="text-[12px] text-muted mt-3">
-                O promotor passa a ver a meta no app na próxima vez que abrir com internet. Quem estiver em “{WORK_MODE_LABEL.route}” continua vendo o roteiro: mude a forma de trabalho no cadastro do usuário ou em Configurações.
+                Com dias fixos, a loja entra na programação desses dias (Programação › Gerar). Sem dias, entra na carteira do promotor: ele escolhe o dia e cumpre a quantidade. O promotor vê no app na próxima vez que abrir com internet.
               </p>
             </SectionCard>
             <SectionCard title="Muitas metas de uma vez" bodyClass="px-5 pb-5">
@@ -187,7 +209,7 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
                 <Link href="/painel/cadastros/importar" className="font-semibold text-brand-700 hover:underline">
                   Importar planilha
                 </Link>{" "}
-                com o tipo <strong>Metas da carteira</strong>: colunas <code>promotor</code> (usuário), <code>loja</code> (código ou nome), <code>marca</code> (código ou nome) e <code>visitas_semana</code>.
+                com o tipo <strong>Atribuições</strong> (planilha padrão): colunas <code>promotor</code> (usuário), <code>loja</code> (código ou nome), <code>marca</code>, <code>vezes</code>, <code>periodo</code> (semana, quinzena ou mês) e <code>dias</code> (ex.: SEG/QUI; vazio = só a quantidade).
               </p>
             </SectionCard>
           </div>

@@ -13,7 +13,9 @@ import type { DB } from "../src/server/db";
 import type { Scope } from "../src/server/auth";
 import type { AttendanceInput, VisitInput } from "../src/lib/sync-types";
 import { todayIso } from "../src/lib/dates";
-import { expectedByToday, targetStatus, weekEnd, weekStart, weekTotals } from "../src/lib/portfolio";
+import { expectedByToday, periodWindow, targetStatus, weekEnd, weekStart, weekTotals } from "../src/lib/portfolio";
+import { addDays as addDaysIso, daysBetween as daysBetweenIso } from "../src/lib/dates";
+const weekStartIso = weekStart;
 
 let db: DB;
 let auth: typeof import("../src/server/auth");
@@ -138,5 +140,41 @@ describe("carteira com meta semanal", () => {
     const af = await scopeOf("admin");
     const cross = await portfolio.saveTarget(af, { promoterId: carla.id, storeId: target.storeId, brandId: target.brandId, perWeek: 2 });
     assert.equal(cross.ok, false);
+  });
+
+  test("quinzena e mês: janela e ritmo", () => {
+    const w = periodWindow("2026-10-14", "fortnight");
+    assert.equal(daysBetweenIso(w.from, w.to), 13);
+    assert.ok(w.from <= "2026-10-14" && w.to >= "2026-10-14");
+    assert.deepEqual(periodWindow("2026-10-14", "month"), { from: "2026-10-01", to: "2026-10-31" });
+    assert.equal(expectedByToday(2, "2026-10-31", "month"), 2);
+  });
+
+  test("atribuição por loja: dias fixos geram programação; sem dia vai para a carteira; acesso só às marcas atribuídas", async () => {
+    const admin = await scopeOf("admin");
+    const [lucas] = await db.select().from(s.users).where(eq(s.users.username, "lucas"));
+    const boot0 = await promoter.buildBootstrap(await scopeOf("lucas"));
+    const store = boot0.stores.find((x) => x.brandIds.length >= 2)!;
+    const [b1, b2] = store.brandIds;
+    // Seg/Qui para a 1ª marca; a 2ª só quantidade (2x por semana).
+    const r = await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [
+      { brandId: b1, perWeek: 2, weekdays: [1, 4] },
+      { brandId: b2, perWeek: 2, weekdays: [] },
+    ]);
+    assert.ok(r.ok, JSON.stringify(r));
+    const list = await portfolio.listAssignments(admin, lucas.id);
+    assert.deepEqual(list.find((x) => x.storeId === store.id)!.brands.map((b) => b.weekdays.length).sort(), [0, 2]);
+    // Programação: próxima segunda.
+    const monday = addDaysIso(weekStartIso(todayIso()), 7);
+    const gen = await portfolio.generateFromAssignments(admin, monday, monday);
+    assert.ok(gen.created + gen.skipped >= 1);
+    const sch = await db.select().from(s.schedules).where(eq(s.schedules.date, monday));
+    const mine = sch.find((x) => x.promoterId === lucas.id && x.storeId === store.id)!;
+    const sb = await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, mine.id));
+    assert.deepEqual(sb.map((x) => x.brandId), [b1], "na segunda só a marca com dia fixo");
+    // App: a marca sem dia fixo aparece na carteira; o acesso na loja fica restrito às atribuídas.
+    const boot = await promoter.buildBootstrap(await scopeOf("lucas"));
+    assert.deepEqual(boot.portfolio!.targets.filter((t) => t.storeId === store.id).map((t) => t.brandId), [b2]);
+    assert.deepEqual([...boot.stores.find((x) => x.id === store.id)!.brandIds].sort(), [b1, b2].sort());
   });
 });

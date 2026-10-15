@@ -254,7 +254,18 @@ export interface ServerVisit extends Omit<VisitInput, "attendances"> {
 export interface BootstrapPortfolio {
   weekStart: string;
   weekEnd: string;
-  targets: { storeId: string; brandId: string; perWeek: number; doneAttendanceIds: string[] }[];
+  targets: {
+    storeId: string;
+    brandId: string;
+    /** Vezes por período. */
+    perWeek: number;
+    period: "week" | "fortnight" | "month";
+    weekdays: number[];
+    /** Período vigente (no dia do download) — o app recalcula se o período virar sem sinal. */
+    windowFrom: string;
+    windowTo: string;
+    doneAttendanceIds: string[];
+  }[];
 }
 
 export interface BootstrapPayload {

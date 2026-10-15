@@ -9,6 +9,7 @@ import { CheckCircle2, MapPin, PartyPopper, PlayCircle, RotateCcw, Target, Troph
 import clsx from "clsx";
 import { Button, Progress } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
+import { PERIOD_SHORT } from "@/lib/portfolio";
 import { go, useCatalog, useLocal } from "../_lib/hooks";
 import type { PortfolioProgress, PortfolioStore } from "../_lib/portfolio-progress";
 
@@ -139,6 +140,7 @@ export function PortfolioList({ p, onStart }: { p: PortfolioProgress; onStart: (
                     {cat.brandById.get(r.brandId)?.name ?? "Marca"}
                     <span className="tnum">
                       {Math.min(r.done, r.perWeek)}/{r.perWeek}
+                      {r.period !== "week" ? ` ${PERIOD_SHORT[r.period]}` : ""}
                     </span>
                   </span>
                 ))}

@@ -20,7 +20,7 @@ export function ImportForm() {
               <option value="produtos">Produtos</option>
               <option value="lojas">Lojas (com redes e marcas autorizadas)</option>
               <option value="promotores">Promotores (com marcas e lojas)</option>
-              <option value="metas">Metas da carteira (visitas por semana)</option>
+              <option value="metas">Atribuições: promotor × loja × marca × dias × vezes (planilha padrão)</option>
               <option value="mix">Mix de produtos (por formato da rede ou por loja)</option>
               <option value="roteiros">Roteiros (promotor, dias e lojas)</option>
             </select>
@@ -47,7 +47,7 @@ export function ImportForm() {
             <Download className="size-4" /> Modelo de promotores
           </a>
           <a href="/api/templates/metas" className={buttonClass("ghost")}>
-            <Download className="size-4" /> Modelo de metas
+            <Download className="size-4" /> Modelo de atribuições
           </a>
           <a href="/api/templates/mix" className={buttonClass("ghost")}>
             <Download className="size-4" /> Modelo de mix
