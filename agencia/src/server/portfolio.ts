@@ -3,7 +3,7 @@
  * por semana) e o realizado da semana, com o ritmo esperado até hoje.
  */
 import "server-only";
-import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { audit } from "./audit";
@@ -164,7 +164,7 @@ async function checkPromoterStore(scope: Scope, promoterId: string, storeId: str
 }
 
 /** Cria ou altera uma atribuição (uma por promotor × loja × marca). */
-export async function saveTarget(scope: Scope, i: TargetInput): Promise<ActionResult> {
+export async function saveTarget(scope: Scope, i: TargetInput, opts: { sync?: boolean } = {}): Promise<ActionResult> {
   if (!canManage(scope)) return fail("Sem permissão.");
   const bad = validTimes(i) ?? (await checkPromoterStore(scope, i.promoterId, i.storeId));
   if (bad) return fail(bad);
@@ -186,6 +186,8 @@ export async function saveTarget(scope: Scope, i: TargetInput): Promise<ActionRe
       .returning({ id: s.visitTargets.id });
     await audit({ agencyId: scope.agencyId, userId: scope.userId }, "target", row.id, "saved", { after: { ...i, period, weekdays } }, tx);
   });
+  // Dias fixos viram programação na hora (o promotor vê no Hoje sem ninguém gerar).
+  if (opts.sync !== false) await syncPromoterSchedules(scope.agencyId, scope.userId, [i.promoterId], i.storeId);
   return { ok: true, message: "Atribuição salva." };
 }
 
@@ -225,6 +227,7 @@ export async function saveStoreAssignment(scope: Scope, promoterId: string, stor
       tx,
     );
   });
+  await syncPromoterSchedules(scope.agencyId, scope.userId, [promoterId], storeId);
   return { ok: true, message: rows.length ? "Loja salva na carteira do promotor." : "Loja retirada do promotor." };
 }
 
@@ -268,37 +271,163 @@ export async function listAssignments(scope: Scope, promoterId: string): Promise
   return [...map.values()];
 }
 
+/** Motivo gravado quando a programação some porque o dia saiu da atribuição (volta sozinha se o dia voltar). */
+export const AUTO_CANCEL_REASON = "Atribuição alterada: dia retirado.";
+/** Quantos dias à frente a programação das atribuições é mantida. */
+export const ASSIGNMENT_HORIZON_DAYS = 13;
+
+export interface ScheduleSyncInput {
+  agencyId: string;
+  actorId: string | null;
+  from: string;
+  to: string;
+  /** null = todos os promotores da agência. */
+  promoterIds?: string[] | null;
+  storeId?: string;
+  /** Também retira (do dia de hoje em diante) o que a atribuição deixou de prever. */
+  prune?: boolean;
+}
+
 /**
  * Programação a partir das atribuições com dias fixos: em cada dia, uma loja por
- * promotor com as marcas daquele dia. Não duplica o que já existe.
+ * promotor com as marcas daquele dia. Cria o que falta, acerta as marcas do que
+ * foi gerado pela atribuição e (com prune) retira o que deixou de ser previsto.
+ * Nunca mexe em loja já iniciada, nem no que o gestor programou ou cancelou à mão.
  */
-export async function generateFromAssignments(scope: Scope, from: string, to: string): Promise<{ created: number; skipped: number }> {
+export async function syncAssignmentSchedules(o: ScheduleSyncInput): Promise<{ created: number; updated: number; cancelled: number }> {
+  const result = { created: 0, updated: 0, cancelled: 0 };
+  if (o.from > o.to || (o.promoterIds && !o.promoterIds.length)) return result;
   const db = await getDb();
-  const { createSchedule } = await import("./schedules");
+  const today = todayIso();
   const targets = await db
     .select({ promoterId: s.visitTargets.promoterId, storeId: s.visitTargets.storeId, brandId: s.visitTargets.brandId, weekdays: s.visitTargets.weekdays })
     .from(s.visitTargets)
-    .innerJoin(s.users, eq(s.users.id, s.visitTargets.promoterId))
-    .where(and(eq(s.visitTargets.agencyId, scope.agencyId), eq(s.users.status, "active"), promoterFilter(scope, s.visitTargets.promoterId)));
-  let created = 0;
-  let skipped = 0;
-  for (let d = from; d <= to; d = addDays(d, 1)) {
+    .innerJoin(s.users, and(eq(s.users.id, s.visitTargets.promoterId), eq(s.users.status, "active")))
+    .innerJoin(s.stores, and(eq(s.stores.id, s.visitTargets.storeId), eq(s.stores.status, "active")))
+    .innerJoin(s.brands, and(eq(s.brands.id, s.visitTargets.brandId), eq(s.brands.status, "active")))
+    .where(
+      and(
+        eq(s.visitTargets.agencyId, o.agencyId),
+        o.promoterIds ? inArray(s.visitTargets.promoterId, o.promoterIds) : undefined,
+        o.storeId ? eq(s.visitTargets.storeId, o.storeId) : undefined,
+      ),
+    );
+
+  const desired = new Map<string, { promoterId: string; storeId: string; date: string; brands: Set<string> }>();
+  for (let d = o.from; d <= o.to; d = addDays(d, 1)) {
     const wd = weekdayOf(d);
-    const byStop = new Map<string, { promoterId: string; storeId: string; brands: string[] }>();
     for (const t of targets) {
       if (!t.weekdays.includes(wd)) continue;
-      const k = `${t.promoterId}:${t.storeId}`;
-      const g = byStop.get(k) ?? { promoterId: t.promoterId, storeId: t.storeId, brands: [] };
-      g.brands.push(t.brandId);
-      byStop.set(k, g);
-    }
-    for (const g of byStop.values()) {
-      const r = await createSchedule(scope, { promoterId: g.promoterId, storeId: g.storeId, date: d, plannedStart: null, brandIds: g.brands, notes: null });
-      if (r.ok) created++;
-      else skipped++;
+      const k = `${t.promoterId}|${t.storeId}|${d}`;
+      const g = desired.get(k) ?? { promoterId: t.promoterId, storeId: t.storeId, date: d, brands: new Set<string>() };
+      g.brands.add(t.brandId);
+      desired.set(k, g);
     }
   }
-  return { created, skipped };
+
+  const existing = await db
+    .select({ id: s.schedules.id, promoterId: s.schedules.promoterId, storeId: s.schedules.storeId, date: s.schedules.date, status: s.schedules.status, origin: s.schedules.origin, cancelReason: s.schedules.cancelReason })
+    .from(s.schedules)
+    .where(
+      and(
+        eq(s.schedules.agencyId, o.agencyId),
+        gte(s.schedules.date, o.from),
+        lte(s.schedules.date, o.to),
+        o.promoterIds ? inArray(s.schedules.promoterId, o.promoterIds) : undefined,
+        o.storeId ? eq(s.schedules.storeId, o.storeId) : undefined,
+      ),
+    );
+  if (!desired.size && !(o.prune && existing.some((e) => e.origin === "assignment" && e.status === "active"))) return result;
+  const ids = existing.map((e) => e.id);
+  const [brandRows, startedRows, seqRows] = await Promise.all([
+    ids.length ? db.select().from(s.scheduleBrands).where(inArray(s.scheduleBrands.scheduleId, ids)) : [],
+    ids.length ? db.select({ scheduleId: s.visits.scheduleId }).from(s.visits).where(and(inArray(s.visits.scheduleId, ids), ne(s.visits.status, "cancelled"))) : [],
+    // Próxima posição do dia: depois de tudo o que o promotor já tem (inclusive outras lojas).
+    db
+      .select({ promoterId: s.schedules.promoterId, date: s.schedules.date, next: sql<number>`coalesce(max(${s.schedules.seq}), -1)::int + 1` })
+      .from(s.schedules)
+      .where(and(eq(s.schedules.agencyId, o.agencyId), gte(s.schedules.date, o.from), lte(s.schedules.date, o.to), o.promoterIds ? inArray(s.schedules.promoterId, o.promoterIds) : undefined))
+      .groupBy(s.schedules.promoterId, s.schedules.date),
+  ]);
+  const brandsOf = new Map<string, Set<string>>();
+  for (const b of brandRows) brandsOf.set(b.scheduleId, (brandsOf.get(b.scheduleId) ?? new Set<string>()).add(b.brandId));
+  const started = new Set(startedRows.map((r) => r.scheduleId));
+  const nextSeq = new Map(seqRows.map((r) => [`${r.promoterId}|${r.date}`, Number(r.next)]));
+  const byKey = new Map<string, typeof existing>();
+  for (const e of existing) {
+    const k = `${e.promoterId}|${e.storeId}|${e.date}`;
+    byKey.set(k, [...(byKey.get(k) ?? []), e]);
+  }
+  const same = (a: Set<string> | undefined, b: Set<string>) => !!a && a.size === b.size && [...b].every((x) => a.has(x));
+
+  await db.transaction(async (tx) => {
+    const setBrands = async (scheduleId: string, brands: Set<string>) => {
+      await tx.delete(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, scheduleId));
+      await tx.insert(s.scheduleBrands).values([...brands].map((brandId) => ({ scheduleId, brandId })));
+    };
+    for (const [k, g] of desired) {
+      const rows = byKey.get(k) ?? [];
+      const active = rows.find((r) => r.status === "active");
+      if (active) {
+        if (active.origin === "assignment" && !started.has(active.id) && !same(brandsOf.get(active.id), g.brands)) {
+          await setBrands(active.id, g.brands);
+          await tx.update(s.schedules).set({ updatedAt: new Date(), updatedBy: o.actorId }).where(eq(s.schedules.id, active.id));
+          result.updated++;
+        }
+        continue;
+      }
+      // Cancelada à mão pelo gestor: respeita. Cancelada pela própria atribuição: volta.
+      const auto = rows.find((r) => r.origin === "assignment" && r.cancelReason === AUTO_CANCEL_REASON);
+      if (rows.length && !auto) continue;
+      if (auto) {
+        await tx.update(s.schedules).set({ status: "active", cancelReason: null, updatedAt: new Date(), updatedBy: o.actorId }).where(eq(s.schedules.id, auto.id));
+        await setBrands(auto.id, g.brands);
+        result.created++;
+        continue;
+      }
+      const sk = `${g.promoterId}|${g.date}`;
+      const seq = nextSeq.get(sk) ?? 0;
+      nextSeq.set(sk, seq + 1);
+      const [row] = await tx
+        .insert(s.schedules)
+        .values({ agencyId: o.agencyId, promoterId: g.promoterId, storeId: g.storeId, date: g.date, seq, origin: "assignment", createdBy: o.actorId, updatedBy: o.actorId })
+        .returning({ id: s.schedules.id });
+      await tx.insert(s.scheduleBrands).values([...g.brands].map((brandId) => ({ scheduleId: row.id, brandId })));
+      result.created++;
+    }
+    if (o.prune) {
+      for (const e of existing) {
+        const k = `${e.promoterId}|${e.storeId}|${e.date}`;
+        if (e.status !== "active" || e.origin !== "assignment" || e.date < today || started.has(e.id) || desired.has(k)) continue;
+        await tx.update(s.schedules).set({ status: "cancelled", cancelReason: AUTO_CANCEL_REASON, updatedAt: new Date(), updatedBy: o.actorId }).where(eq(s.schedules.id, e.id));
+        result.cancelled++;
+      }
+    }
+  });
+  return result;
+}
+
+/**
+ * Depois de mudar atribuições: acerta a programação do promotor de hoje até o
+ * horizonte (ou até o último dia já programado, se for mais longe).
+ */
+export async function syncPromoterSchedules(agencyId: string, actorId: string | null, promoterIds: string[], storeId?: string) {
+  if (!promoterIds.length) return { created: 0, updated: 0, cancelled: 0 };
+  const db = await getDb();
+  const today = todayIso();
+  const [last] = await db
+    .select({ max: sql<string | null>`max(${s.schedules.date})::text` })
+    .from(s.schedules)
+    .where(and(eq(s.schedules.agencyId, agencyId), inArray(s.schedules.promoterId, promoterIds), eq(s.schedules.status, "active")));
+  const horizon = addDays(today, ASSIGNMENT_HORIZON_DAYS);
+  const to = last?.max && last.max > horizon ? last.max : horizon;
+  return syncAssignmentSchedules({ agencyId, actorId, from: today, to, promoterIds, storeId, prune: true });
+}
+
+/** Botão "Gerar programação": também acerta o que a atribuição deixou de prever. */
+export async function generateFromAssignments(scope: Scope, from: string, to: string): Promise<{ created: number; skipped: number }> {
+  const r = await syncAssignmentSchedules({ agencyId: scope.agencyId, actorId: scope.userId, from, to, promoterIds: scope.promoterIds, prune: true });
+  return { created: r.created, skipped: 0 };
 }
 
 export async function deleteTarget(scope: Scope, id: string): Promise<ActionResult> {
@@ -307,6 +436,7 @@ export async function deleteTarget(scope: Scope, id: string): Promise<ActionResu
   const [row] = await db.select().from(s.visitTargets).where(and(eq(s.visitTargets.id, id), eq(s.visitTargets.agencyId, scope.agencyId)));
   if (!row) return fail("Meta não encontrada.");
   await db.delete(s.visitTargets).where(eq(s.visitTargets.id, id));
+  await syncPromoterSchedules(scope.agencyId, scope.userId, [row.promoterId], row.storeId);
   await audit({ agencyId: scope.agencyId, userId: scope.userId }, "target", id, "deleted", { before: { promoterId: row.promoterId, storeId: row.storeId, brandId: row.brandId, perWeek: row.perWeek } });
   return { ok: true, message: "Meta removida." };
 }

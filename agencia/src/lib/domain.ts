@@ -109,6 +109,22 @@ export const PHOTO_KIND_LABEL: Record<PhotoKind, string> = {
   damage: "Avaria",
 };
 
+/** Onde o produto está exposto na foto do antes/depois (o promotor escolhe ao fotografar). */
+export const PHOTO_PLACEMENTS = ["extra_point", "natural_point", "island", "cross"] as const;
+export type PhotoPlacement = (typeof PHOTO_PLACEMENTS)[number];
+export const PHOTO_PLACEMENT_LABEL: Record<PhotoPlacement, string> = {
+  extra_point: "Ponto extra",
+  natural_point: "Área de vendas – ponto natural",
+  island: "Ilha",
+  cross: "Cross merchandising",
+};
+
+/** "Antes · Ponto extra" — sufixo do local quando a foto tem. */
+export function withPlacement(text: string, placement: string | null | undefined): string {
+  const label = placement ? PHOTO_PLACEMENT_LABEL[placement as PhotoPlacement] : undefined;
+  return label ? `${text} · ${label}` : text;
+}
+
 export const PHOTO_SOURCES = ["camera", "gallery"] as const;
 export type PhotoSource = (typeof PHOTO_SOURCES)[number];
 

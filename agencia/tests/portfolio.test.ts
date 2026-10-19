@@ -166,8 +166,8 @@ describe("carteira com meta semanal", () => {
     assert.deepEqual(list.find((x) => x.storeId === store.id)!.brands.map((b) => b.weekdays.length).sort(), [0, 2]);
     // Programação: próxima segunda.
     const monday = addDaysIso(weekStartIso(todayIso()), 7);
-    const gen = await portfolio.generateFromAssignments(admin, monday, monday);
-    assert.ok(gen.created + gen.skipped >= 1);
+    // Salvar a atribuição já programa os próximos dias (gerar de novo não duplica).
+    await portfolio.generateFromAssignments(admin, monday, monday);
     const sch = await db.select().from(s.schedules).where(eq(s.schedules.date, monday));
     const mine = sch.find((x) => x.promoterId === lucas.id && x.storeId === store.id)!;
     const sb = await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, mine.id));
@@ -176,5 +176,37 @@ describe("carteira com meta semanal", () => {
     const boot = await promoter.buildBootstrap(await scopeOf("lucas"));
     assert.deepEqual(boot.portfolio!.targets.filter((t) => t.storeId === store.id).map((t) => t.brandId), [b2]);
     assert.deepEqual([...boot.stores.find((x) => x.id === store.id)!.brandIds].sort(), [b1, b2].sort());
+  });
+
+  test("dia fixo de hoje aparece no Hoje do promotor sem ninguém gerar; tirar o dia retira a loja", async () => {
+    const admin = await scopeOf("admin");
+    const [lucas] = await db.select().from(s.users).where(eq(s.users.username, "lucas"));
+    const today = todayIso();
+    const wd = new Date(`${today}T12:00:00Z`).getUTCDay();
+    // Uma loja da agência que o promotor não tem programada hoje.
+    const busy = new Set((await db.select().from(s.schedules).where(eq(s.schedules.promoterId, lucas.id))).filter((x) => x.date === today).map((x) => x.storeId));
+    const sbs = await db.select({ storeId: s.storeBrands.storeId, brandId: s.storeBrands.brandId, agencyId: s.stores.agencyId }).from(s.storeBrands).innerJoin(s.stores, eq(s.stores.id, s.storeBrands.storeId));
+    const pick = sbs.find((x) => x.agencyId === lucas.agencyId && !busy.has(x.storeId))!;
+    assert.ok(pick, "loja livre");
+    const store = { id: pick.storeId };
+    const brand = pick.brandId;
+    const r = await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: brand, perWeek: 1, weekdays: [wd] }]);
+    assert.ok(r.ok, JSON.stringify(r));
+    const boot = await promoter.buildBootstrap(await scopeOf("lucas"));
+    const sch = boot.schedules.find((x) => x.date === today && x.storeId === store.id);
+    assert.ok(sch, "a loja de hoje já está no Hoje");
+    assert.deepEqual(sch!.brandIds, [brand]);
+    // Gerar de novo não duplica.
+    await portfolio.generateFromAssignments(admin, today, today);
+    const again = await db.select().from(s.schedules).where(eq(s.schedules.date, today));
+    assert.equal(again.filter((x) => x.promoterId === lucas.id && x.storeId === store.id && x.status === "active").length, 1);
+    // Tira o dia de hoje: a programação gerada pela atribuição sai (ninguém começou a visita).
+    await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: brand, perWeek: 1, weekdays: [(wd + 1) % 7] }]);
+    const after = await promoter.buildBootstrap(await scopeOf("lucas"));
+    assert.ok(!after.schedules.some((x) => x.date === today && x.storeId === store.id), "saiu do Hoje");
+    // E volta se o dia voltar.
+    await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: brand, perWeek: 1, weekdays: [wd] }]);
+    const back = await promoter.buildBootstrap(await scopeOf("lucas"));
+    assert.ok(back.schedules.some((x) => x.date === today && x.storeId === store.id), "voltou ao Hoje");
   });
 });

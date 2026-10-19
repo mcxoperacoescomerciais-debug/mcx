@@ -11,7 +11,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { saveChain, saveProduct, saveStore, saveUser, validateProduct } from "./admin";
-import { saveTarget } from "./portfolio";
+import { saveTarget, syncPromoterSchedules } from "./portfolio";
 import { importMix, importRoutes, parseWeekdays } from "./import-extra";
 import { parseCoords, productNameKey } from "@/lib/rules";
 import type { Unit } from "@/lib/domain";
@@ -127,6 +127,7 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
     return ids;
   };
   const seen = new Set<string>();
+  const syncPromoters = new Set<string>();
 
   for (const [i, r] of rows.entries()) {
     const line = i + 2;
@@ -223,7 +224,8 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
         else report.created++;
         continue;
       }
-      const res = await saveTarget(scope, { promoterId: promoter.id, storeId: stores[0].id, brandId: brandIds[0], perWeek, period, weekdays });
+      const res = await saveTarget(scope, { promoterId: promoter.id, storeId: stores[0].id, brandId: brandIds[0], perWeek, period, weekdays }, { sync: false });
+      if (res.ok) syncPromoters.add(promoter.id);
       if (!res.ok) report.errors.push({ line, message: res.error });
       else if (prev) report.updated++;
       else report.created++;
@@ -287,6 +289,8 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
       else report.created++;
     }
   }
+  // Atribuições com dias fixos: a programação acompanha de uma vez só, no fim.
+  if (syncPromoters.size) await syncPromoterSchedules(scope.agencyId, scope.userId, [...syncPromoters]);
   return report;
 }
 

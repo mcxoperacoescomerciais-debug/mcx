@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, CalendarDays, CheckCircle2, CloudOff, History, Loader2, RefreshCw, Store, UserRound, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, CloudOff, History, Loader2, RefreshCw, RotateCw, Store, UserRound, X } from "lucide-react";
 import clsx from "clsx";
-import { pendingCount, syncNow } from "../_lib/local-store";
+import { pendingCount, refreshAll, syncNow } from "../_lib/local-store";
 import { go, useLocal } from "../_lib/hooks";
 import { fmtAgo } from "@/lib/dates";
 
@@ -84,6 +84,39 @@ export function SyncPill() {
     >
       {icon}
       {label}
+    </button>
+  );
+}
+
+/**
+ * Atualizar: envia o que está no celular, busca a programação e as lojas do
+ * servidor e recarrega a tela (pega também versões novas do app). Sem sinal, só avisa.
+ */
+export function RefreshButton({ label = true }: { label?: boolean }) {
+  const local = useLocal();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        if (!navigator.onLine) {
+          toast("Sem sinal agora. Tente de novo quando a internet voltar.", "warn");
+          return;
+        }
+        setBusy(true);
+        try {
+          await refreshAll();
+        } finally {
+          window.location.reload();
+        }
+      }}
+      className={clsx("h-8 rounded-full inline-flex items-center gap-1.5 text-[12px] font-semibold bg-white text-brand-900 active:bg-brand-100", label ? "px-3" : "w-8 justify-center")}
+      aria-label="Atualizar"
+      title={local.bootstrapAt ? `Atualizado ${fmtAgo(local.bootstrapAt)}` : undefined}
+    >
+      {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCw className="size-3.5" />}
+      {label ? "Atualizar" : null}
     </button>
   );
 }

@@ -1,15 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { CalendarClock, MoreHorizontal, PackagePlus, PackageX, Search, Trash2 } from "lucide-react";
-import { ProductSheet } from "./product-sheet";
+import { useMemo, useState } from "react";
+import { PackagePlus, Search, Trash2 } from "lucide-react";
+import { ProductCard } from "./product-sheet";
 import clsx from "clsx";
-import { Button, StatusBadge } from "@/components/ui";
-import { STOCK_COUNT_UNITS, STOCK_STATE_SHORT, STOCK_STATE_TONE, UNIT_LABEL, type StockState, type Unit } from "@/lib/domain";
-import { fmtDate } from "@/lib/dates";
-import { matchesQuery, suggestsRupture, validateStock } from "@/lib/rules";
+import { Button } from "@/components/ui";
+import { STOCK_COUNT_UNITS, UNIT_LABEL, type StockState, type Unit } from "@/lib/domain";
+import { matchesQuery, validateStock } from "@/lib/rules";
 import type { BootstrapProduct } from "@/lib/sync-types";
-import { clearStock, deleteUnregistered, saveStock, saveUnregistered, toggleRupture, uuid, type LocalAttendance } from "../_lib/local-store";
+import { clearStock, deleteUnregistered, saveStock, saveUnregistered, uuid, type LocalAttendance } from "../_lib/local-store";
 import { haptic, useCatalog } from "../_lib/hooks";
 import { Chip, Notice, Sheet, TextArea, toast } from "./primitives";
 
@@ -27,7 +26,6 @@ export function StockStep({ visitId, visitDate, storeId, attendance, products, e
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
   const [editing, setEditing] = useState<BootstrapProduct | null>(null);
-  const [detail, setDetail] = useState<BootstrapProduct | null>(null);
   const [addingUnregistered, setAddingUnregistered] = useState(false);
   const informed = products.filter((p) => attendance.stock[p.id]).length;
 
@@ -47,7 +45,7 @@ export function StockStep({ visitId, visitDate, storeId, attendance, products, e
           {informed}/{products.length} informados
         </span>
       </div>
-      <p className="text-[13px] text-muted mb-3">Toque no produto para tratar tudo de uma vez: ruptura, quantidade na área de vendas e as validades (área de vendas e estoque). Para só contar, digite a quantidade na linha.</p>
+      <p className="text-[13px] text-muted mb-3">Em cada produto: <strong>RUPTURA</strong> ou <strong>NÃO RUPTURA</strong>. Sem ruptura, informe a quantidade e as validades da área de vendas e do estoque (pode ter várias datas no mesmo produto).</p>
 
       {products.length > 6 ? (
         <label className="relative block mb-2">
@@ -75,15 +73,15 @@ export function StockStep({ visitId, visitDate, storeId, attendance, products, e
 
       <div className="bg-surface border border-line rounded-2xl divide-y divide-line overflow-hidden">
         {list.map((p) => (
-          <StockRow
+          <ProductCard
             key={p.id}
             visitId={visitId}
+            visitDate={visitDate}
             attendance={attendance}
             product={p}
             prev={lastStock[storeId]?.[p.id]}
             editable={editable}
             onMore={() => setEditing(p)}
-            onOpen={() => setDetail(p)}
           />
         ))}
         {list.length === 0 ? <p className="px-4 py-6 text-center text-[14px] text-muted">Nenhum produto neste filtro.</p> : null}
@@ -128,7 +126,6 @@ export function StockStep({ visitId, visitDate, storeId, attendance, products, e
           }}
         />
       ) : null}
-      {detail ? <ProductSheet visitId={visitId} visitDate={visitDate} attendance={attendance} product={detail} onClose={() => setDetail(null)} /> : null}
       {addingUnregistered ? (
         <UnregisteredSheet
           onClose={() => setAddingUnregistered(false)}
@@ -139,159 +136,6 @@ export function StockStep({ visitId, visitDate, storeId, attendance, products, e
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-/** Linha do produto: quantidade + unidade + ruptura, sem abrir outra tela. */
-function StockRow({
-  visitId,
-  attendance,
-  product: p,
-  prev,
-  editable,
-  onMore,
-  onOpen,
-}: {
-  visitId: string;
-  attendance: LocalAttendance;
-  product: BootstrapProduct;
-  prev: { state: string; quantity: number | null; unit?: string; date: string } | undefined;
-  editable: boolean;
-  onMore: () => void;
-  onOpen: () => void;
-}) {
-  const validities = Object.values(attendance.validities ?? {}).filter((v) => v.productId === p.id).length;
-  const entry = attendance.stock[p.id];
-  const rupture = Object.values(attendance.ruptures).find((r) => r.productId === p.id);
-  const unitOptions: Unit[] = [...STOCK_COUNT_UNITS];
-  const savedQty = entry?.state === "quantity" && entry.quantity !== null ? String(entry.quantity) : "";
-  const [qty, setQty] = useState(savedQty);
-  const [unit, setUnit] = useState<Unit>(countUnit(entry?.unit, p.unit));
-  // Valor salvo mudou por fora (folha de opções, ruptura): o campo acompanha.
-  const [lastSaved, setLastSaved] = useState(savedQty);
-  if (savedQty !== lastSaved) {
-    setLastSaved(savedQty);
-    setQty(savedQty);
-  }
-  const otherState = entry && entry.state !== "quantity" && entry.state !== "zero" ? entry.state : null;
-  // Salva sozinho logo depois de parar de digitar (e também ao sair do campo).
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  async function commit(nextQty = qty, nextUnit = unit) {
-    const n = nextQty === "" ? null : Number(nextQty);
-    if (n === null || !Number.isFinite(n)) return;
-    const now = new Date().toISOString();
-    if (n === 0) {
-      await saveStock(visitId, attendance.id, { productId: p.id, state: "zero", quantity: 0, unit: nextUnit, note: entry?.note ?? null, recordedAt: now });
-      return;
-    }
-    if (entry?.state === "quantity" && entry.quantity === n && (entry.unit ?? p.unit) === nextUnit) return;
-    await saveStock(visitId, attendance.id, { productId: p.id, state: "quantity", quantity: n, unit: nextUnit, note: entry?.note ?? null, recordedAt: now });
-    // Produto encontrado na gôndola: não está em ruptura.
-    if (rupture) await toggleRupture(visitId, attendance.id, p.id);
-    haptic(10);
-  }
-
-  async function ruptureTap() {
-    const on = await toggleRupture(visitId, attendance.id, p.id, suggestsRupture(entry?.state));
-    if (on && (!entry || entry.state === "quantity")) {
-      // Ruptura = nada na gôndola: o estoque fica registrado como zero.
-      await saveStock(visitId, attendance.id, { productId: p.id, state: "zero", quantity: 0, unit, note: entry?.note ?? null, recordedAt: new Date().toISOString() });
-      setQty("");
-    }
-    haptic(on ? 25 : 10);
-    toast(on ? `Ruptura: ${p.name}` : "Ruptura desmarcada.", on ? "warn" : "ok");
-  }
-
-  return (
-    <div className={clsx("px-4 py-3", rupture && "bg-bad-bg/40")}>
-      <div className="flex items-start gap-2">
-        <button type="button" disabled={!editable} onClick={onOpen} className="flex-1 min-w-0 text-left">
-          <p className="text-[15px] font-semibold leading-snug">{p.name}</p>
-          <p className="text-[12px] text-muted mt-0.5">
-            SKU {p.sku}
-            {p.package ? ` · ${p.package}` : ""}
-            {prev ? ` · última: ${prev.state === "quantity" ? `${prev.quantity} ${prev.unit ?? p.unit}` : (STOCK_STATE_SHORT[prev.state as StockState] ?? "—")} (${fmtDate(prev.date).slice(0, 5)})` : ""}
-          </p>
-          <span className={clsx("inline-flex items-center gap-1 mt-1 text-[12px] font-semibold rounded-md px-1.5 py-0.5", validities ? "bg-info-bg text-info" : "text-brand-700")}>
-            <CalendarClock className="size-3.5" /> {validities ? `${validities} validade(s)` : "Validades e mais"} ›
-          </span>
-        </button>
-        {editable ? (
-          <button type="button" onClick={onMore} aria-label="Mais opções" className="size-9 -mr-2 grid place-items-center rounded-lg text-muted active:bg-canvas">
-            <MoreHorizontal className="size-5" />
-          </button>
-        ) : null}
-      </div>
-
-      {otherState ? (
-        <div className="mt-2 flex items-center gap-2">
-          <StatusBadge tone={STOCK_STATE_TONE[otherState]} size="sm">
-            {STOCK_STATE_SHORT[otherState]}
-          </StatusBadge>
-          {editable ? (
-            <button type="button" onClick={onMore} className="text-[13px] font-semibold text-brand-700">
-              alterar
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <div className="mt-2 flex items-stretch gap-2">
-          <input
-            inputMode="numeric"
-            pattern="[0-9]*"
-            disabled={!editable}
-            value={qty}
-            placeholder={entry?.state === "zero" ? "0" : "Qtd."}
-            aria-label={`Quantidade de ${p.name}`}
-            onChange={(e) => {
-              const v = e.target.value.replace(/\D/g, "").slice(0, 6);
-              setQty(v);
-              if (timer.current) clearTimeout(timer.current);
-              timer.current = setTimeout(() => void commit(v), 900);
-            }}
-            onBlur={() => {
-              if (timer.current) clearTimeout(timer.current);
-              void commit();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            }}
-            className="w-20 h-12 rounded-xl border-2 border-line-strong bg-surface px-2 text-center text-[20px] font-bold tnum focus:border-brand-600 focus:outline-none disabled:bg-canvas"
-          />
-          <div className="flex rounded-xl border-2 border-line-strong overflow-hidden" role="radiogroup" aria-label="Unidade">
-            {unitOptions.map((u) => (
-              <button
-                key={u}
-                type="button"
-                role="radio"
-                aria-checked={unit === u}
-                disabled={!editable}
-                onClick={() => {
-                  setUnit(u);
-                  if (qty !== "") void commit(qty, u);
-                }}
-                className={clsx("px-2.5 text-[12px] font-bold uppercase", unit === u ? "bg-brand-800 text-white" : "bg-surface text-ink-2")}
-              >
-                {u === "un" ? "UN" : u === "cx" ? "CX" : u.toUpperCase()}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            disabled={!editable}
-            aria-pressed={Boolean(rupture)}
-            onClick={() => void ruptureTap()}
-            className={clsx(
-              "flex-1 min-w-[92px] rounded-xl border-2 text-[12.5px] font-bold inline-flex items-center justify-center gap-1",
-              rupture ? "bg-bad border-bad text-white" : "border-bad/40 text-bad bg-surface",
-            )}
-          >
-            <PackageX className="size-4" /> {rupture ? "RUPTURA ✓" : "RUPTURA"}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

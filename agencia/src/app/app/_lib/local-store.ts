@@ -26,7 +26,7 @@ import type {
   VisitInput,
   VisitSyncResult,
 } from "@/lib/sync-types";
-import type { AttendanceDisplayStatus, AttendanceStatus, ExceptionItem, ExceptionReason, PhotoKind, PhotoSource, VisitStatus } from "@/lib/domain";
+import type { AttendanceDisplayStatus, AttendanceStatus, ExceptionItem, ExceptionReason, PhotoKind, PhotoPlacement, PhotoSource, VisitStatus } from "@/lib/domain";
 import { todayIso } from "@/lib/dates";
 
 export interface LocalPhoto extends PhotoInput {
@@ -191,6 +191,10 @@ export async function initLocalStore(): Promise<void> {
     if (document.visibilityState === "visible") void refreshAll();
   });
   setInterval(() => void syncNow(), 20_000);
+  // Loja programada pelo gestor agora há pouco aparece sozinha no Hoje (com o app aberto).
+  setInterval(() => {
+    if (document.visibilityState === "visible" && navigator.onLine) void refreshBootstrap();
+  }, 120_000);
   await refreshAll();
 }
 
@@ -488,6 +492,8 @@ export function updateAttendance(visitId: string, attendanceId: string, patch: P
 }
 
 export interface PhotoLink {
+  /** Antes/depois: onde o produto está exposto. */
+  placement?: PhotoPlacement;
   ruptureId?: string;
   occurrenceId?: string;
   validityId?: string;
@@ -502,7 +508,7 @@ export async function addPhoto(visitId: string, attendanceId: string, kind: Phot
     ...a,
     photos: [
       ...a.photos,
-      { id, kind, source, takenAt: new Date().toISOString(), ruptureId: link.ruptureId ?? null, occurrenceId: link.occurrenceId ?? null, validityId: link.validityId ?? null, damageId: link.damageId ?? null, uploaded: false, local: true },
+      { id, kind, source, takenAt: new Date().toISOString(), ruptureId: link.ruptureId ?? null, occurrenceId: link.occurrenceId ?? null, validityId: link.validityId ?? null, damageId: link.damageId ?? null, placement: link.placement ?? null, uploaded: false, local: true },
     ],
   }));
   return id;

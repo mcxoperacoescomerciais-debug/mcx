@@ -9,7 +9,7 @@ import { fmtLongDate, fmtTime } from "@/lib/dates";
 import { pendingCount } from "../_lib/local-store";
 import { go, useCatalog, useLocal } from "../_lib/hooks";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
-import { BottomTabs, Notice, Screen, SectionTitle, SyncPill } from "./primitives";
+import { BottomTabs, Notice, RefreshButton, Screen, SectionTitle, SyncPill } from "./primitives";
 import { useStartVisit } from "./visit-start";
 import type { BootstrapSchedule } from "@/lib/sync-types";
 import { usePortfolio } from "../_lib/portfolio-progress";
@@ -89,7 +89,10 @@ export function HomeScreen() {
               ) : null}
               <p className="text-[13px] text-brand-200 first-letter:uppercase truncate">{fmtLongDate(today)}</p>
             </div>
-            <SyncPill />
+            <div className="flex items-center gap-1 shrink-0">
+              <SyncPill />
+              <RefreshButton />
+            </div>
           </div>
           <h1 className="text-[24px] font-semibold mt-2 leading-tight">
             {greeting()}, {user.name.split(" ")[0]}
@@ -204,7 +207,7 @@ export function HomeScreen() {
           <div className="bg-surface border border-line rounded-2xl p-6 text-center">
             <CalendarClock className="size-8 mx-auto text-muted" />
             <p className="font-semibold mt-2">Nenhuma loja programada para hoje</p>
-            <p className="text-[14px] text-muted mt-1">Se o gestor pediu uma visita, abra pela aba Lojas.</p>
+            <p className="text-[14px] text-muted mt-1">Se o gestor acabou de programar, toque em Atualizar no topo. Visita fora do roteiro: abra pela aba Lojas.</p>
           </div>
         ) : (
           stops.map((st, i) => <StopCard key={st.schedule?.id ?? st.visit?.id ?? i} stop={st} index={i} onStart={() => st.schedule && startScheduled(st.schedule)} />)

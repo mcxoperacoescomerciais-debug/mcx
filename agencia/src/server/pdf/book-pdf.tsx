@@ -15,6 +15,7 @@ import { storage } from "../storage";
 import { C, Footer, type PdfAgency } from "./kit";
 import type { PanelFilters } from "@/lib/filters";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
+import { withPlacement } from "@/lib/domain";
 
 /** Limites para o PDF caber na memória do servidor. */
 export const BOOK_MAX_ATTENDANCES = 60;
@@ -26,6 +27,7 @@ type Img = { data: Buffer; format: "png" | "jpg" };
 export interface BookPhoto {
   id: string;
   kind: "before" | "after";
+  placement: string | null;
   takenAt: Date;
   img: Img | null;
 }
@@ -97,7 +99,7 @@ export async function bookData(scope: Scope, f: PanelFilters): Promise<BookData>
 
   const photoRows = rows.length
     ? await db
-        .select({ id: s.photos.id, attendanceId: s.photos.attendanceId, kind: s.photos.kind, takenAt: s.photos.takenAt, storageKey: s.photos.storageKey, contentType: s.photos.contentType })
+        .select({ id: s.photos.id, attendanceId: s.photos.attendanceId, kind: s.photos.kind, placement: s.photos.placement, takenAt: s.photos.takenAt, storageKey: s.photos.storageKey, contentType: s.photos.contentType })
         .from(s.photos)
         .where(and(inArray(s.photos.attendanceId, rows.map((r) => r.id)), inArray(s.photos.kind, ["before", "after"]), isNull(s.photos.deletedAt), sql`${s.photos.uploadedAt} is not null`))
         .orderBy(asc(s.photos.takenAt))
@@ -114,7 +116,7 @@ export async function bookData(scope: Scope, f: PanelFilters): Promise<BookData>
       if (budget <= 0) break;
       const bytes = p.storageKey ? await storage().get(p.storageKey).catch(() => null) : null;
       budget--;
-      photos.push({ id: p.id, kind: p.kind as "before" | "after", takenAt: p.takenAt, img: bytes ? { data: Buffer.from(bytes), format: p.contentType === "image/png" ? "png" : "jpg" } : null });
+      photos.push({ id: p.id, kind: p.kind as "before" | "after", placement: p.placement, takenAt: p.takenAt, img: bytes ? { data: Buffer.from(bytes), format: p.contentType === "image/png" ? "png" : "jpg" } : null });
     }
     if (!photos.length) continue;
     attendances.push({
@@ -196,7 +198,7 @@ function StampedPhoto({ a, p }: { a: BookAttendance; p: BookPhoto }) {
         </View>
       </View>
       <View style={{ paddingVertical: 6, paddingHorizontal: 8, backgroundColor: "#FAFAF8" }}>
-        <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", letterSpacing: 1, color: p.kind === "before" ? C.warn : C.ok }}>{p.kind === "before" ? "ANTES DA REPOSIÇÃO" : "PÓS REPOSIÇÃO"}</Text>
+        <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", letterSpacing: 1, color: p.kind === "before" ? C.warn : C.ok }}>{withPlacement(p.kind === "before" ? "ANTES DA REPOSIÇÃO" : "PÓS REPOSIÇÃO", p.placement).toUpperCase()}</Text>
       </View>
     </View>
   );

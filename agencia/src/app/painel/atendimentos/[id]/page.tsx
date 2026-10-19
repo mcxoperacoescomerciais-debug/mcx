@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, Check, ChevronRight, FileDown, History, MapPin, PencilLine, X } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { getAttendanceDetail } from "@/server/details";
+import { withPlacement } from "@/lib/domain";
 import {
   ATTENDANCE_STATUS_LABEL,
   ATTENDANCE_STATUS_TONE,
@@ -56,7 +57,7 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
   const toViewer = (p: (typeof d.photos)[number], label: string, caption?: string): ViewerPhoto => ({
     id: p.id,
     kind: p.kind,
-    label,
+    label: withPlacement(label, p.placement),
     takenAt: fmtDateTime(p.takenAt),
     uploaded: Boolean(p.uploadedAt),
     source: p.source,

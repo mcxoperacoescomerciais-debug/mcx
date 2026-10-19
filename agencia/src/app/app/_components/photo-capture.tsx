@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, CheckCircle2, CloudUpload, Expand, ImagePlus, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import clsx from "clsx";
-import type { PhotoKind } from "@/lib/domain";
+import { PHOTO_PLACEMENT_LABEL, PHOTO_PLACEMENTS, type PhotoKind, type PhotoPlacement } from "@/lib/domain";
 import { fmtTime } from "@/lib/dates";
 import { addPhoto, getPhotoBlob, removePhoto, type LocalPhoto, type PhotoLink } from "../_lib/local-store";
 import { haptic, useObjectUrl } from "../_lib/hooks";
@@ -78,6 +78,14 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
   const [busy, setBusy] = useState(false);
   const [replacing, setReplacing] = useState<string | null>(null);
   const [viewing, setViewing] = useState<LocalPhoto | null>(null);
+  // Antes/depois: antes de fotografar, o promotor diz onde o produto está exposto.
+  const asksPlacement = kind === "before" || kind === "after";
+  const [choosing, setChoosing] = useState<"camera" | "gallery" | null>(null);
+  const placementRef = useRef<PhotoPlacement | null>(null);
+  const open = (source: "camera" | "gallery") => {
+    if (asksPlacement) setChoosing(source);
+    else (source === "camera" ? cameraRef : galleryRef).current?.click();
+  };
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>, source: "camera" | "gallery") {
     const file = e.target.files?.[0];
@@ -94,7 +102,7 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
     try {
       const { full, thumb } = await preparePhoto(file);
       if (replacing) await removePhoto(visitId, attendanceId, replacing);
-      await addPhoto(visitId, attendanceId, kind, source, full, thumb, link);
+      await addPhoto(visitId, attendanceId, kind, source, full, thumb, { ...link, placement: placementRef.current ?? undefined });
       haptic(25);
       toast(replacing ? "Foto substituída e salva no celular." : "Foto salva no celular.");
     } catch {
@@ -134,6 +142,7 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
               </button>
               <figcaption className="px-2.5 py-2 space-y-1">
                 <PhotoStatus photo={p} />
+                {p.placement ? <p className="text-[12px] font-semibold text-brand-800 leading-snug">{PHOTO_PLACEMENT_LABEL[p.placement]}</p> : null}
                 <p className="text-[11.5px] text-muted tnum">
                   {fmtTime(p.takenAt)} · {p.source === "gallery" ? "galeria" : "câmera"}
                 </p>
@@ -144,7 +153,10 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
                       className="flex-1 h-9 rounded-lg bg-canvas text-[12.5px] font-semibold text-ink-2 flex items-center justify-center gap-1"
                       onClick={() => {
                         setReplacing(p.id);
-                        cameraRef.current?.click();
+                        // Substituir mantém o local já escolhido para esta foto.
+                        placementRef.current = p.placement ?? null;
+                        if (asksPlacement && !p.placement) setChoosing("camera");
+                        else cameraRef.current?.click();
                       }}
                     >
                       <RefreshCw className="size-3.5" /> Substituir
@@ -173,7 +185,7 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
           <button
             type="button"
             disabled={busy}
-            onClick={() => cameraRef.current?.click()}
+            onClick={() => open("camera")}
             className={clsx(
               "w-full rounded-2xl font-bold flex items-center justify-center gap-2.5 active:scale-[0.99] transition",
               compact ? "h-12 text-[14px] bg-surface border border-line-strong text-ink" : photos.length ? "h-14 text-[15px] bg-surface border-2 border-brand-700 text-brand-800" : "h-20 text-[16px] bg-brand-800 text-white",
@@ -183,7 +195,7 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
             {busy ? "Preparando foto…" : photos.length ? "Adicionar outra foto" : cta}
           </button>
           {allowGallery ? (
-            <button type="button" disabled={busy} onClick={() => galleryRef.current?.click()} className="w-full h-11 rounded-xl text-[14px] font-semibold text-ink-2 flex items-center justify-center gap-2 active:bg-surface">
+            <button type="button" disabled={busy} onClick={() => open("gallery")} className="w-full h-11 rounded-xl text-[14px] font-semibold text-ink-2 flex items-center justify-center gap-2 active:bg-surface">
               <ImagePlus className="size-4" /> Escolher da galeria
             </button>
           ) : null}
@@ -194,6 +206,34 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
 
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => void onFile(e, "camera")} />
       <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={(e) => void onFile(e, "gallery")} />
+
+      <Sheet
+        open={choosing !== null}
+        onClose={() => {
+          setChoosing(null);
+          setReplacing(null);
+        }}
+        title="Onde está o produto nesta foto?"
+      >
+        <div className="grid gap-2">
+          {PHOTO_PLACEMENTS.map((pl) => (
+            <button
+              key={pl}
+              type="button"
+              onClick={() => {
+                placementRef.current = pl;
+                const source = choosing;
+                setChoosing(null);
+                // Ainda no toque do promotor: o celular só abre a câmera assim.
+                (source === "gallery" ? galleryRef : cameraRef).current?.click();
+              }}
+              className="w-full min-h-14 rounded-2xl border-2 border-line-strong bg-surface px-4 text-left text-[16px] font-semibold active:bg-brand-50 active:border-brand-700"
+            >
+              {PHOTO_PLACEMENT_LABEL[pl]}
+            </button>
+          ))}
+        </div>
+      </Sheet>
 
       <Sheet open={Boolean(viewing)} onClose={() => setViewing(null)} title="Foto">
         {viewing ? (

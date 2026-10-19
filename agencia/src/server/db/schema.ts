@@ -44,6 +44,7 @@ import type {
   OccurrenceCategory,
   OccurrenceStatus,
   PhotoKind,
+  PhotoPlacement,
   PhotoSource,
   ReviewStatus,
   Role,
@@ -397,6 +398,8 @@ export const schedules = pgTable(
     plannedStart: text("planned_start"),
     plannedEnd: text("planned_end"),
     routeId: uuid("route_id").references(() => routes.id),
+    /** manual (gestor), route (roteiro) ou assignment (dias fixos da atribuição — acompanha a atribuição). */
+    origin: text("origin").$type<"manual" | "route" | "assignment">().notNull().default("manual"),
     status: text("status").$type<"active" | "cancelled">().notNull().default("active"),
     cancelReason: text("cancel_reason"),
     notes: text("notes"),
@@ -513,6 +516,8 @@ export const photos = pgTable(
     occurrenceId: uuid("occurrence_id"),
     validityId: uuid("validity_id"),
     damageId: uuid("damage_id"),
+    /** Antes/depois: ponto extra, ponto natural, ilha ou cross merchandising. */
+    placement: text("placement").$type<PhotoPlacement>(),
     source: text("source").$type<PhotoSource>().notNull().default("camera"),
     /** Momento da captura no aparelho. */
     takenAt: ts("taken_at").notNull(),

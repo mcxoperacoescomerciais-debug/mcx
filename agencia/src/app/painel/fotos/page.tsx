@@ -6,6 +6,7 @@ import { photoReport } from "@/server/analytics";
 import { BOOK_MAX_ATTENDANCES } from "@/server/pdf/book-pdf";
 import { parseFilters, withParams } from "@/lib/filters";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
+import { withPlacement } from "@/lib/domain";
 import { EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
 import { Pagination } from "../_components/widgets";
@@ -28,7 +29,7 @@ export default async function PhotosPage({ searchParams }: PageProps<"/painel/fo
     r.photos
       .filter((p) => (kind ? p.kind === kind : p.kind === "before" || p.kind === "after"))
       .map((p) => {
-        const when = p.kind === "before" ? "Antes" : "Depois";
+        const when = withPlacement(p.kind === "before" ? "Antes" : "Depois", p.placement);
         return {
           id: p.id,
           kind: p.kind,

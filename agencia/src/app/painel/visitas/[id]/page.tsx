@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowRight, FileDown, MapPin } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { getVisitDetail } from "@/server/details";
-import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, EXCEPTION_ITEM_LABEL, VISIT_ORIGIN_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE } from "@/lib/domain";
+import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, EXCEPTION_ITEM_LABEL, VISIT_ORIGIN_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE, withPlacement } from "@/lib/domain";
 import { fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates";
 import { LinkButton, PageHeader, StatusBadge } from "@/components/ui";
 import { SectionCard } from "../../_components/widgets";
@@ -21,7 +21,7 @@ export default async function VisitPage({ params }: PageProps<"/painel/visitas/[
   if (!d) notFound();
   const v = d.visit;
   const brandIds = [...new Set([...d.planned.map((b) => b.id), ...d.attendances.map((x) => x.a.brandId)])];
-  const viewer = (p: (typeof d.photos)[number], label: string): ViewerPhoto => ({ id: p.id, kind: p.kind, label, takenAt: fmtDateTime(p.takenAt), uploaded: Boolean(p.uploadedAt), source: p.source });
+  const viewer = (p: (typeof d.photos)[number], label: string): ViewerPhoto => ({ id: p.id, kind: p.kind, label: withPlacement(label, p.placement), takenAt: fmtDateTime(p.takenAt), uploaded: Boolean(p.uploadedAt), source: p.source });
 
   return (
     <>

@@ -5,7 +5,7 @@ import { CalendarCheck2, MapPin, Search, Store } from "lucide-react";
 import clsx from "clsx";
 import { matchesQuery } from "@/lib/rules";
 import { go, useCatalog, useLocal } from "../_lib/hooks";
-import { BottomTabs, Chip, Screen, TopBar } from "./primitives";
+import { BottomTabs, Chip, RefreshButton, Screen, TopBar } from "./primitives";
 import { useStartVisit } from "./visit-start";
 import { usePortfolio } from "../_lib/portfolio-progress";
 import { portfolioBrands } from "./portfolio";
@@ -30,7 +30,7 @@ export function StoresScreen() {
 
   return (
     <Screen>
-      <TopBar title="Minhas lojas" subtitle={`${cat.stores.length} lojas autorizadas`} />
+      <TopBar title="Minhas lojas" subtitle={`${cat.stores.length} lojas autorizadas`} right={<RefreshButton label={false} />} />
       <div className="sticky top-14 z-20 bg-canvas px-4 pt-3 pb-2 space-y-2">
         <label className="relative block">
           <Search className="size-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />

@@ -14,6 +14,7 @@ import {
   EXCEPTION_REASONS,
   OCCURRENCE_CATEGORIES,
   PHOTO_KINDS,
+  PHOTO_PLACEMENTS,
   PHOTO_SOURCES,
   RUPTURE_SITUATIONS,
   STOCK_STATES,
@@ -35,6 +36,7 @@ export const photoInput = z.object({
   occurrenceId: id.nullable().optional().default(null),
   validityId: id.nullable().optional().default(null),
   damageId: id.nullable().optional().default(null),
+  placement: z.enum(PHOTO_PLACEMENTS).nullable().optional(),
   source: z.enum(PHOTO_SOURCES),
   takenAt: instant,
 });

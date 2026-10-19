@@ -355,7 +355,7 @@ export async function photoReport(scope: Scope, f: F, pageSize = 24) {
     .offset((f.page - 1) * pageSize);
   const photos = rows.length
     ? await db
-        .select({ id: s.photos.id, attendanceId: s.photos.attendanceId, kind: s.photos.kind, takenAt: s.photos.takenAt, uploadedAt: s.photos.uploadedAt, source: s.photos.source })
+        .select({ id: s.photos.id, attendanceId: s.photos.attendanceId, kind: s.photos.kind, placement: s.photos.placement, takenAt: s.photos.takenAt, uploadedAt: s.photos.uploadedAt, source: s.photos.source })
         .from(s.photos)
         .where(and(sql`${s.photos.attendanceId} in (${sql.join(rows.map((r) => sql`${r.id}`), sql`, `)})`, isNull(s.photos.deletedAt)))
         .orderBy(asc(s.photos.takenAt))

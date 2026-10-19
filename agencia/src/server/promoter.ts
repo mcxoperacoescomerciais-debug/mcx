@@ -129,6 +129,14 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
   const storeProducts: Record<string, string[]> = {};
   for (const r of customRows) (storeProducts[r.storeId] ??= []).push(r.productId);
 
+  // Dias fixos das atribuições viram programação de hoje e amanhã mesmo que ninguém tenha clicado em "Gerar".
+  try {
+    const { syncAssignmentSchedules } = await import("./portfolio");
+    await syncAssignmentSchedules({ agencyId: scope.agencyId, actorId: null, from: today, to: addDays(today, 1), promoterIds: [promoterId] });
+  } catch (err) {
+    console.error("[bootstrap] programação das atribuições", err);
+  }
+
   // Programação de hoje e amanhã (amanhã: para o promotor se planejar).
   const scheduleRows = await db
     .select()
@@ -350,6 +358,7 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
               occurrenceId: p.occurrenceId,
               validityId: p.validityId,
               damageId: p.damageId,
+              placement: p.placement,
               source: p.source,
               takenAt: p.takenAt.toISOString(),
               uploaded: Boolean(p.uploadedAt),
@@ -706,6 +715,7 @@ async function applyAttendance(
         occurrenceId: p.occurrenceId,
         validityId: p.validityId,
         damageId: p.damageId,
+        placement: p.placement ?? null,
         source: p.source,
         takenAt: new Date(p.takenAt),
         createdBy: promoterId,

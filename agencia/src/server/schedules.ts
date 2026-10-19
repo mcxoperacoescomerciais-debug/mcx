@@ -202,7 +202,7 @@ export async function generateFromRoutes(scope: Scope, from: string, to: string)
           created++;
           await db
             .update(s.schedules)
-            .set({ routeId: route.id })
+            .set({ routeId: route.id, origin: "route" })
             .where(and(eq(s.schedules.promoterId, route.promoterId), eq(s.schedules.storeId, stop.storeId), eq(s.schedules.date, d), eq(s.schedules.status, "active")));
         } else skipped++;
       }

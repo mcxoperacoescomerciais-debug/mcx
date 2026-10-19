@@ -57,6 +57,13 @@
       "when": 1792025289814,
       "tag": "0007_perfis",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792452937732,
+      "tag": "0008_fotos_local_programacao",
+      "breakpoints": true
     }
   ]
 }

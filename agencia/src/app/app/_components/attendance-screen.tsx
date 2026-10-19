@@ -34,11 +34,12 @@ import { SharePdf } from "./share-pdf";
 
 const STEPS = [
   { id: "antes", label: "Antes" },
-  { id: "execucao", label: "Execução" },
   { id: "depois", label: "Depois" },
   { id: "estoque", label: "Estoque, ruptura e validade" },
   { id: "avaria", label: "Avaria" },
   { id: "ocorrencias", label: "Ocorrências" },
+  // Checklist final: o promotor confere tudo antes da revisão.
+  { id: "execucao", label: "Execução" },
   { id: "revisao", label: "Revisão" },
 ] as const;
 type StepId = (typeof STEPS)[number]["id"];
@@ -201,7 +202,7 @@ function firstOpenStep(a: LocalAttendance, brand: { minBeforePhotos: number }, _
   void _tracked;
   if (a.photos.filter((p) => p.kind === "before").length < brand.minBeforePhotos) return "antes";
   if (a.photos.some((p) => p.kind === "after")) return "estoque";
-  return "execucao";
+  return "depois";
 }
 
 function ExecutionStep({ visitId, attendance, activities, editable }: { visitId: string; attendance: LocalAttendance; activities: string[]; editable: boolean }) {
@@ -213,7 +214,7 @@ function ExecutionStep({ visitId, attendance, activities, editable }: { visitId:
   return (
     <div>
       <h2 className="text-[13px] font-bold uppercase tracking-wide text-ink-2 mb-2">Execução do trabalho</h2>
-      <p className="text-[13px] text-muted mb-3">Dê OK em <strong>todos</strong> os itens para poder finalizar. Depois registre o resultado na foto do depois.</p>
+      <p className="text-[13px] text-muted mb-3">Checklist final: confira e dê OK em <strong>todos</strong> os itens. Depois vem a revisão para finalizar.</p>
       {activities.length ? (
         <div className="bg-surface border border-line rounded-2xl divide-y divide-line overflow-hidden">
           {activities.map((act) => {
@@ -227,7 +228,7 @@ function ExecutionStep({ visitId, attendance, activities, editable }: { visitId:
           })}
         </div>
       ) : (
-        <p className="text-[14px] text-muted bg-surface border border-line rounded-2xl p-4">Esta marca não tem atividades cadastradas. Siga para a foto do depois.</p>
+        <p className="text-[14px] text-muted bg-surface border border-line rounded-2xl p-4">Esta marca não tem atividades cadastradas. Siga para a revisão.</p>
       )}
       <div className="mt-4">
         {editable ? (
