@@ -9,7 +9,7 @@ import type { Scope } from "./auth";
 import { audit } from "./audit";
 import type { ActionResult } from "./manager";
 import { canManageTastings } from "./tastings";
-import type { CalcCity, CalcGlobals } from "@/lib/tasting-calc";
+import { DEFAULT_FUEL_PRICE, normalizeCity, type CalcCity, type CalcGlobals } from "@/lib/tasting-calc";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
@@ -33,28 +33,7 @@ export async function getQuote(scope: Scope, id: string) {
 const num = (v: unknown, max = 1_000_000) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : 0);
 
 function cleanCities(raw: unknown): CalcCity[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.slice(0, 60).map((c) => {
-    const o = (c ?? {}) as Record<string, unknown>;
-    return {
-      city: String(o.city ?? "").slice(0, 80),
-      actions: Math.round(num(o.actions, 1000)),
-      tasters: Math.max(1, Math.round(num(o.tasters, 20))),
-      tasterFee: num(o.tasterFee),
-      tasterTransport: num(o.tasterTransport),
-      meal: num(o.meal),
-      consumables: num(o.consumables),
-      product: num(o.product),
-      equipment: num(o.equipment),
-      km: num(o.km, 10000),
-      costPerKm: num(o.costPerKm, 100),
-      trips: Math.max(1, Math.round(num(o.trips, 100))),
-      lodging: num(o.lodging),
-      freight: num(o.freight),
-      supervision: num(o.supervision),
-      offeredPrice: typeof o.offeredPrice === "number" && Number.isFinite(o.offeredPrice) && o.offeredPrice > 0 ? o.offeredPrice : null,
-    };
-  });
+  return Array.isArray(raw) ? raw.slice(0, 60).map(normalizeCity) : [];
 }
 
 export async function saveQuote(scope: Scope, id: string | null, i: { name: string; brandId: string | null; globals: CalcGlobals; cities: unknown; notes: string | null }): Promise<ActionResult & { id?: string }> {
@@ -63,7 +42,7 @@ export async function saveQuote(scope: Scope, id: string | null, i: { name: stri
   if (name.length < 2) return fail("Dê um nome ao orçamento (ex.: Suinco · novembro · 5 cidades).");
   const cities = cleanCities(i.cities);
   if (!cities.length) return fail("Inclua ao menos uma cidade.");
-  const globals = { taxPct: num(i.globals.taxPct, 99), adminPct: 0, marginPct: num(i.globals.marginPct, 99) };
+  const globals = { taxPct: num(i.globals.taxPct, 99), adminPct: 0, marginPct: num(i.globals.marginPct, 99), fuelPrice: num(i.globals.fuelPrice ?? DEFAULT_FUEL_PRICE, 100) };
   const db = await getDb();
   if (i.brandId) {
     const [b] = await db.select({ id: s.brands.id }).from(s.brands).where(and(eq(s.brands.id, i.brandId), eq(s.brands.agencyId, scope.agencyId)));

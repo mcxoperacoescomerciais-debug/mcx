@@ -8,10 +8,10 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, Loader2, Plus, Save, Trash2, Users } from "lucide-react";
+import { Copy, Fuel, Loader2, Plus, Save, Trash2, Truck, Users } from "lucide-react";
 import clsx from "clsx";
 import { buttonClass, inputClass, selectClass } from "@/components/ui";
-import { calcTasting, type CalcCity, type CalcGlobals } from "@/lib/tasting-calc";
+import { DEFAULT_FUEL_PRICE, calcTasting, type CalcCity, type CalcGlobals, type CityResult } from "@/lib/tasting-calc";
 import { brl, pct } from "@/lib/tasting";
 import { deleteQuoteAction, saveQuoteAction } from "../actions";
 
@@ -28,7 +28,6 @@ type NumKey = Exclude<keyof CalcCity, "city" | "offeredPrice">;
 
 const PER_PERSON: [NumKey, string][] = [
   ["tasterFee", "Cachê por ação"],
-  ["tasterTransport", "Transporte por ação"],
   ["meal", "Alimentação por ação"],
 ];
 const PER_ACTION: [NumKey, string][] = [
@@ -37,11 +36,7 @@ const PER_ACTION: [NumKey, string][] = [
   ["equipment", "Desgaste de equipamentos"],
 ];
 const PER_CITY: [NumKey, string][] = [
-  ["km", "Km ida e volta"],
-  ["costPerKm", "R$ por km"],
-  ["trips", "Viagens no período"],
   ["lodging", "Hospedagem e diárias"],
-  ["freight", "Frete de materiais"],
   ["supervision", "Supervisão"],
 ];
 
@@ -71,6 +66,7 @@ export function Calculator({
   const r = useMemo(() => calcTasting(q.globals, q.cities), [q.globals, q.cities]);
 
   const setCity = (i: number, patch: Partial<CalcCity>) => setQ((x) => ({ ...x, cities: x.cities.map((c, j) => (j === i ? { ...c, ...patch } : c)) }));
+  const fuel = q.globals.fuelPrice ?? DEFAULT_FUEL_PRICE;
   const setG = (k: keyof CalcGlobals, v: string) => setQ((x) => ({ ...x, globals: { ...x.globals, [k]: toNum(v) } }));
 
   function save() {
@@ -94,7 +90,7 @@ export function Calculator({
     <div className="space-y-6">
       {/* Orçamento e premissas */}
       <section className="bg-surface border border-line rounded-[var(--radius-card)] p-5 space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-[2fr_1.4fr_1fr_1.2fr] gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-[2fr_1.4fr_1fr_1.2fr_1fr] gap-3">
           <label className="block">
             <span className="block text-[12.5px] font-semibold text-ink-2 mb-1">Nome do orçamento</span>
             <input id="q-name" value={q.name} onChange={(e) => setQ({ ...q, name: e.target.value })} placeholder="Ex.: Suinco · novembro · 5 cidades" className={inputClass} />
@@ -112,6 +108,7 @@ export function Calculator({
           </label>
           <Pct id="g-tax" label="Impostos sobre a nota (%)" value={q.globals.taxPct} onChange={(v) => setG("taxPct", v)} hint="Simples, ISS…" />
           <Pct id="g-margin" label="Margem de contribuição desejada (%)" value={q.globals.marginPct} onChange={(v) => setG("marginPct", v)} hint="Antes das despesas administrativas (DRE)" />
+          <Field id="g-fuel" label="Combustível (R$ por litro)" value={fuel} onChange={(v) => setG("fuelPrice", v)} money />
         </div>
         {r.invalid ? <p className="text-[13px] text-bad font-medium">Impostos + margem passam de 100%: não existe preço que feche a conta. Reduza algum percentual.</p> : null}
       </section>
@@ -160,9 +157,10 @@ export function Calculator({
                     <Field key={k} id={`c-${i}-${k}`} label={l} value={c[k]} onChange={(v) => setCity(i, { [k]: toNum(v) })} money />
                   ))}
                 </Group>
+                {res ? <Logistics i={i} c={c} res={res} fuel={fuel} setCity={(p) => setCity(i, p)} /> : null}
                 <Group title="Da cidade (rateado nas ações)">
                   {PER_CITY.map(([k, l]) => (
-                    <Field key={k} id={`c-${i}-${k}`} label={l} value={c[k]} onChange={(v) => setCity(i, { [k]: k === "trips" ? Math.max(1, Math.round(toNum(v))) : toNum(v) })} money={k !== "km" && k !== "trips"} />
+                    <Field key={k} id={`c-${i}-${k}`} label={l} value={c[k]} onChange={(v) => setCity(i, { [k]: toNum(v) })} money />
                   ))}
                 </Group>
                 <div className="grid sm:grid-cols-[1fr_2fr] gap-3 items-end">
@@ -203,7 +201,7 @@ export function Calculator({
                     <div className="h-full rounded-full bg-brand-600" style={{ width: `${(c.suggestedPerAction / best) * 100}%` }} />
                   </div>
                   <p className="text-[11.5px] text-muted mt-0.5 tnum">
-                    mínimo {brl(c.breakEvenPerAction)} · custo {brl(c.directCost)} (fixo da cidade {brl(c.fixedCost)})
+                    mínimo {brl(c.breakEvenPerAction)} · custo {brl(c.directCost)} (transporte {brl(c.transportTotal)} · frete e fixos {brl(c.fixedCost)})
                     {c.offered ? (
                       <>
                         {" "}
@@ -311,6 +309,71 @@ export function Calculator({
             </section>
           ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+const fmtNum = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+
+/**
+ * Logística da cidade em duas partes, cada uma calculada pelo km (km rodados ÷ km
+ * por litro × combustível) ou digitada em reais quando não há km:
+ * transporte (se repete a cada ação) e frete (por viagem, muitas vezes só 1).
+ */
+function Logistics({ i, c, res, fuel, setCity }: { i: number; c: CalcCity; res: CityResult; fuel: number; setCity: (p: Partial<CalcCity>) => void }) {
+  const tByKm = c.transportKm > 0;
+  const fByKm = c.freightKm > 0;
+  const liters = (km: number, kml: number) => (kml > 0 ? km / kml : 0);
+  return (
+    <>
+      <fieldset className="rounded-xl border border-line p-3 space-y-2">
+        <legend className="px-1 text-[11.5px] font-bold uppercase tracking-wide text-muted inline-flex items-center gap-1.5">
+          <Fuel className="size-3.5" /> Transporte da equipe (em cada ação)
+        </legend>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 items-end">
+          <Field id={`c-${i}-tkm`} label="Km por ação (ida e volta)" value={c.transportKm} onChange={(v) => setCity({ transportKm: toNum(v) })} />
+          <Field id={`c-${i}-tkml`} label="Km/litro do veículo" value={c.transportKml} onChange={(v) => setCity({ transportKml: toNum(v) })} />
+          {tByKm ? (
+            <Calc label="Transporte por ação" detail={`${fmtNum(liters(c.transportKm, c.transportKml))} L × ${brl(fuel)}`} value={brl(res.transportPerAction)} />
+          ) : (
+            <Field id={`c-${i}-transport`} label="Transporte por ação (sem km)" value={c.transport} onChange={(v) => setCity({ transport: toNum(v) })} money />
+          )}
+        </div>
+        <p className="text-[12.5px] text-ink-2 tnum">
+          Transporte total: {brl(res.transportPerAction)} × {res.actions} ação(ões) = <strong>{brl(res.transportTotal)}</strong>
+          {!tByKm ? <span className="text-muted"> · informe o km para calcular pelo combustível</span> : null}
+        </p>
+      </fieldset>
+      <fieldset className="rounded-xl border border-line p-3 space-y-2">
+        <legend className="px-1 text-[11.5px] font-bold uppercase tracking-wide text-muted inline-flex items-center gap-1.5">
+          <Truck className="size-3.5" /> Frete do material (balcão → loja)
+        </legend>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+          <Field id={`c-${i}-fkm`} label="Km por viagem (ida e volta)" value={c.freightKm} onChange={(v) => setCity({ freightKm: toNum(v) })} />
+          <Field id={`c-${i}-fkml`} label="Km/litro do veículo" value={c.freightKml} onChange={(v) => setCity({ freightKml: toNum(v) })} />
+          <Field id={`c-${i}-ftrips`} label="Viagens" value={c.freightTrips} onChange={(v) => setCity({ freightTrips: Math.max(1, Math.round(toNum(v))) })} />
+          {fByKm ? (
+            <Calc label="Frete por viagem" detail={`${fmtNum(liters(c.freightKm, c.freightKml))} L × ${brl(fuel)}`} value={brl(res.freightPerTrip)} />
+          ) : (
+            <Field id={`c-${i}-freight`} label="Frete por viagem (sem km)" value={c.freight} onChange={(v) => setCity({ freight: toNum(v) })} money />
+          )}
+        </div>
+        <p className="text-[12.5px] text-ink-2 tnum">
+          Frete total: {brl(res.freightPerTrip)} × {Math.max(1, c.freightTrips)} viagem(ns) = <strong>{brl(res.freightTotal)}</strong> <span className="text-muted">(rateado nas ações)</span>
+        </p>
+      </fieldset>
+    </>
+  );
+}
+
+function Calc({ label, detail, value }: { label: string; detail: string; value: string }) {
+  return (
+    <div>
+      <span className="block text-[12px] font-semibold text-ink-2 mb-1 leading-tight">{label}</span>
+      <div className="h-10 rounded-lg bg-canvas px-3 flex items-center justify-between gap-2">
+        <span className="text-[11.5px] text-muted tnum truncate">{detail}</span>
+        <span className="font-bold tnum text-[14px]">{value}</span>
       </div>
     </div>
   );

@@ -1001,7 +1001,7 @@ export const tastingQuotes = pgTable(
     agencyId: uuid("agency_id").notNull().references(() => agencies.id),
     name: text("name").notNull(),
     brandId: uuid("brand_id").references(() => brands.id),
-    globals: jsonb("globals").$type<{ taxPct: number; adminPct: number; marginPct: number }>().notNull(),
+    globals: jsonb("globals").$type<{ taxPct: number; adminPct: number; marginPct: number; fuelPrice?: number }>().notNull(),
     cities: jsonb("cities").$type<unknown[]>().notNull().default([]),
     notes: text("notes"),
     ...timestamps,

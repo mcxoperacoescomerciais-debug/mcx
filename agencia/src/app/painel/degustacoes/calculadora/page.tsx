@@ -4,7 +4,7 @@ import { getScope } from "@/server/auth";
 import { canManageTastings, tastingFormOptions } from "@/server/tastings";
 import { calcReferences, getQuote, listQuotes } from "@/server/tasting-quotes";
 import { isUuid } from "@/lib/filters";
-import { blankCity, type CalcCity } from "@/lib/tasting-calc";
+import { DEFAULT_FUEL_PRICE, blankCity, normalizeCity, type CalcCity } from "@/lib/tasting-calc";
 import { fmtDate } from "@/lib/dates";
 import { PageHeader } from "@/components/ui";
 import { DegTabs } from "../_components/deg-tabs";
@@ -20,10 +20,10 @@ export default async function CalculatorPage({ searchParams }: PageProps<"/paine
   const id = typeof sp.orcamento === "string" && isUuid(sp.orcamento) ? sp.orcamento : null;
   const [opts, refs, quotes, saved] = await Promise.all([tastingFormOptions(scope), calcReferences(scope), listQuotes(scope), id ? getQuote(scope, id) : Promise.resolve(null)]);
   // Ponto de partida: um exemplo com valores comuns, para ajustar.
-  const example: CalcCity = { ...blankCity("Divinópolis"), actions: 8, tasterFee: 160, tasterTransport: 20, meal: 25, consumables: 15, equipment: 10, supervision: 150 };
+  const example: CalcCity = { ...blankCity("Divinópolis"), actions: 8, tasterFee: 160, meal: 25, transportKm: 30, transportKml: 10, consumables: 15, equipment: 10, supervision: 150 };
   const initial: QuoteData = saved
-    ? { id: saved.id, name: saved.name, brandId: saved.brandId, globals: saved.globals, cities: saved.cities as CalcCity[], notes: saved.notes }
-    : { id: null, name: "", brandId: null, globals: { taxPct: 6, adminPct: 0, marginPct: 30 }, cities: [example], notes: null };
+    ? { id: saved.id, name: saved.name, brandId: saved.brandId, globals: { ...saved.globals, fuelPrice: saved.globals.fuelPrice ?? DEFAULT_FUEL_PRICE }, cities: Array.isArray(saved.cities) ? saved.cities.map(normalizeCity) : [], notes: saved.notes }
+    : { id: null, name: "", brandId: null, globals: { taxPct: 6, adminPct: 0, marginPct: 30, fuelPrice: DEFAULT_FUEL_PRICE }, cities: [example], notes: null };
   return (
     <>
       <DegTabs />
@@ -39,7 +39,7 @@ export default async function CalculatorPage({ searchParams }: PageProps<"/paine
         quotes={quotes.map((x) => ({ id: x.id, name: x.name, brandName: x.brandName, count: Array.isArray(x.cities) ? x.cities.length : 0, updatedAt: fmtDate(x.updatedAt.toISOString().slice(0, 10)) }))}
       />
       <p className="text-[12px] text-muted mt-6 max-w-4xl">
-        Como a conta é feita: custo direto = (degustadoras × cachê, transporte e alimentação + descartáveis, produto e equipamento) × ações + custos da cidade (km × R$/km × viagens, hospedagem, frete e supervisão). Preço mínimo = custo ÷ (1 − impostos). Preço sugerido = custo ÷ (1 − impostos − margem de contribuição). A margem aqui é de contribuição: as despesas administrativas e fixas da agência não entram na calculadora — elas são descontadas no DRE geral do Financeiro.
+        Como a conta é feita: custo direto = (degustadoras × cachê e alimentação + transporte + descartáveis, produto e equipamento) × ações + custos da cidade (frete × viagens, hospedagem e supervisão). Transporte e frete pelo km: km rodados ÷ km por litro do veículo × preço do combustível. Preço mínimo = custo ÷ (1 − impostos). Preço sugerido = custo ÷ (1 − impostos − margem de contribuição). A margem aqui é de contribuição: as despesas administrativas e fixas da agência não entram na calculadora — elas são descontadas no DRE geral do Financeiro.
       </p>
     </>
   );
