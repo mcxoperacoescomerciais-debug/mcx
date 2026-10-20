@@ -213,7 +213,7 @@ export function tastingFinance(rows: TastingRow[]): TastingFinance {
 /** DRE gerencial do mês (previsto × realizado) + degustações por marca + comparação dos últimos 6 meses. */
 export async function financeOverview(scope: Scope, month: string) {
   const { from, to, month: m } = monthRange(month);
-  const [tastingRows, promo, payroll] = await Promise.all([listTastings(scope, { from, to }), promotoriaRevenue(scope, m), payrollCost(scope)]);
+  const [tastingRows, promo, payroll, fixed] = await Promise.all([listTastings(scope, { from, to }), promotoriaRevenue(scope, m), payrollCost(scope), monthExpenses(scope, m)]);
   const tastings = tastingFinance(tastingRows);
   // Degustações: previsto = tudo o que está programado (canceladas só com multa); realizado = concluídas + multas.
   const live = tastingRows.filter((r) => r.status !== "cancelled");
@@ -224,7 +224,25 @@ export async function financeOverview(scope: Scope, month: string) {
     const revenue = r2(promotoria + tastingRevenue);
     const directCosts = r2(payroll.total + tasterCost + tastingOther);
     const contribution = r2(revenue - taxes - directCosts);
-    return { promotoriaRevenue: promotoria, tastingRevenue, revenue, taxes, payroll: payroll.total, tasterCost, tastingOtherCosts: tastingOther, directCosts, contribution, margin: revenue > 0 ? Math.round((contribution / revenue) * 1000) / 10 : null };
+    const operating = r2(contribution - fixed.total);
+    const margin = revenue > 0 ? Math.round((contribution / revenue) * 1000) / 10 : null;
+    return {
+      promotoriaRevenue: promotoria,
+      tastingRevenue,
+      revenue,
+      taxes,
+      payroll: payroll.total,
+      tasterCost,
+      tastingOtherCosts: tastingOther,
+      directCosts,
+      contribution,
+      margin,
+      fixed: fixed.total,
+      operating,
+      operatingMargin: revenue > 0 ? Math.round((operating / revenue) * 1000) / 10 : null,
+      /** Receita necessária para pagar as despesas fixas com a margem de contribuição atual. */
+      breakEven: margin && margin > 0 ? r2(fixed.total / (margin / 100)) : null,
+    };
   };
   const planned = col(r2(sum(live, (r) => r.planned.revenue) + fees), sum(live, (r) => r.planned.taxes), sum(live, (r) => r.planned.tasterCost), sum(live, (r) => r.planned.otherCosts), promo.planned);
   const realized = col(r2(sum(done, (r) => r.actual.revenue) + fees), sum(done, (r) => r.actual.taxes), sum(done, (r) => r.actual.tasterCost), sum(done, (r) => r.actual.otherCosts), promo.realized);
@@ -245,7 +263,7 @@ export async function financeOverview(scope: Scope, month: string) {
     months.push({ month: mm, revenue: f.revenue, costs: r2(f.tasterCost + f.otherCosts), contribution: f.contribution, count: f.count });
   }
 
-  return { from, to, month: m, dre: { planned, realized }, tastings, brands, months, promo, payroll };
+  return { from, to, month: m, dre: { planned, realized }, tastings, brands, months, promo, payroll, fixed };
 }
 
 export function shiftMonth(month: string, delta: number): string {
@@ -467,4 +485,73 @@ export async function strategyOverview(scope: Scope) {
     promoters,
     totals: { revenue: r2(totalRevenue), visits: totalVisits, avgPerVisit: r2(avgPerVisit), fieldCost: r2(brands.reduce((t, b) => t + b.fieldCost, 0)), payroll: payroll.total, withoutCost: payroll.withoutCost, stores: visited.size },
   };
+}
+
+// ───────────────────────────── Despesas administrativas e fixas ─────────────────────────────
+
+export const EXPENSE_CATEGORIES = {
+  staff: "Pessoal administrativo (salários, pró-labore, encargos)",
+  occupancy: "Ocupação (aluguel, condomínio, água, luz)",
+  services: "Serviços (contador, jurídico, consultorias)",
+  systems: "Sistemas, internet e telefone",
+  vehicles: "Veículos da empresa (parcela, seguro, manutenção)",
+  financial: "Despesas financeiras (tarifas, juros)",
+  taxes: "Impostos e taxas fixos",
+  other: "Outras despesas",
+} as const;
+export type ExpenseCategory = keyof typeof EXPENSE_CATEGORIES;
+
+const isMonth = (m: string | null | undefined): m is string => typeof m === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(m);
+
+/** Despesas que valem no mês (recorrentes ativas + lançamentos daquele mês). */
+export async function monthExpenses(scope: Scope, month: string) {
+  const db = await getDb();
+  const rows = await db
+    .select()
+    .from(s.fixedExpenses)
+    .where(and(eq(s.fixedExpenses.agencyId, scope.agencyId), lte(s.fixedExpenses.startMonth, month), sql`(${s.fixedExpenses.endMonth} is null or ${s.fixedExpenses.endMonth} >= ${month})`))
+    .orderBy(asc(s.fixedExpenses.category), asc(s.fixedExpenses.name));
+  const byCategory = (Object.keys(EXPENSE_CATEGORIES) as ExpenseCategory[])
+    .map((k) => ({ category: k, label: EXPENSE_CATEGORIES[k], total: r2(rows.filter((r) => r.category === k).reduce((t, r) => t + r.amount, 0)) }))
+    .filter((c) => c.total > 0);
+  return { rows, byCategory, total: r2(rows.reduce((t, r) => t + r.amount, 0)) };
+}
+
+export async function saveExpense(scope: Scope, id: string | null, i: { name: string; category: string; amount: number | null; startMonth: string; recurring: boolean; endMonth: string | null; notes: string | null }): Promise<ActionResult> {
+  if (!canSeeFinance(scope)) return fail("Sem permissão.");
+  if (i.name.trim().length < 2) return fail("Descreva a despesa (ex.: Aluguel do escritório).");
+  if (!(i.category in EXPENSE_CATEGORIES)) return fail("Escolha a categoria.");
+  if (i.amount === null || !Number.isFinite(i.amount) || i.amount <= 0 || i.amount > 10_000_000) return fail("Informe o valor mensal.");
+  if (!isMonth(i.startMonth)) return fail("Mês inicial inválido.");
+  const endMonth = i.recurring ? (isMonth(i.endMonth) ? i.endMonth : null) : i.startMonth;
+  if (endMonth && endMonth < i.startMonth) return fail("O mês final é antes do inicial.");
+  const db = await getDb();
+  const values = { name: i.name.trim(), category: i.category, amount: r2(i.amount), startMonth: i.startMonth, endMonth, notes: i.notes?.trim() || null, updatedAt: new Date(), updatedBy: scope.userId };
+  if (id) {
+    const r = await db.update(s.fixedExpenses).set(values).where(and(eq(s.fixedExpenses.id, id), eq(s.fixedExpenses.agencyId, scope.agencyId))).returning({ id: s.fixedExpenses.id });
+    if (!r.length) return fail("Despesa não encontrada.");
+    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "fixed_expense", id, "updated", { after: values });
+    return { ok: true, message: "Despesa salva." };
+  }
+  const [row] = await db.insert(s.fixedExpenses).values({ ...values, agencyId: scope.agencyId, createdBy: scope.userId }).returning({ id: s.fixedExpenses.id });
+  await audit({ agencyId: scope.agencyId, userId: scope.userId }, "fixed_expense", row.id, "created", { after: values });
+  return { ok: true, message: "Despesa lançada." };
+}
+
+/** Encerra uma despesa recorrente: deixa de contar a partir do mês informado (o histórico fica). */
+export async function endExpense(scope: Scope, id: string, fromMonth: string): Promise<ActionResult> {
+  if (!canSeeFinance(scope)) return fail("Sem permissão.");
+  if (!isMonth(fromMonth)) return fail("Mês inválido.");
+  const db = await getDb();
+  const [e] = await db.select().from(s.fixedExpenses).where(and(eq(s.fixedExpenses.id, id), eq(s.fixedExpenses.agencyId, scope.agencyId)));
+  if (!e) return fail("Despesa não encontrada.");
+  const last = shiftMonth(fromMonth, -1);
+  if (last < e.startMonth) {
+    await db.delete(s.fixedExpenses).where(eq(s.fixedExpenses.id, id));
+    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "fixed_expense", id, "deleted", { before: e });
+    return { ok: true, message: "Despesa removida." };
+  }
+  await db.update(s.fixedExpenses).set({ endMonth: last, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.fixedExpenses.id, id));
+  await audit({ agencyId: scope.agencyId, userId: scope.userId }, "fixed_expense", id, "ended", { before: { endMonth: e.endMonth }, after: { endMonth: last } });
+  return { ok: true, message: `Despesa encerrada: conta até ${last.slice(5)}/${last.slice(0, 4)}.` };
 }

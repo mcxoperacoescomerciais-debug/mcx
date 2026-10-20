@@ -25,14 +25,13 @@ export default async function FinancePage({ searchParams }: PageProps<"/painel/f
   const tastRes = (x: typeof P) => x.tastingRevenue - x.taxes - x.tasterCost - x.tastingOtherCosts;
   return (
     <>
-      <FinHeader title="DRE geral da empresa" subtitle="promotoria + degustações, até o resultado de contribuição" month={ov.month} path="/painel/financeiro" />
+      <FinHeader title="DRE geral da empresa" subtitle="promotoria + degustações, até o resultado operacional" month={ov.month} path="/painel/financeiro" />
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard label="Receita prevista do mês" value={brl(P.revenue)} sub={`Promotoria ${brl(P.promotoriaRevenue)} · Degustações ${brl(P.tastingRevenue)}`} />
         <KpiCard label="Receita realizada até agora" value={brl(R.revenue)} tone="info" sub={`Promotoria ${brl(R.promotoriaRevenue)} (visitas feitas) · Degustações ${brl(R.tastingRevenue)}`} />
         <KpiCard label="Folha de pagamento" value={brl(ov.payroll.total)} tone="warning" sub={`${ov.payroll.people.length} promotor(es) ativo(s)${ov.payroll.withoutCost ? ` · ${ov.payroll.withoutCost} sem custo informado` : ""}`} href={`/painel/financeiro/promotoria${withParams({ mes: ov.month })}#folha`} />
-        <KpiCard label="Resultado previsto" value={brl(P.contribution)} tone={P.contribution >= 0 ? "success" : "danger"} sub={`Margem ${pct(P.margin)} · realizado ${brl(R.contribution)}`} />
+        <KpiCard label="Resultado operacional previsto" value={brl(P.operating)} tone={P.operating >= 0 ? "success" : "danger"} sub={`Contribuição ${brl(P.contribution)} (${pct(P.margin)}) − fixas ${brl(P.fixed)}`} href={`/painel/financeiro/despesas${withParams({ mes: ov.month })}`} />
       </div>
-
 
       <div className="grid xl:grid-cols-5 gap-6 mt-6">
         <SectionCard className="xl:col-span-3" title="DRE geral do mês" subtitle="Previsto (meta cheia e ações programadas) × realizado (visitas feitas e ações concluídas)" bodyClass="px-5 pb-5">
@@ -46,9 +45,26 @@ export default async function FinancePage({ searchParams }: PageProps<"/painel/f
             <DreRow label="(−) Outros custos diretos das degustações" p={-P.tastingOtherCosts} r={-R.tastingOtherCosts} />
             <DreRow label="Resultado de contribuição" p={P.contribution} r={R.contribution} strong />
             <PctRow label="Margem de contribuição" p={pct(P.margin)} r={pct(R.margin)} />
+            <DreRow label="(−) Despesas administrativas e fixas" p={-P.fixed} r={-R.fixed} />
+            <DreRow label="Resultado operacional" p={P.operating} r={R.operating} strong />
+            <PctRow label="Margem operacional" p={pct(P.operatingMargin)} r={pct(R.operatingMargin)} />
           </DreTable>
           <p className="text-[12px] text-muted mt-3 flex gap-1.5">
-            <Info className="size-4 shrink-0" /> Não é o lucro líquido: faltam as despesas administrativas e gerais da agência.
+            <Info className="size-4 shrink-0" />
+            <span>
+              Despesas fixas vêm da aba{" "}
+              <Link href={`/painel/financeiro/despesas${withParams({ mes: ov.month })}`} className="font-semibold text-brand-700 hover:underline">
+                Despesas fixas
+              </Link>
+              {P.breakEven !== null ? (
+                <>
+                  {" "}· ponto de equilíbrio: <b>{brl(P.breakEven)}</b> de receita no mês (despesas fixas ÷ margem de contribuição).
+                </>
+              ) : (
+                "."
+              )}{" "}
+              Antes de IR/CSLL.
+            </span>
           </p>
         </SectionCard>
         <div className="xl:col-span-2 grid gap-4 content-start">

@@ -94,7 +94,7 @@ export function Calculator({
     <div className="space-y-6">
       {/* Orçamento e premissas */}
       <section className="bg-surface border border-line rounded-[var(--radius-card)] p-5 space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-[2fr_1.4fr_1fr_1fr_1fr] gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-[2fr_1.4fr_1fr_1.2fr] gap-3">
           <label className="block">
             <span className="block text-[12.5px] font-semibold text-ink-2 mb-1">Nome do orçamento</span>
             <input id="q-name" value={q.name} onChange={(e) => setQ({ ...q, name: e.target.value })} placeholder="Ex.: Suinco · novembro · 5 cidades" className={inputClass} />
@@ -111,10 +111,9 @@ export function Calculator({
             </select>
           </label>
           <Pct id="g-tax" label="Impostos sobre a nota (%)" value={q.globals.taxPct} onChange={(v) => setG("taxPct", v)} hint="Simples, ISS…" />
-          <Pct id="g-admin" label="Administrativo (%)" value={q.globals.adminPct} onChange={(v) => setG("adminPct", v)} hint="Estrutura da agência" />
-          <Pct id="g-margin" label="Margem desejada (%)" value={q.globals.marginPct} onChange={(v) => setG("marginPct", v)} hint="Lucro sobre o preço" />
+          <Pct id="g-margin" label="Margem de contribuição desejada (%)" value={q.globals.marginPct} onChange={(v) => setG("marginPct", v)} hint="Antes das despesas administrativas (DRE)" />
         </div>
-        {r.invalid ? <p className="text-[13px] text-bad font-medium">Impostos + administrativo + margem passam de 100%: não existe preço que feche a conta. Reduza algum percentual.</p> : null}
+        {r.invalid ? <p className="text-[13px] text-bad font-medium">Impostos + margem passam de 100%: não existe preço que feche a conta. Reduza algum percentual.</p> : null}
       </section>
 
       <div className="grid xl:grid-cols-5 gap-6 items-start">
@@ -241,7 +240,7 @@ export function Calculator({
           <section className="bg-surface border border-line rounded-[var(--radius-card)] p-5 space-y-3">
             <h2 className="font-semibold text-[15px]">Se a marca pedir preço único</h2>
             <p className="text-[13px] text-ink-2">
-              Preço por ação para o pedido inteiro dar {pct(q.globals.marginPct)} de margem: <strong className="tnum text-[15px]">{brl(r.totals.uniquePrice)}</strong>
+              Preço por ação para o pedido inteiro dar {pct(q.globals.marginPct)} de margem de contribuição: <strong className="tnum text-[15px]">{brl(r.totals.uniquePrice)}</strong>
             </p>
             <table className="w-full text-[13px]">
               <thead>

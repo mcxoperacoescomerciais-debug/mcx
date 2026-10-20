@@ -177,7 +177,7 @@ export async function commitScheduleAction(batchId: string, brandId: string, row
   return r;
 }
 
-export async function saveQuoteAction(id: string | null, data: { name: string; brandId: string | null; globals: { taxPct: number; adminPct: number; marginPct: number }; cities: unknown; notes: string | null }) {
+export async function saveQuoteAction(id: string | null, data: { name: string; brandId: string | null; globals: { taxPct: number; adminPct?: number; marginPct: number }; cities: unknown; notes: string | null }) {
   const { saveQuote } = await import("@/server/tasting-quotes");
   const r = await saveQuote(await getScope(), id, data);
   if (r.ok) revalidatePath(`${BASE}/calculadora`);

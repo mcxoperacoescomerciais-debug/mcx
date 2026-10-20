@@ -63,7 +63,7 @@ export async function saveQuote(scope: Scope, id: string | null, i: { name: stri
   if (name.length < 2) return fail("Dê um nome ao orçamento (ex.: Suinco · novembro · 5 cidades).");
   const cities = cleanCities(i.cities);
   if (!cities.length) return fail("Inclua ao menos uma cidade.");
-  const globals = { taxPct: num(i.globals.taxPct, 99), adminPct: num(i.globals.adminPct, 99), marginPct: num(i.globals.marginPct, 99) };
+  const globals = { taxPct: num(i.globals.taxPct, 99), adminPct: 0, marginPct: num(i.globals.marginPct, 99) };
   const db = await getDb();
   if (i.brandId) {
     const [b] = await db.select({ id: s.brands.id }).from(s.brands).where(and(eq(s.brands.id, i.brandId), eq(s.brands.agencyId, scope.agencyId)));

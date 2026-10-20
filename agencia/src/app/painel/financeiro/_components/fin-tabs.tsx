@@ -9,6 +9,7 @@ const TABS = [
   { href: "/painel/financeiro", label: "DRE geral", exact: true },
   { href: "/painel/financeiro/promotoria", label: "DRE promotoria" },
   { href: "/painel/financeiro/degustacoes", label: "DRE degustações" },
+  { href: "/painel/financeiro/despesas", label: "Despesas fixas" },
   { href: "/painel/financeiro/estrategico", label: "Visão estratégica" },
 ];
 

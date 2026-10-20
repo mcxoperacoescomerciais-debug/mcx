@@ -229,6 +229,32 @@ describe("degustações — fluxo", () => {
     for (const b of st.brands) assert.equal(b.result, Math.round((b.revenue - b.fieldCost) * 100) / 100);
   });
 
+  test("despesas fixas: vigência por mês e resultado operacional no DRE geral", async () => {
+    const admin = await scopeOf("admin");
+    const month = todayIso().slice(0, 7);
+    const next = fin.shiftMonth(month, 1);
+    const base = { category: "occupancy", endMonth: null, notes: null };
+    assert.equal((await fin.saveExpense(admin, null, { ...base, name: "Aluguel", amount: 0, startMonth: month, recurring: true })).ok, false, "valor obrigatório");
+    assert.ok((await fin.saveExpense(admin, null, { ...base, name: "Aluguel", amount: 3000, startMonth: month, recurring: true })).ok);
+    assert.ok((await fin.saveExpense(admin, null, { ...base, name: "Mudança", category: "other", amount: 500, startMonth: month, recurring: false })).ok);
+    const now = await fin.monthExpenses(admin, month);
+    assert.equal(now.total, 3500);
+    assert.equal((await fin.monthExpenses(admin, next)).total, 3000, "a despesa só deste mês não vai para o próximo");
+    assert.equal((await fin.monthExpenses(admin, fin.shiftMonth(month, -1))).total, 0);
+    const ov = await fin.financeOverview(admin, month);
+    const P = ov.dre.planned;
+    assert.equal(P.fixed, 3500);
+    assert.equal(P.operating, Math.round((P.contribution - 3500) * 100) / 100);
+    if (P.margin && P.margin > 0) assert.ok(Math.abs(P.breakEven! - 3500 / (P.margin / 100)) < 0.01);
+    // Encerrar a partir do próximo mês mantém este; encerrar no mês inicial remove.
+    const rent = now.rows.find((r) => r.name === "Aluguel")!;
+    assert.ok((await fin.endExpense(admin, rent.id, next)).ok);
+    assert.equal((await fin.monthExpenses(admin, month)).total, 3500);
+    assert.equal((await fin.monthExpenses(admin, next)).total, 0);
+    for (const r of now.rows) assert.ok((await fin.endExpense(admin, r.id, month)).ok);
+    assert.equal((await db.select().from(s.fixedExpenses).where(eq(s.fixedExpenses.agencyId, admin.agencyId))).length, 0);
+  });
+
   test("dados de exemplo: criam e somem por completo", async () => {
     const admin = await scopeOf("admin");
     const { seedSamples } = await import("../src/server/tasting-samples");

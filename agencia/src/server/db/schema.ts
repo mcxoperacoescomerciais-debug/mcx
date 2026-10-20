@@ -1009,3 +1009,23 @@ export const tastingQuotes = pgTable(
   },
   (t) => [index("tasting_quotes_agency_idx").on(t.agencyId, t.updatedAt)],
 );
+
+/** Despesas administrativas e fixas da agência (entram no DRE geral, depois do resultado de contribuição). */
+export const fixedExpenses = pgTable(
+  "fixed_expenses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    name: text("name").notNull(),
+    category: text("category").notNull(),
+    amount: money("amount").notNull(),
+    /** Primeiro mês (aaaa-mm). */
+    startMonth: text("start_month").notNull(),
+    /** Último mês (aaaa-mm); vazio = continua. Igual ao primeiro = lançamento só daquele mês. */
+    endMonth: text("end_month"),
+    notes: text("notes"),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [index("fixed_expenses_agency_idx").on(t.agencyId, t.startMonth)],
+);

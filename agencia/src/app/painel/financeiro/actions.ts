@@ -31,3 +31,23 @@ export async function cancelInvoiceAction(_: FormState, fd: FormData): Promise<F
   if (r.ok) revalidatePath("/painel", "layout");
   return r;
 }
+
+export async function saveExpenseAction(_: FormState, fd: FormData): Promise<FormState> {
+  const r = await fin.saveExpense(await getScope(), str(fd, "id") || null, {
+    name: str(fd, "name"),
+    category: str(fd, "category"),
+    amount: money(fd, "amount"),
+    startMonth: str(fd, "startMonth"),
+    recurring: str(fd, "recurring") !== "once",
+    endMonth: str(fd, "endMonth") || null,
+    notes: str(fd, "notes") || null,
+  });
+  if (r.ok) revalidatePath("/painel/financeiro", "layout");
+  return r;
+}
+
+export async function endExpenseAction(_: FormState, fd: FormData): Promise<FormState> {
+  const r = await fin.endExpense(await getScope(), str(fd, "id"), str(fd, "fromMonth"));
+  if (r.ok) revalidatePath("/painel/financeiro", "layout");
+  return r;
+}

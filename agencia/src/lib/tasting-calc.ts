@@ -2,18 +2,19 @@
  * Calculadora de degustação: quanto cobrar por ação em cada cidade para não ter
  * prejuízo e para chegar à margem desejada. Funções puras (tela e testes).
  *
- * Preço P de uma cidade com custo direto C (todas as ações + custos da cidade):
- *   P − impostos(P) − administrativo(P) − C = margem(P)
- *   ⇒ P = C ÷ (1 − imposto% − administrativo% − margem%)
- * Preço mínimo (empate) = C ÷ (1 − imposto% − administrativo%).
+ * Custeio variável: a calculadora não rateia despesas administrativas (elas
+ * entram no DRE geral). Preço P de uma cidade com custo direto C:
+ *   P − impostos(P) − C = margem de contribuição(P)
+ *   ⇒ P = C ÷ (1 − imposto% − margem%)
+ * Preço mínimo (empate) = C ÷ (1 − imposto%).
  */
 
 export interface CalcGlobals {
   /** Impostos sobre o faturamento (%), ex.: Simples Nacional. */
   taxPct: number;
-  /** Custos administrativos e da estrutura da agência rateados sobre o preço (%). */
-  adminPct: number;
-  /** Margem de lucro desejada sobre o preço (%). */
+  /** Não usado: despesas administrativas entram no DRE geral (mantido para orçamentos antigos). */
+  adminPct?: number;
+  /** Margem de contribuição desejada sobre o preço (%), antes das despesas administrativas. */
   marginPct: number;
 }
 
@@ -62,7 +63,7 @@ export interface CityResult {
   fixedCost: number;
   directCost: number;
   costPerAction: number;
-  /** Preço mínimo por ação para não ter prejuízo (paga impostos e administrativo). */
+  /** Preço mínimo por ação para não ter prejuízo (paga impostos e os custos da ação). */
   breakEvenPerAction: number;
   /** Preço por ação que entrega a margem desejada. */
   suggestedPerAction: number;
@@ -88,7 +89,7 @@ export interface CalcResult {
     offeredResult: number | null;
     offeredMargin: number | null;
   };
-  /** Divisor inválido (impostos + administrativo + margem ≥ 100%). */
+  /** Divisor inválido (impostos + margem ≥ 100%). */
   invalid: boolean;
 }
 
@@ -97,9 +98,8 @@ const n = (v: number | null | undefined) => (typeof v === "number" && Number.isF
 
 export function calcTasting(g: CalcGlobals, cities: CalcCity[]): CalcResult {
   const tax = n(g.taxPct) / 100;
-  const admin = n(g.adminPct) / 100;
   const margin = n(g.marginPct) / 100;
-  const keepBE = 1 - tax - admin;
+  const keepBE = 1 - tax;
   const keep = keepBE - margin;
   const invalid = keep <= 0 || keepBE <= 0;
   const results: CityResult[] = cities.map((c) => {
