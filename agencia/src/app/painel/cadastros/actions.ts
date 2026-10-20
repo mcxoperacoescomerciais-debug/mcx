@@ -153,9 +153,24 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
           whatsappApiKey: str(fd, "alert_apikey").toLowerCase() === "apagar" ? "" : str(fd, "alert_apikey") || scope.settings.alerts.whatsappApiKey,
           storageReport: scope.settings.alerts.storageReport,
         },
+        promoterCost: {
+          salary: moneyField(fd, "cost_salary"),
+          meal: moneyField(fd, "cost_meal"),
+          fuel: moneyField(fd, "cost_fuel"),
+          other: moneyField(fd, "cost_other"),
+          chargesPct: moneyField(fd, "cost_chargesPct") ?? scope.settings.promoterCost.chargesPct,
+        },
       }),
     ),
   );
+}
+
+/** "1.518,00" / "1518.5" → número; vazio → null. */
+function moneyField(fd: FormData, k: string): number | null {
+  const t = String(fd.get(k) ?? "").trim().replace(/[R$ %]/g, "");
+  if (!t) return null;
+  const n = Number(t.includes(",") ? t.split(".").join("").replace(",", ".") : t);
+  return Number.isFinite(n) ? n : null;
 }
 
 /** "37 99999-8888, +55 31 98888 7777" → "+5537999998888,+5531988887777" */
@@ -199,6 +214,27 @@ export async function importAction(_: ImportState, fd: FormData): Promise<Import
 }
 
 /** Cadastro do promotor: marcas, dias e vezes numa loja (substitui as da loja; vazio = tira a loja). */
+/** Custos do promotor: o que for igual ao padrão da agência fica acompanhando o padrão (salvo vazio). */
+export async function savePromoterCostAction(_: FormState, fd: FormData): Promise<FormState> {
+  const scope = await getScope();
+  const { savePromoterCost } = await import("@/server/finance");
+  const d = scope.settings.promoterCost;
+  const own = (k: string, def: number | null) => {
+    const v = moneyField(fd, k);
+    return v === null || (def !== null && Math.abs(v - def) < 0.005) ? null : v;
+  };
+  const userId = String(fd.get("userId") ?? "");
+  const r = await savePromoterCost(scope, userId, {
+    costSalary: own("salary", d.salary),
+    costMeal: own("meal", d.meal),
+    costFuel: own("fuel", d.fuel),
+    costOther: own("other", d.other),
+    costCharges: moneyField(fd, "charges"),
+  });
+  if (r.ok) revalidatePath(`/painel/cadastros/usuarios/${userId}`);
+  return r;
+}
+
 export async function moveStoreDayAction(promoterId: string, storeId: string, fromDay: number, toDay: number) {
   const { moveStoreDay } = await import("@/server/portfolio");
   const r = await moveStoreDay(await getScope(), promoterId, storeId, fromDay, toDay);

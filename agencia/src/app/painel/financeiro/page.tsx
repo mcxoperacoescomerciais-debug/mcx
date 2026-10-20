@@ -10,7 +10,7 @@ import { fmtDate, todayIso } from "@/lib/dates";
 import { Badge, EmptyState, PageHeader, inputClass } from "@/components/ui";
 import { KpiCard, SectionCard, Table, Td, Th } from "../_components/widgets";
 import { ActionForm, Disclosure } from "../_components/action-form";
-import { brandFeeAction, cancelInvoiceAction, createInvoiceAction, receiveInvoiceAction } from "./actions";
+import { cancelInvoiceAction, createInvoiceAction, receiveInvoiceAction } from "./actions";
 
 export const metadata: Metadata = { title: "Financeiro" };
 
@@ -26,7 +26,8 @@ export default async function FinancePage({ searchParams }: PageProps<"/painel/f
   const sp = await searchParams;
   const ov = await financeOverview(scope, typeof sp.mes === "string" ? sp.mes : todayIso().slice(0, 7));
   const [invoices, unbilled] = await Promise.all([listInvoices(scope, `${shiftMonth(ov.month, -2)}-01`, ov.to), unbilledTastings(scope)]);
-  const dre = ov.dre;
+  const P = ov.dre.planned;
+  const R = ov.dre.realized;
   const t = ov.tastings;
   const maxMonth = Math.max(1, ...ov.months.map((m) => Math.max(m.revenue, m.costs)));
   const byBrandUnbilled = new Map<string, { brandName: string; rows: typeof unbilled }>();
@@ -53,27 +54,40 @@ export default async function FinancePage({ searchParams }: PageProps<"/painel/f
       />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <KpiCard label="Receita do mês" value={brl(dre.revenue)} sub={`Promotoria ${brl(dre.promotoriaRevenue)} · Degustações ${brl(dre.tastingRevenue)}`} />
-        <KpiCard label="Custos diretos" value={brl(dre.directCosts)} tone="warning" sub={`Promotores ${brl(dre.promoterCost)} · Degustação ${brl(dre.tasterCost + dre.tastingOtherCosts)}`} />
-        <KpiCard label="Resultado de contribuição" value={brl(dre.contribution)} tone={dre.contribution >= 0 ? "success" : "danger"} sub={dre.margin === null ? "—" : `Margem ${pct(dre.margin)}`} />
-        <KpiCard label="A receber (degustações)" value={brl(t.toReceive)} tone={t.toReceive ? "info" : "neutral"} sub={`Recebido ${brl(t.received)} · a pagar degustadoras ${brl(t.toPay)}`} />
+        <KpiCard label="Receita prevista do mês" value={brl(P.revenue)} sub={`Promotoria ${brl(P.promotoriaRevenue)} · Degustações ${brl(P.tastingRevenue)}`} />
+        <KpiCard label="Receita realizada até agora" value={brl(R.revenue)} tone="info" sub={`Promotoria ${brl(R.promotoriaRevenue)} (visitas feitas) · Degustações ${brl(R.tastingRevenue)}`} />
+        <KpiCard label="Folha de pagamento" value={brl(ov.payroll.total)} tone="warning" sub={`${ov.payroll.people.length} promotor(es) ativo(s)${ov.payroll.withoutCost ? ` · ${ov.payroll.withoutCost} sem custo informado` : ""}`} href="#folha" />
+        <KpiCard label="Resultado previsto" value={brl(P.contribution)} tone={P.contribution >= 0 ? "success" : "danger"} sub={`Margem ${pct(P.margin)} · realizado ${brl(R.contribution)}`} />
       </div>
 
       <div className="grid xl:grid-cols-5 gap-6 mt-6">
-        <SectionCard className="xl:col-span-2" title="DRE gerencial do mês" subtitle="Até o resultado de contribuição" bodyClass="px-5 pb-5">
-          <dl className="text-[14px] divide-y divide-line">
-            <Row label="Receita de promotoria (contratos mensais)" value={brl(dre.promotoriaRevenue)} />
-            <Row label="Receita de degustações" value={brl(dre.tastingRevenue)} />
-            <Row label="Receita bruta" value={brl(dre.revenue)} strong />
-            <Row label="(−) Impostos e deduções informados" value={`− ${brl(dre.taxes)}`} />
-            <Row label="(−) Pagamento de promotores" value={`− ${brl(dre.promoterCost)}`} />
-            <Row label="(−) Degustadoras" value={`− ${brl(dre.tasterCost)}`} />
-            <Row label="(−) Outros custos diretos das degustações" value={`− ${brl(dre.tastingOtherCosts)}`} />
-            <Row label="Resultado de contribuição (após impostos informados)" value={brl(dre.contribution)} strong />
-            <Row label="Margem de contribuição" value={dre.margin === null ? "—" : pct(dre.margin)} />
-          </dl>
+        <SectionCard className="xl:col-span-2" title="DRE gerencial do mês" subtitle="Previsto (meta cheia e ações programadas) × realizado (visitas feitas e ações concluídas)" bodyClass="px-5 pb-5">
+          <table className="w-full text-[13.5px]">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-muted">
+                <th className="text-left font-semibold py-1.5"></th>
+                <th className="text-right font-semibold py-1.5">Previsto</th>
+                <th className="text-right font-semibold py-1.5">Realizado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              <DreRow label="Receita de promotoria (VR ATEND)" p={P.promotoriaRevenue} r={R.promotoriaRevenue} />
+              <DreRow label="Receita de degustações" p={P.tastingRevenue} r={R.tastingRevenue} />
+              <DreRow label="Receita bruta" p={P.revenue} r={R.revenue} strong />
+              <DreRow label="(−) Impostos e deduções informados" p={-P.taxes} r={-R.taxes} />
+              <DreRow label="(−) Folha de pagamento dos promotores" p={-P.payroll} r={-R.payroll} />
+              <DreRow label="(−) Degustadoras" p={-P.tasterCost} r={-R.tasterCost} />
+              <DreRow label="(−) Outros custos diretos das degustações" p={-P.tastingOtherCosts} r={-R.tastingOtherCosts} />
+              <DreRow label="Resultado de contribuição" p={P.contribution} r={R.contribution} strong />
+              <tr>
+                <td className="py-2 text-ink-2">Margem de contribuição</td>
+                <td className="py-2 text-right tnum font-semibold">{pct(P.margin)}</td>
+                <td className="py-2 text-right tnum font-semibold">{pct(R.margin)}</td>
+              </tr>
+            </tbody>
+          </table>
           <p className="text-[12px] text-muted mt-3 flex gap-1.5">
-            <Info className="size-4 shrink-0" /> Não é o lucro líquido: faltam despesas administrativas e gerais. Degustações por competência (data da ação): concluídas pelo realizado, programadas pelo previsto, canceladas só com multa registrada.
+            <Info className="size-4 shrink-0" /> Promotoria: previsto = soma do VR ATEND das lojas (meta cheia do mês); realizado = VR ATEND × visitas feitas ÷ meta, como o “A PAGAR” da planilha. A folha entra inteira nas duas colunas. Não é o lucro líquido: faltam as demais despesas da agência.
           </p>
         </SectionCard>
 
@@ -147,18 +161,106 @@ export default async function FinancePage({ searchParams }: PageProps<"/painel/f
         </p>
       </SectionCard>
 
-      <SectionCard
-        title="Promotoria · pagamento dos promotores"
-        subtitle="Como na planilha: VR ATEND de cada loja × visitas feitas no mês ÷ meta do mês (pode passar de 100%)"
-        className="mt-6"
-        bodyClass="pb-1"
-      >
-        {ov.payroll.missing ? (
-          <p className="px-5 pb-3 text-[12.5px] text-warn font-medium">
-            {ov.payroll.missing} loja(s) × marca(s) ainda sem VR ATEND cadastrado — não entram no total. Importe a planilha de atribuições com a coluna “valor”.
-          </p>
-        ) : null}
-        {ov.payroll.rows.length ? (
+      <div className="grid xl:grid-cols-2 gap-6 mt-6">
+        <SectionCard title="Promotoria · receita por marca" subtitle="VR ATEND somado das lojas de cada marca" bodyClass="pb-1">
+          {ov.promo.brands.length ? (
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Marca</Th>
+                  <Th align="right">Lojas</Th>
+                  <Th align="right">Visitas / meta</Th>
+                  <Th align="right">Previsto</Th>
+                  <Th align="right">Realizado</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {ov.promo.brands.map((b) => (
+                  <tr key={b.brandId} className="hover:bg-subtle">
+                    <Td className="font-semibold">{b.brandName}</Td>
+                    <Td align="right" className="tnum">{b.stores}</Td>
+                    <Td align="right" className="tnum">
+                      {b.visits}/{b.meta}
+                    </Td>
+                    <Td align="right" className="tnum">{brl(b.planned)}</Td>
+                    <Td align="right" className="tnum font-semibold">{brl(b.realized)}</Td>
+                  </tr>
+                ))}
+                <tr className="bg-subtle font-bold">
+                  <Td>Total</Td>
+                  <Td />
+                  <Td />
+                  <Td align="right" className="tnum">{brl(ov.promo.planned)}</Td>
+                  <Td align="right" className="tnum">{brl(ov.promo.realized)}</Td>
+                </tr>
+              </tbody>
+            </Table>
+          ) : (
+            <EmptyState title="Nenhuma atribuição com VR ATEND" />
+          )}
+          {ov.promo.missing ? <p className="px-5 py-3 text-[12.5px] text-warn font-medium">{ov.promo.missing} loja(s) × marca(s) sem VR ATEND — não entram na receita. Inclua a coluna “valor” na planilha de atribuições.</p> : null}
+        </SectionCard>
+
+        <SectionCard title="Folha de pagamento" subtitle="Custo mensal de cada promotor ativo — ajuste no cadastro do promotor; o padrão fica em Configurações" bodyClass="pb-1">
+          <div id="folha" />
+          {ov.payroll.people.length ? (
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Promotor</Th>
+                  <Th align="right">Salário</Th>
+                  <Th align="right">Alimentação</Th>
+                  <Th align="right">Combustível</Th>
+                  <Th align="right">Encargos</Th>
+                  <Th align="right">Outros</Th>
+                  <Th align="right">Total</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {ov.payroll.people.map((p) => (
+                  <tr key={p.id} className="hover:bg-subtle">
+                    <Td>
+                      <Link href={`/painel/cadastros/usuarios/${p.id}#custos`} className="font-semibold hover:underline">
+                        {p.name}
+                      </Link>
+                      <span className="block text-[11px] text-muted">{p.employment === "fixed" ? "Fixo" : "Freelancer"}</span>
+                    </Td>
+                    <Td align="right" className="tnum">{brl(p.cost.salary)}</Td>
+                    <Td align="right" className="tnum">{brl(p.cost.meal)}</Td>
+                    <Td align="right" className="tnum">{brl(p.cost.fuel)}</Td>
+                    <Td align="right" className="tnum">{brl(p.cost.charges)}</Td>
+                    <Td align="right" className="tnum">{brl(p.cost.other)}</Td>
+                    <Td align="right" className="tnum font-semibold">{brl(p.cost.total)}</Td>
+                  </tr>
+                ))}
+                <tr className="bg-subtle font-bold">
+                  <Td>Total</Td>
+                  <Td align="right" className="tnum">{brl(ov.payroll.salary)}</Td>
+                  <Td align="right" className="tnum">{brl(ov.payroll.meal)}</Td>
+                  <Td align="right" className="tnum">{brl(ov.payroll.fuel)}</Td>
+                  <Td align="right" className="tnum">{brl(ov.payroll.charges)}</Td>
+                  <Td align="right" className="tnum">{brl(ov.payroll.other)}</Td>
+                  <Td align="right" className="tnum">{brl(ov.payroll.total)}</Td>
+                </tr>
+              </tbody>
+            </Table>
+          ) : (
+            <EmptyState title="Nenhum promotor ativo" />
+          )}
+          {ov.payroll.withoutCost ? (
+            <p className="px-5 py-3 text-[12.5px] text-warn font-medium">
+              {ov.payroll.withoutCost} promotor(es) com custo zero. Preencha o padrão em{" "}
+              <Link href="/painel/configuracoes" className="underline">
+                Configurações
+              </Link>{" "}
+              ou o custo no cadastro de cada um.
+            </p>
+          ) : null}
+        </SectionCard>
+      </div>
+
+      <SectionCard title="Promotoria · receita por promotor e marca" subtitle="Como o RESUMO da planilha: VR ATEND × visitas feitas ÷ meta do mês (pode passar de 100%)" className="mt-6" bodyClass="pb-1">
+        {ov.promo.rows.length ? (
           <Table>
             <thead>
               <tr>
@@ -168,36 +270,26 @@ export default async function FinancePage({ searchParams }: PageProps<"/painel/f
                 <Th align="right">Visitas</Th>
                 <Th align="right">Meta</Th>
                 <Th align="right">% cumpr.</Th>
-                <Th align="right">VR ATEND</Th>
-                <Th align="right">A pagar</Th>
+                <Th align="right">VR ATEND (previsto)</Th>
+                <Th align="right">A receber (realizado)</Th>
               </tr>
             </thead>
             <tbody>
-              {ov.payroll.rows.map((r) => (
+              {ov.promo.rows.map((r) => (
                 <tr key={`${r.promoterId}:${r.brandId}`} className="hover:bg-subtle">
                   <Td className="font-semibold">{r.promoterName}</Td>
                   <Td>{r.brandName}</Td>
                   <Td align="right" className="tnum">{r.stores}</Td>
                   <Td align="right" className="tnum">{r.visits}</Td>
                   <Td align="right" className="tnum">{r.meta}</Td>
-                  <Td align="right" className="tnum">{r.pct === null ? "—" : pct(r.pct)}</Td>
+                  <Td align="right" className="tnum">{pct(r.pct)}</Td>
                   <Td align="right" className="tnum">
-                    {brl(r.value)}
+                    {brl(r.planned)}
                     {r.missingValue ? <span className="block text-[11px] text-warn">{r.missingValue} sem valor</span> : null}
                   </Td>
-                  <Td align="right" className="tnum font-semibold">{brl(r.toPay)}</Td>
+                  <Td align="right" className="tnum font-semibold">{brl(r.realized)}</Td>
                 </tr>
               ))}
-              <tr className="bg-subtle font-bold">
-                <Td>Total</Td>
-                <Td />
-                <Td />
-                <Td />
-                <Td />
-                <Td />
-                <Td />
-                <Td align="right" className="tnum">{brl(ov.payroll.total)}</Td>
-              </tr>
             </tbody>
           </Table>
         ) : (
@@ -205,20 +297,7 @@ export default async function FinancePage({ searchParams }: PageProps<"/painel/f
         )}
       </SectionCard>
 
-      <div className="grid xl:grid-cols-2 gap-6 mt-6">
-        <SectionCard title="Receita de promotoria por marca" subtitle="Quanto cada marca paga por mês pela promotoria (contrato)" bodyClass="px-5 pb-5">
-          <ul className="divide-y divide-line">
-            {ov.fees.map((b) => (
-              <li key={b.id} className="py-2">
-                <ActionForm action={brandFeeAction} hidden={{ brandId: b.id }} submitLabel="Salvar" variant="secondary" resetOnSuccess={false} className="!space-y-0 flex flex-wrap items-center gap-2">
-                  <span className="flex-1 min-w-32 text-[13.5px] font-semibold">{b.name}</span>
-                  <input name="fee" inputMode="decimal" defaultValue={b.monthlyFee === null ? "" : b.monthlyFee.toFixed(2).replace(".", ",")} placeholder="R$ por mês" className={inputClass + " !w-36 tnum"} aria-label={`Valor mensal ${b.name}`} />
-                </ActionForm>
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
-
+      <div className="mt-6">
         <SectionCard title="Faturas de degustação" subtitle="Uma fatura pode juntar várias degustações da mesma marca — a receita não é contada duas vezes" bodyClass="px-5 pb-5">
           {invoices.length ? (
             <ul className="divide-y divide-line mb-4">
@@ -280,12 +359,14 @@ export default async function FinancePage({ searchParams }: PageProps<"/painel/f
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function DreRow({ label, p, r, strong }: { label: string; p: number; r: number; strong?: boolean }) {
+  const fmt = (v: number) => (Math.abs(v) < 0.005 ? brl(0) : v < 0 ? `− ${brl(-v)}` : brl(v));
   return (
-    <div className="flex items-center justify-between gap-3 py-2">
-      <dt className={strong ? "font-bold" : "text-ink-2"}>{label}</dt>
-      <dd className={`tnum ${strong ? "font-bold" : "font-semibold"}`}>{value}</dd>
-    </div>
+    <tr>
+      <td className={`py-2 ${strong ? "font-bold" : "text-ink-2"}`}>{label}</td>
+      <td className={`py-2 text-right tnum ${strong ? "font-bold" : "font-semibold"}`}>{fmt(p)}</td>
+      <td className={`py-2 text-right tnum ${strong ? "font-bold" : "font-semibold"}`}>{fmt(r)}</td>
+    </tr>
   );
 }
 

@@ -122,6 +122,12 @@ export const users = pgTable(
     teamOnly: boolean("team_only").notNull().default(false),
     /** Promotor: "route" (roteiro com dia certo) ou "portfolio" (carteira com meta semanal). null = padrão da agência. */
     workMode: text("work_mode").$type<WorkMode>(),
+    /** Custo mensal do promotor para a folha (vazio = padrão da agência; encargos vazios = % sobre o salário). */
+    costSalary: money("cost_salary"),
+    costMeal: money("cost_meal"),
+    costFuel: money("cost_fuel"),
+    costCharges: money("cost_charges"),
+    costOther: money("cost_other"),
     /** Equipe MCX: administra todas as agências (nunca definido pela tela da agência). */
     platform: boolean("platform").notNull().default(false),
     /** Equipe MCX: "owner" (Dono: cadastra a equipe) ou "master". */
@@ -344,7 +350,7 @@ export const visitTargets = pgTable(
     period: text("period").$type<TargetPeriod>().notNull().default("week"),
     /** Dias fixos (0 = domingo … 6 = sábado). Vazio = sem dia fixo: o promotor escolhe (só a quantidade). */
     weekdays: jsonb("weekdays").$type<number[]>().notNull().default([]),
-    /** VR ATEND: valor do mês pago ao promotor por esta loja × marca com a meta cheia (paga proporcional ao cumprido). */
+    /** VR ATEND: valor do mês que a marca paga à agência por esta loja × marca com a meta cheia (recebe proporcional ao cumprido). */
     payValue: money("pay_value"),
     ...timestamps,
     ...authorship,

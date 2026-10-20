@@ -13,6 +13,7 @@ import { saveUserAction } from "../../actions";
 import { listAssignments } from "@/server/portfolio";
 import { PromoterAssignments } from "./promoter-assignments";
 import { RolePicker } from "./role-picker";
+import { PromoterCostForm } from "./promoter-cost-form";
 
 export const metadata: Metadata = { title: "Usuário" };
 
@@ -127,6 +128,17 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
           bodyClass="px-5 pb-5"
         >
           <PromoterAssignments promoterId={user.id} stores={storeOptions} allBrands={activeBrands} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
+        </SectionCard>
+      ) : null}
+      {user?.role === "promoter" && scope.role === "admin" && scope.brandIds === null ? (
+        <SectionCard className="mt-6" title="Custos do promotor (mensal)" subtitle="Salário, alimentação, combustível e encargos que a agência paga. Já vêm com o padrão de Configurações; o total entra na folha de pagamento do Financeiro." bodyClass="px-5 pb-5">
+          <div id="custos" />
+          <PromoterCostForm
+            userId={user.id}
+            fixed={user.employment !== "freelancer"}
+            own={{ salary: user.costSalary, meal: user.costMeal, fuel: user.costFuel, charges: user.costCharges, other: user.costOther }}
+            defaults={scope.settings.promoterCost}
+          />
         </SectionCard>
       ) : null}
     </>

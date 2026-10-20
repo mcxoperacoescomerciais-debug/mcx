@@ -1,9 +1,10 @@
 /**
- * Financeiro da agência: DRE gerencial do mês (resultado de contribuição) com
- * PROMOTORIA (receita contratada por marca × custo com promotores, calculado como
- * na planilha: VR ATEND × visitas feitas ÷ meta do mês) e DEGUSTAÇÕES (receita e
- * custos de cada evento). Faturas juntam várias degustações sem contar a receita
- * duas vezes: a receita é sempre a da degustação; a fatura só registra a cobrança.
+ * Financeiro da agência: DRE gerencial do mês (previsto × realizado) com
+ * PROMOTORIA — receita = VR ATEND de cada loja × marca (meta cheia no previsto;
+ * VR ATEND × visitas feitas ÷ meta do mês no realizado, como o "A PAGAR" da
+ * planilha) e FOLHA DE PAGAMENTO (custo mensal de cada promotor ativo) — e
+ * DEGUSTAÇÕES (receita e custos de cada evento). Faturas juntam várias
+ * degustações sem contar a receita duas vezes.
  */
 import "server-only";
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
@@ -15,6 +16,7 @@ import type { ActionResult } from "./manager";
 import { canManageTastings, listTastings, monthRange, type TastingRow } from "./tastings";
 import { addDays, isIsoDate, todayIso } from "@/lib/dates";
 import type { TargetPeriod } from "@/lib/portfolio";
+import { promoterCost, type PromoterCost } from "@/lib/promoter-cost";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -28,7 +30,7 @@ export function monthlyMeta(perWeek: number, period: TargetPeriod): number {
   return period === "week" ? perWeek * 4 : period === "fortnight" ? perWeek * 2 : perWeek;
 }
 
-export interface PayrollRow {
+export interface RevenueRow {
   promoterId: string;
   promoterName: string;
   brandId: string;
@@ -38,16 +40,16 @@ export interface PayrollRow {
   meta: number;
   /** % cumprimento (pode passar de 100%, como na planilha). */
   pct: number | null;
-  /** Soma do VR ATEND das lojas. */
-  value: number;
-  /** A pagar = Σ VR ATEND × feitas ÷ meta de cada loja. */
-  toPay: number;
-  /** Lojas sem VR ATEND cadastrado (não entram no a pagar). */
+  /** Previsto: soma do VR ATEND das lojas (meta cheia). */
+  planned: number;
+  /** Realizado: Σ VR ATEND × feitas ÷ meta de cada loja. */
+  realized: number;
+  /** Lojas sem VR ATEND cadastrado (não entram na receita). */
   missingValue: number;
 }
 
-/** Custo com promotores no mês (RESUMO da planilha), a partir das visitas registradas no sistema. */
-export async function promoterPayroll(scope: Scope, month: string) {
+/** Receita de promotoria do mês (RESUMO da planilha), a partir das atribuições e das visitas registradas. */
+export async function promotoriaRevenue(scope: Scope, month: string) {
   const { from, to } = monthRange(month);
   const db = await getDb();
   const targets = await db
@@ -62,7 +64,7 @@ export async function promoterPayroll(scope: Scope, month: string) {
       payValue: s.visitTargets.payValue,
     })
     .from(s.visitTargets)
-    .innerJoin(s.users, eq(s.users.id, s.visitTargets.promoterId))
+    .innerJoin(s.users, and(eq(s.users.id, s.visitTargets.promoterId), eq(s.users.status, "active")))
     .innerJoin(s.brands, eq(s.brands.id, s.visitTargets.brandId))
     .where(and(eq(s.visitTargets.agencyId, scope.agencyId), brandFilter(scope, s.visitTargets.brandId), promoterFilter(scope, s.visitTargets.promoterId)));
   const done = targets.length
@@ -74,10 +76,10 @@ export async function promoterPayroll(scope: Scope, month: string) {
         .groupBy(s.visits.promoterId, s.visits.storeId, s.attendances.brandId)
     : [];
   const doneBy = new Map(done.map((d) => [`${d.promoterId}:${d.storeId}:${d.brandId}`, d.n]));
-  const groups = new Map<string, PayrollRow>();
+  const groups = new Map<string, RevenueRow>();
   for (const t of targets) {
     const k = `${t.promoterId}:${t.brandId}`;
-    const g = groups.get(k) ?? { promoterId: t.promoterId, promoterName: t.promoterName, brandId: t.brandId, brandName: t.brandName, stores: 0, visits: 0, meta: 0, pct: null, value: 0, toPay: 0, missingValue: 0 };
+    const g = groups.get(k) ?? { promoterId: t.promoterId, promoterName: t.promoterName, brandId: t.brandId, brandName: t.brandName, stores: 0, visits: 0, meta: 0, pct: null, planned: 0, realized: 0, missingValue: 0 };
     const meta = monthlyMeta(t.perWeek, t.period);
     const n = doneBy.get(`${t.promoterId}:${t.storeId}:${t.brandId}`) ?? 0;
     g.stores++;
@@ -85,39 +87,62 @@ export async function promoterPayroll(scope: Scope, month: string) {
     g.meta += meta;
     if (t.payValue === null) g.missingValue++;
     else {
-      g.value += t.payValue;
-      g.toPay += meta ? (t.payValue * n) / meta : 0;
+      g.planned += t.payValue;
+      g.realized += meta ? (t.payValue * n) / meta : 0;
     }
     groups.set(k, g);
   }
   const rows = [...groups.values()]
-    .map((g) => ({ ...g, value: r2(g.value), toPay: r2(g.toPay), pct: g.meta ? Math.round((g.visits / g.meta) * 1000) / 10 : null }))
+    .map((g) => ({ ...g, planned: r2(g.planned), realized: r2(g.realized), pct: g.meta ? Math.round((g.visits / g.meta) * 1000) / 10 : null }))
     .sort((a, b) => a.promoterName.localeCompare(b.promoterName, "pt-BR") || a.brandName.localeCompare(b.brandName, "pt-BR"));
-  return { from, to, rows, total: r2(rows.reduce((t, r) => t + r.toPay, 0)), missing: rows.reduce((t, r) => t + r.missingValue, 0) };
+  // Por marca (para a marca: quanto vale o contrato no mês e quanto já foi cumprido).
+  const byBrand = new Map<string, { brandId: string; brandName: string; stores: number; planned: number; realized: number; visits: number; meta: number }>();
+  for (const r of rows) {
+    const b = byBrand.get(r.brandId) ?? { brandId: r.brandId, brandName: r.brandName, stores: 0, planned: 0, realized: 0, visits: 0, meta: 0 };
+    b.stores += r.stores;
+    b.planned += r.planned;
+    b.realized += r.realized;
+    b.visits += r.visits;
+    b.meta += r.meta;
+    byBrand.set(r.brandId, b);
+  }
+  return {
+    from,
+    to,
+    rows,
+    brands: [...byBrand.values()].map((b) => ({ ...b, planned: r2(b.planned), realized: r2(b.realized) })).sort((a, b) => b.planned - a.planned),
+    planned: r2(rows.reduce((t, r) => t + r.planned, 0)),
+    realized: r2(rows.reduce((t, r) => t + r.realized, 0)),
+    missing: rows.reduce((t, r) => t + r.missingValue, 0),
+  };
 }
 
-/** Receita contratada de promotoria (valor mensal por marca). */
-export async function brandFees(scope: Scope) {
+/** Folha de pagamento: custo mensal de cada promotor ativo (cadastro dele ou padrão da agência). */
+export async function payrollCost(scope: Scope) {
   const db = await getDb();
-  return db
-    .select({ id: s.brands.id, name: s.brands.name, monthlyFee: s.brands.monthlyFee })
-    .from(s.brands)
-    .where(and(eq(s.brands.agencyId, scope.agencyId), eq(s.brands.status, "active"), brandFilter(scope, s.brands.id)))
-    .orderBy(asc(s.brands.name));
+  const rows = await db
+    .select({ id: s.users.id, name: s.users.name, employment: s.users.employment, costSalary: s.users.costSalary, costMeal: s.users.costMeal, costFuel: s.users.costFuel, costCharges: s.users.costCharges, costOther: s.users.costOther })
+    .from(s.users)
+    .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id)))
+    .orderBy(asc(s.users.name));
+  const people = rows.map((u) => ({ id: u.id, name: u.name, employment: u.employment, cost: promoterCost(u, scope.settings.promoterCost) }));
+  const sum = (k: keyof Pick<PromoterCost, "salary" | "meal" | "fuel" | "charges" | "other" | "total">) => r2(people.reduce((t, p) => t + p.cost[k], 0));
+  return { people, salary: sum("salary"), meal: sum("meal"), fuel: sum("fuel"), charges: sum("charges"), other: sum("other"), total: sum("total"), withoutCost: people.filter((p) => p.cost.total === 0).length };
 }
 
-export async function saveBrandFee(scope: Scope, brandId: string, fee: number | null): Promise<ActionResult> {
+/** Custo do promotor no cadastro (vazio = padrão da agência; encargos vazios = automáticos). */
+export async function savePromoterCost(scope: Scope, userId: string, i: { costSalary: number | null; costMeal: number | null; costFuel: number | null; costCharges: number | null; costOther: number | null }): Promise<ActionResult> {
   if (!canSeeFinance(scope)) return fail("Sem permissão.");
-  if (fee !== null && (!Number.isFinite(fee) || fee < 0 || fee > 10_000_000)) return fail("Valor inválido.");
+  for (const v of Object.values(i)) if (v !== null && (!Number.isFinite(v) || v < 0 || v > 1_000_000)) return fail("Valor inválido.");
   const db = await getDb();
-  const [b] = await db.select().from(s.brands).where(and(eq(s.brands.id, brandId), eq(s.brands.agencyId, scope.agencyId)));
-  if (!b) return fail("Marca não encontrada.");
-  await db.update(s.brands).set({ monthlyFee: fee, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.brands.id, brandId));
-  await audit({ agencyId: scope.agencyId, userId: scope.userId }, "brand", brandId, "monthly_fee", { before: { monthlyFee: b.monthlyFee }, after: { monthlyFee: fee } });
-  return { ok: true, message: "Valor mensal salvo." };
+  const [u] = await db.select().from(s.users).where(and(eq(s.users.id, userId), eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter")));
+  if (!u) return fail("Promotor não encontrado.");
+  await db.update(s.users).set({ ...i, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.users.id, userId));
+  await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", userId, "cost_saved", { before: { costSalary: u.costSalary, costMeal: u.costMeal, costFuel: u.costFuel, costCharges: u.costCharges, costOther: u.costOther }, after: i });
+  return { ok: true, message: "Custos do promotor salvos." };
 }
 
-/** VR ATEND de cada loja × marca do promotor (o que a planilha paga com a meta cheia). */
+/** VR ATEND de uma loja × marca do promotor. */
 export async function saveTargetPayValue(scope: Scope, targetId: string, value: number | null): Promise<ActionResult> {
   if (!canSeeFinance(scope)) return fail("Sem permissão.");
   if (value !== null && (!Number.isFinite(value) || value < 0 || value > 1_000_000)) return fail("Valor inválido.");
@@ -185,15 +210,24 @@ export function tastingFinance(rows: TastingRow[]): TastingFinance {
   };
 }
 
-/** DRE gerencial do mês + degustações por marca + comparação dos últimos 6 meses. */
+/** DRE gerencial do mês (previsto × realizado) + degustações por marca + comparação dos últimos 6 meses. */
 export async function financeOverview(scope: Scope, month: string) {
   const { from, to, month: m } = monthRange(month);
-  const [tastingRows, payroll, fees] = await Promise.all([listTastings(scope, { from, to }), promoterPayroll(scope, m), brandFees(scope)]);
+  const [tastingRows, promo, payroll] = await Promise.all([listTastings(scope, { from, to }), promotoriaRevenue(scope, m), payrollCost(scope)]);
   const tastings = tastingFinance(tastingRows);
-  const promotoriaRevenue = r2(fees.reduce((t, b) => t + (b.monthlyFee ?? 0), 0));
-  const revenue = r2(promotoriaRevenue + tastings.revenue);
-  const directCosts = r2(payroll.total + tastings.tasterCost + tastings.otherCosts);
-  const contribution = r2(revenue - tastings.taxes - directCosts);
+  // Degustações: previsto = tudo o que está programado (canceladas só com multa); realizado = concluídas + multas.
+  const live = tastingRows.filter((r) => r.status !== "cancelled");
+  const done = tastingRows.filter((r) => r.status === "completed");
+  const fees = r2(tastingRows.filter((r) => r.status === "cancelled").reduce((t, r) => t + r.revenueCounted, 0));
+  const sum = (list: TastingRow[], f: (r: TastingRow) => number) => r2(list.reduce((t, r) => t + f(r), 0));
+  const col = (tastingRevenue: number, taxes: number, tasterCost: number, tastingOther: number, promotoria: number) => {
+    const revenue = r2(promotoria + tastingRevenue);
+    const directCosts = r2(payroll.total + tasterCost + tastingOther);
+    const contribution = r2(revenue - taxes - directCosts);
+    return { promotoriaRevenue: promotoria, tastingRevenue, revenue, taxes, payroll: payroll.total, tasterCost, tastingOtherCosts: tastingOther, directCosts, contribution, margin: revenue > 0 ? Math.round((contribution / revenue) * 1000) / 10 : null };
+  };
+  const planned = col(r2(sum(live, (r) => r.planned.revenue) + fees), sum(live, (r) => r.planned.taxes), sum(live, (r) => r.planned.tasterCost), sum(live, (r) => r.planned.otherCosts), promo.planned);
+  const realized = col(r2(sum(done, (r) => r.actual.revenue) + fees), sum(done, (r) => r.actual.taxes), sum(done, (r) => r.actual.tasterCost), sum(done, (r) => r.actual.otherCosts), promo.realized);
 
   const byBrand = new Map<string, { brandId: string; brandName: string; rows: TastingRow[] }>();
   for (const r of tastingRows) {
@@ -203,27 +237,15 @@ export async function financeOverview(scope: Scope, month: string) {
   }
   const brands = [...byBrand.values()].map((g) => ({ brandId: g.brandId, brandName: g.brandName, ...tastingFinance(g.rows) })).sort((a, b) => b.contribution - a.contribution);
 
-  // Comparação mensal (degustações + promotoria contratada; folha só do mês aberto para não pesar).
   const months: { month: string; revenue: number; costs: number; contribution: number; count: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const mm = shiftMonth(m, -i);
-    const range = monthRange(mm);
-    const rows = mm === m ? tastingRows : await listTastings(scope, range);
+    const rows = mm === m ? tastingRows : await listTastings(scope, monthRange(mm));
     const f = tastingFinance(rows);
     months.push({ month: mm, revenue: f.revenue, costs: r2(f.tasterCost + f.otherCosts), contribution: f.contribution, count: f.count });
   }
 
-  return {
-    from,
-    to,
-    month: m,
-    dre: { promotoriaRevenue, tastingRevenue: tastings.revenue, revenue, taxes: tastings.taxes, promoterCost: payroll.total, tasterCost: tastings.tasterCost, tastingOtherCosts: tastings.otherCosts, directCosts, contribution, margin: revenue > 0 ? Math.round((contribution / revenue) * 1000) / 10 : null },
-    tastings,
-    brands,
-    months,
-    payroll,
-    fees,
-  };
+  return { from, to, month: m, dre: { planned, realized }, tastings, brands, months, promo, payroll };
 }
 
 export function shiftMonth(month: string, delta: number): string {

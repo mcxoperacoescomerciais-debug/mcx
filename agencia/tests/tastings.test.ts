@@ -188,18 +188,37 @@ describe("degustações — fluxo", () => {
     assert.equal(files.length, 1, "arquivo original guardado");
   });
 
-  test("folha da promotoria: VR ATEND × feitas ÷ meta do mês", async () => {
+  test("promotoria: receita = VR ATEND (previsto) e VR ATEND × feitas ÷ meta (realizado); folha soma os promotores ativos", async () => {
     assert.equal(fin.monthlyMeta(2, "week"), 8);
     assert.equal(fin.monthlyMeta(1, "fortnight"), 2);
     const admin = await scopeOf("admin");
+    const month = todayIso().slice(0, 7);
     const [t] = await db.select().from(s.visitTargets).where(eq(s.visitTargets.agencyId, admin.agencyId)).limit(1);
     if (t) {
       assert.ok((await fin.saveTargetPayValue(admin, t.id, 400)).ok);
-      const p = await fin.promoterPayroll(admin, todayIso().slice(0, 7));
+      const p = await fin.promotoriaRevenue(admin, month);
       const row = p.rows.find((r) => r.promoterId === t.promoterId && r.brandId === t.brandId)!;
-      assert.ok(row.value >= 400);
-      assert.ok(row.toPay <= row.value * Math.max(1, row.visits / Math.max(1, row.meta)) + 0.01);
+      assert.ok(row.planned >= 400, "previsto = VR ATEND cheio");
+      assert.ok(row.realized <= row.planned * Math.max(1, row.visits / Math.max(1, row.meta)) + 0.01);
     }
+    // Folha: padrão da agência + ajuste individual; encargos automáticos só para vínculo fixo.
+    const withDefaults = { ...admin, settings: { ...admin.settings, promoterCost: { salary: 2000, meal: 400, fuel: 300, other: null, chargesPct: 27.44 } } };
+    const promoters = await db.select().from(s.users).where(eq(s.users.role, "promoter"));
+    const mine = promoters.filter((u) => u.agencyId === admin.agencyId && u.status === "active");
+    const fixed = mine.find((u) => u.employment === "fixed")!;
+    assert.ok((await fin.savePromoterCost(admin, fixed.id, { costSalary: 2500, costMeal: null, costFuel: null, costCharges: null, costOther: 100 })).ok);
+    const pay = await fin.payrollCost(withDefaults);
+    const me = pay.people.find((x) => x.id === fixed.id)!;
+    assert.equal(me.cost.salary, 2500);
+    assert.equal(me.cost.meal, 400, "alimentação vem do padrão");
+    assert.equal(me.cost.charges, 686, "27,44% de 2.500");
+    assert.equal(me.cost.total, 2500 + 400 + 300 + 686 + 100);
+    const free = pay.people.find((x) => x.employment === "freelancer");
+    if (free) assert.equal(free.cost.charges, 0, "freelancer sem encargos");
+    assert.equal(pay.people.length, mine.length, "todos os promotores ativos entram na folha");
+    const ov = await fin.financeOverview(withDefaults, month);
+    assert.equal(ov.dre.planned.payroll, pay.total);
+    assert.equal(ov.dre.planned.promotoriaRevenue, (await fin.promotoriaRevenue(admin, month)).planned);
   });
 
   test("dados de exemplo: criam e somem por completo", async () => {

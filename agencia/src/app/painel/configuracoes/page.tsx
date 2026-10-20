@@ -32,6 +32,26 @@ export default async function SettingsPage() {
               </select>
             </Row>
           </SectionCard>
+          <SectionCard title="Custos padrão do promotor (mensal)" subtitle="Preenchem automaticamente o cadastro de cada promotor (dá para ajustar um a um) e somam na folha de pagamento do Financeiro." bodyClass="px-5 pb-5">
+            <div className="grid grid-cols-2 gap-3">
+              <Row label="Salário (R$)">
+                <input name="cost_salary" inputMode="decimal" defaultValue={brlInput(st.promoterCost.salary)} placeholder="0,00" className={inputClass} />
+              </Row>
+              <Row label="Alimentação (R$)">
+                <input name="cost_meal" inputMode="decimal" defaultValue={brlInput(st.promoterCost.meal)} placeholder="0,00" className={inputClass} />
+              </Row>
+              <Row label="Combustível (R$)">
+                <input name="cost_fuel" inputMode="decimal" defaultValue={brlInput(st.promoterCost.fuel)} placeholder="0,00" className={inputClass} />
+              </Row>
+              <Row label="Outros (R$)">
+                <input name="cost_other" inputMode="decimal" defaultValue={brlInput(st.promoterCost.other)} placeholder="0,00" className={inputClass} />
+              </Row>
+              <Row label="Encargos sobre o salário (%) — só vínculo fixo">
+                <input name="cost_chargesPct" inputMode="decimal" defaultValue={String(st.promoterCost.chargesPct).replace(".", ",")} className={inputClass} />
+              </Row>
+            </div>
+            <p className="text-[12px] text-muted mt-2">Padrão 27,44% = FGTS 8% + 13º 8,33% + férias com 1/3 11,11% (empresa do Simples Nacional). Freelancer não tem encargos.</p>
+          </SectionCard>
           <SectionCard title="Regras de campo" bodyClass="px-5 pb-5 space-y-3">
             <Check name="allowExceptions" checked={st.allowExceptions} label="Permitir exceção justificada para foto/estoque obrigatórios" help="A exceção exige motivo + justificativa e aparece para o gestor." />
             <Check name="allowIncompleteVisit" checked={st.allowIncompleteVisit} label="Permitir encerrar visita com marca pendente (com justificativa)" />
@@ -113,6 +133,8 @@ export default async function SettingsPage() {
     </>
   );
 }
+
+const brlInput = (v: number | null) => (v === null ? "" : v.toFixed(2).replace(".", ","));
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (

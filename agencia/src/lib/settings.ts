@@ -44,7 +44,21 @@ export interface AgencySettings {
   alerts: AlertSettings;
   /** Forma de trabalho padrão dos promotores (cada promotor pode ter a sua no cadastro). */
   defaultWorkMode: WorkMode;
+  /** Custo mensal padrão do promotor (preenche o cadastro de cada um; vazio = não informado). */
+  promoterCost: PromoterCostDefaults;
 }
+
+export interface PromoterCostDefaults {
+  salary: number | null;
+  meal: number | null;
+  fuel: number | null;
+  other: number | null;
+  /** Encargos da agência sobre o salário (%), só para vínculo fixo (CLT). */
+  chargesPct: number;
+}
+
+/** FGTS 8% + 13º 8,33% + férias com 1/3 11,11% (empresa do Simples Nacional). Ajustável em Configurações. */
+export const DEFAULT_CHARGES_PCT = 27.44;
 
 export const DEFAULT_SETTINGS: AgencySettings = {
   requireApproval: false,
@@ -59,6 +73,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   validityBands: DEFAULT_BANDS,
   alerts: { bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "", storageReport: false },
   defaultWorkMode: "route",
+  promoterCost: { salary: null, meal: null, fuel: null, other: null, chargesPct: DEFAULT_CHARGES_PCT },
 };
 
 export function mergeSettings(raw: unknown): AgencySettings {
@@ -92,5 +107,16 @@ export function mergeSettings(raw: unknown): AgencySettings {
       storageReport: bool(r.alerts?.storageReport, false),
     },
     defaultWorkMode: (WORK_MODES as readonly string[]).includes(r.defaultWorkMode as string) ? (r.defaultWorkMode as WorkMode) : DEFAULT_SETTINGS.defaultWorkMode,
+    promoterCost: {
+      salary: money(r.promoterCost?.salary),
+      meal: money(r.promoterCost?.meal),
+      fuel: money(r.promoterCost?.fuel),
+      other: money(r.promoterCost?.other),
+      chargesPct: typeof r.promoterCost?.chargesPct === "number" && Number.isFinite(r.promoterCost.chargesPct) ? Math.min(200, Math.max(0, Math.round(r.promoterCost.chargesPct * 100) / 100)) : DEFAULT_CHARGES_PCT,
+    },
   };
+}
+
+function money(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1_000_000 ? Math.round(v * 100) / 100 : null;
 }

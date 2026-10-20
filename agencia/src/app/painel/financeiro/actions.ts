@@ -13,12 +13,6 @@ function money(fd: FormData, k: string): number | null {
   return Number.isFinite(n) ? n : NaN;
 }
 
-export async function brandFeeAction(_: FormState, fd: FormData): Promise<FormState> {
-  const r = await fin.saveBrandFee(await getScope(), str(fd, "brandId"), money(fd, "fee"));
-  if (r.ok) revalidatePath("/painel/financeiro");
-  return r;
-}
-
 export async function createInvoiceAction(_: FormState, fd: FormData): Promise<FormState> {
   const ids = fd.getAll("tastingId").map(String).filter(Boolean);
   const r = await fin.createInvoice(await getScope(), { brandId: str(fd, "brandId"), tastingIds: ids, number: str(fd, "number") || null, issueDate: str(fd, "issueDate"), dueDate: str(fd, "dueDate") || null, notes: str(fd, "notes") || null });
