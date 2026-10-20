@@ -12,6 +12,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { saveChain, saveProduct, saveStore, saveUser, validateProduct } from "./admin";
 import { saveTarget, syncPromoterSchedules } from "./portfolio";
+import { parseMoney } from "./tasting-import";
 import { importMix, importRoutes, parseWeekdays } from "./import-extra";
 import { parseCoords, productNameKey } from "@/lib/rules";
 import type { Unit } from "@/lib/domain";
@@ -20,7 +21,7 @@ export const TEMPLATES = {
   produtos: ["marca", "nome", "sku", "ean", "categoria", "variante", "embalagem", "unidade", "status"],
   lojas: ["rede", "nome", "codigo", "cnpj", "endereco", "bairro", "cidade", "uf", "marcas", "latitude", "longitude"],
   promotores: ["nome", "usuario", "senha_inicial", "vinculo", "forma_trabalho", "regiao", "codigo_interno", "email", "telefone", "marcas", "lojas"],
-  metas: ["promotor", "loja", "marca", "vezes", "periodo", "dias"],
+  metas: ["promotor", "loja", "marca", "vezes", "periodo", "dias", "valor"],
   mix: ["rede", "mix", "loja", "marca", "sku", "descricao"],
   roteiros: ["promotor", "dias", "loja", "horario", "roteiro"],
 } as const;
@@ -32,7 +33,7 @@ export const TEMPLATE_HELP: Record<ImportKind, string> = {
   promotores: "vinculo: fixo ou freelancer. marcas = identificadores separados por vírgula. lojas = códigos ou nomes das lojas separados por “;”. A senha inicial deve ser trocada no primeiro acesso. forma_trabalho: roteiro ou carteira (vazio = padrão da agência).",
   mix: "Uma linha por produto. Para o mix de um FORMATO da rede (ex.: ABC VAREJO, PLUS, CASH): preencha rede + mix e deixe loja vazia — quando a rede tem mais de um formato, o promotor escolhe o da loja no primeiro atendimento. Para a lista de UMA loja: preencha loja (código ou nome). marca = identificador; sku = código do produto; descricao é só para conferência.",
   roteiros: "Uma linha por loja do roteiro, na ordem da visita. promotor = usuário; dias = SEG/QUI, TER/SEX, SEG/QUA/SEX…; loja = código ou nome; horario (opcional) = 08:00; roteiro (opcional) = nome — sem nome, um roteiro por promotor + dias. Depois gere a programação em Programação › Gerar a partir dos roteiros.",
-  metas: "ATRIBUIÇÕES (planilha padrão): uma linha por promotor × loja × marca. promotor = usuário do promotor; loja = código ou nome da loja; marca = identificador ou nome; vezes = quantas visitas no período; periodo = semana (padrão), quinzena ou mês; dias = dias fixos (ex.: SEG/QUI) — vazio = sem dia fixo, o promotor escolhe e só a quantidade conta. É isso que define a programação, a carteira e as metas. Se a atribuição já existir, é atualizada; a loja e a marca passam a ser autorizadas ao promotor.",
+  metas: "ATRIBUIÇÕES (planilha padrão): uma linha por promotor × loja × marca. promotor = usuário do promotor; loja = código ou nome da loja; marca = identificador ou nome; vezes = quantas visitas no período; periodo = semana (padrão), quinzena ou mês; dias = dias fixos (ex.: SEG/QUI) — vazio = sem dia fixo, o promotor escolhe e só a quantidade conta. valor (opcional) = VR ATEND: quanto o promotor recebe no mês por esta loja × marca com a meta cheia (o Financeiro paga proporcional às visitas feitas). É isso que define a programação, a carteira e as metas. Se a atribuição já existir, é atualizada; a loja e a marca passam a ser autorizadas ao promotor.",
 };
 
 const norm = (v: string) =>
@@ -224,7 +225,12 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
         else report.created++;
         continue;
       }
-      const res = await saveTarget(scope, { promoterId: promoter.id, storeId: stores[0].id, brandId: brandIds[0], perWeek, period, weekdays }, { sync: false });
+      const payValue = parseMoney(r.valor ?? r.vr_atend);
+      if (payValue === null && (r.valor ?? "").trim()) {
+        report.errors.push({ line, message: `valor “${r.valor}” inválido.` });
+        continue;
+      }
+      const res = await saveTarget(scope, { promoterId: promoter.id, storeId: stores[0].id, brandId: brandIds[0], perWeek, period, weekdays, payValue: payValue ?? undefined }, { sync: false });
       if (res.ok) syncPromoters.add(promoter.id);
       if (!res.ok) report.errors.push({ line, message: res.error });
       else if (prev) report.updated++;

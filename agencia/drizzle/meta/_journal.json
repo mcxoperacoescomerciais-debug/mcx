@@ -64,6 +64,13 @@
       "when": 1792452937732,
       "tag": "0008_fotos_local_programacao",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792458717141,
+      "tag": "0009_degustacoes_financeiro",
+      "breakpoints": true
     }
   ]
 }

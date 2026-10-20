@@ -33,6 +33,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Severity } from "../../lib/validity";
+import type { BillingStatus, ContactStatus, DocStatus, PaymentStatus, ReceiptStatus, TastingFileKind, TastingStatus } from "../../lib/tasting";
 import type {
   AttendanceStatus,
   DamageKind,
@@ -68,6 +69,8 @@ const authorship = {
   createdBy: uuid("created_by"),
   updatedBy: uuid("updated_by"),
 };
+/** Dinheiro em reais (2 casas), lido como número. */
+const money = (name: string) => numeric(name, { precision: 12, scale: 2, mode: "number" });
 const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(","));
 
 // ───────────────────────────── Agência e pessoas ─────────────────────────────
@@ -163,6 +166,8 @@ export const brands = pgTable(
     allowGallery: boolean("allow_gallery").notNull().default(true),
     /** Atividades da etapa "Execução" (checklist curto exibido ao promotor). */
     activities: jsonb("activities").$type<string[]>().notNull().default([]),
+    /** Financeiro: quanto a marca paga por mês à agência pela promotoria (contrato). */
+    monthlyFee: money("monthly_fee"),
     notes: text("notes"),
     ...timestamps,
     ...authorship,
@@ -339,6 +344,8 @@ export const visitTargets = pgTable(
     period: text("period").$type<TargetPeriod>().notNull().default("week"),
     /** Dias fixos (0 = domingo … 6 = sábado). Vazio = sem dia fixo: o promotor escolhe (só a quantidade). */
     weekdays: jsonb("weekdays").$type<number[]>().notNull().default([]),
+    /** VR ATEND: valor do mês pago ao promotor por esta loja × marca com a meta cheia (paga proporcional ao cumprido). */
+    payValue: money("pay_value"),
     ...timestamps,
     ...authorship,
   },
@@ -796,4 +803,186 @@ export const auditLogs = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [index("audit_agency_created_idx").on(t.agencyId, t.createdAt), index("audit_entity_idx").on(t.entity, t.entityId)],
+);
+
+// ───────────────────────────── Degustações ─────────────────────────────
+
+/** Cadastro de degustadoras (independente dos usuários: não acessam o sistema). */
+export const tasters = pgTable(
+  "tasters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    name: text("name").notNull(),
+    /** WhatsApp com DDI e DDD, só dígitos. */
+    phone: text("phone"),
+    city: text("city").notNull(),
+    state: text("state").notNull().default("MG"),
+    region: text("region"),
+    area: text("area"),
+    availability: text("availability"),
+    experience: text("experience"),
+    usualFee: money("usual_fee"),
+    notes: text("notes"),
+    status: text("status").$type<"active" | "inactive">().notNull().default("active"),
+    /** Dado fictício para demonstração (apagável em lote). */
+    sample: boolean("sample").notNull().default(false),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [index("tasters_agency_city_idx").on(t.agencyId, t.city)],
+);
+
+/** Arquivo do cronograma importado (um lote gera várias degustações). */
+export const tastingBatches = pgTable("tasting_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+  brandId: uuid("brand_id").references(() => brands.id),
+  fileId: uuid("file_id"),
+  rowsRead: integer("rows_read").notNull().default(0),
+  rowsImported: integer("rows_imported").notNull().default(0),
+  notes: text("notes"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  createdBy: uuid("created_by"),
+});
+
+/** Fatura para a marca: pode juntar várias degustações (a receita continua contada uma vez, na degustação). */
+export const tastingInvoices = pgTable(
+  "tasting_invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    brandId: uuid("brand_id").notNull().references(() => brands.id),
+    number: text("number"),
+    issueDate: date("issue_date").notNull(),
+    dueDate: date("due_date"),
+    amount: money("amount").notNull(),
+    status: text("status").$type<"issued" | "received" | "cancelled">().notNull().default("issued"),
+    receivedAmount: money("received_amount"),
+    receivedAt: date("received_at"),
+    notes: text("notes"),
+    sample: boolean("sample").notNull().default(false),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [index("tasting_invoices_agency_idx").on(t.agencyId, t.issueDate)],
+);
+
+export const tastings = pgTable(
+  "tastings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    brandId: uuid("brand_id").notNull().references(() => brands.id),
+    /** Loja cadastrada (quando existe); senão rede/loja em texto, como veio no cronograma. */
+    storeId: uuid("store_id").references(() => stores.id),
+    chainName: text("chain_name"),
+    storeName: text("store_name").notNull(),
+    city: text("city").notNull(),
+    state: text("state").notNull().default("MG"),
+    date: date("date").notNull(),
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+    product: text("product"),
+    description: text("description"),
+    materialsNote: text("materials_note"),
+    notes: text("notes"),
+    responsibleId: uuid("responsible_id").references(() => users.id),
+    orderRef: text("order_ref"),
+    actionCode: text("action_code"),
+    billingTerms: text("billing_terms"),
+    brandPaymentDue: date("brand_payment_due"),
+    tasterPaymentDue: date("taster_payment_due"),
+    photoProof: boolean("photo_proof").notNull().default(false),
+    requiredEvidence: text("required_evidence"),
+    status: text("status").$type<TastingStatus>().notNull().default("awaiting_taster"),
+    docStatus: text("doc_status").$type<DocStatus>().notNull().default("na"),
+    tasterId: uuid("taster_id").references(() => tasters.id),
+    contactStatus: text("contact_status").$type<ContactStatus>().notNull().default("not_contacted"),
+    // Previsto
+    revenue: money("revenue"),
+    taxes: money("taxes"),
+    tasterFee: money("taster_fee"),
+    transport: money("transport"),
+    food: money("food"),
+    materialsCost: money("materials_cost"),
+    otherCost: money("other_cost"),
+    // Realizado (preenchido depois da ação; vazio = igual ao previsto)
+    revenueActual: money("revenue_actual"),
+    taxesActual: money("taxes_actual"),
+    tasterFeeActual: money("taster_fee_actual"),
+    transportActual: money("transport_actual"),
+    foodActual: money("food_actual"),
+    materialsCostActual: money("materials_cost_actual"),
+    otherCostActual: money("other_cost_actual"),
+    cancellationFee: money("cancellation_fee"),
+    // Faturamento, recebimento e pagamento
+    billingStatus: text("billing_status").$type<BillingStatus>().notNull().default("not_billed"),
+    billedAmount: money("billed_amount"),
+    invoiceId: uuid("invoice_id").references(() => tastingInvoices.id),
+    receiptStatus: text("receipt_status").$type<ReceiptStatus>().notNull().default("pending"),
+    receivedAmount: money("received_amount"),
+    receivedAt: date("received_at"),
+    tasterPaymentStatus: text("taster_payment_status").$type<PaymentStatus>().notNull().default("pending"),
+    paidAmount: money("paid_amount"),
+    paidAt: date("paid_at"),
+    completedAt: ts("completed_at"),
+    cancelReason: text("cancel_reason"),
+    batchId: uuid("batch_id").references(() => tastingBatches.id),
+    sample: boolean("sample").notNull().default(false),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [
+    index("tastings_agency_date_idx").on(t.agencyId, t.date),
+    index("tastings_taster_idx").on(t.tasterId),
+    check("tastings_time_ck", sql`(${t.startTime} is null or ${t.startTime} ~ '^[0-2][0-9]:[0-5][0-9]$') and (${t.endTime} is null or ${t.endTime} ~ '^[0-2][0-9]:[0-5][0-9]$')`),
+  ],
+);
+
+/** Histórico de contatos com degustadoras (cada tentativa fica guardada, inclusive as recusas). */
+export const tastingContacts = pgTable(
+  "tasting_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tastingId: uuid("tasting_id").notNull().references(() => tastings.id),
+    tasterId: uuid("taster_id").notNull().references(() => tasters.id),
+    status: text("status").$type<ContactStatus>().notNull(),
+    note: text("note"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    createdBy: uuid("created_by"),
+  },
+  (t) => [index("tasting_contacts_tasting_idx").on(t.tastingId, t.createdAt)],
+);
+
+export const tastingMaterials = pgTable(
+  "tasting_materials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tastingId: uuid("tasting_id").notNull().references(() => tastings.id),
+    item: text("item").notNull(),
+    checked: boolean("checked").notNull().default(false),
+    checkedBy: uuid("checked_by"),
+    checkedAt: ts("checked_at"),
+  },
+  (t) => [uniqueIndex("tasting_materials_uq").on(t.tastingId, t.item)],
+);
+
+/** Anexos (cronograma, comprovantes, fotos…). Nunca substituídos: cada envio é um registro novo. */
+export const tastingFiles = pgTable(
+  "tasting_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    tastingId: uuid("tasting_id").references(() => tastings.id),
+    batchId: uuid("batch_id").references(() => tastingBatches.id),
+    kind: text("kind").$type<TastingFileKind>().notNull().default("other"),
+    name: text("name").notNull(),
+    storageKey: text("storage_key").notNull(),
+    contentType: text("content_type").notNull(),
+    bytes: integer("bytes").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    createdBy: uuid("created_by"),
+  },
+  (t) => [index("tasting_files_tasting_idx").on(t.tastingId), index("tasting_files_batch_idx").on(t.batchId)],
 );

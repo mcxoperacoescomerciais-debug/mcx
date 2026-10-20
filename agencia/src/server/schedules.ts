@@ -9,6 +9,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { audit } from "./audit";
 import { promoterFilter } from "./scope";
+import { AUTO_CANCEL_REASON } from "./portfolio";
 import { addDays, isIsoDate, weekdayOf } from "@/lib/dates";
 import type { ActionResult } from "./manager";
 
@@ -64,7 +65,16 @@ export async function listDaySchedules(scope: Scope, date: string, promoterId: s
     .from(s.schedules)
     .innerJoin(s.users, eq(s.users.id, s.schedules.promoterId))
     .innerJoin(s.stores, eq(s.stores.id, s.schedules.storeId))
-    .where(and(eq(s.schedules.agencyId, scope.agencyId), eq(s.schedules.date, date), promoterFilter(scope, s.schedules.promoterId), promoterId ? eq(s.schedules.promoterId, promoterId) : undefined))
+    .where(
+      and(
+        eq(s.schedules.agencyId, scope.agencyId),
+        eq(s.schedules.date, date),
+        promoterFilter(scope, s.schedules.promoterId),
+        promoterId ? eq(s.schedules.promoterId, promoterId) : undefined,
+        // Retirada automática (dia saiu da atribuição) não é cancelamento do gestor: não aparece.
+        sql`not (${s.schedules.status} = 'cancelled' and ${s.schedules.origin} = 'assignment' and ${s.schedules.cancelReason} = ${AUTO_CANCEL_REASON})`,
+      ),
+    )
     .orderBy(asc(s.users.name), asc(s.schedules.seq), asc(s.schedules.plannedStart));
   const brands = rows.length
     ? await db

@@ -156,7 +156,8 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
   for (const e of extra.values()) {
     const dates = [...new Set(e.dates)].sort();
     const n = visits.filter((v) => key(v) === key(e) && v.date >= from && v.date <= to).length;
-    const expected = dates.filter((d) => d <= ref).length;
+    // Programado para hoje ainda não está atrasado: conta até ontem (semana passada: tudo).
+    const expected = dates.filter((d) => (ref === today ? d < today : d <= ref)).length;
     rows.push({
       id: `sch:${key(e)}`,
       promoterId: e.promoterId,
@@ -220,6 +221,8 @@ export interface TargetInput {
   period?: TargetPeriod;
   /** Dias fixos (0 = dom … 6 = sáb); vazio = só a quantidade. */
   weekdays?: number[];
+  /** VR ATEND (valor do mês ao promotor); undefined = mantém o que já tem. */
+  payValue?: number | null;
 }
 
 function validTimes(i: { perWeek: number; period?: TargetPeriod }): string | null {
@@ -259,8 +262,8 @@ export async function saveTarget(scope: Scope, i: TargetInput, opts: { sync?: bo
     await tx.insert(s.userBrands).values({ userId: i.promoterId, brandId: i.brandId }).onConflictDoNothing();
     const [row] = await tx
       .insert(s.visitTargets)
-      .values({ agencyId: scope.agencyId, promoterId: i.promoterId, storeId: i.storeId, brandId: i.brandId, perWeek: i.perWeek, period, weekdays, createdBy: scope.userId, updatedBy: scope.userId })
-      .onConflictDoUpdate({ target: [s.visitTargets.promoterId, s.visitTargets.storeId, s.visitTargets.brandId], set: { perWeek: i.perWeek, period, weekdays, updatedAt: new Date(), updatedBy: scope.userId } })
+      .values({ agencyId: scope.agencyId, promoterId: i.promoterId, storeId: i.storeId, brandId: i.brandId, perWeek: i.perWeek, period, weekdays, payValue: i.payValue ?? null, createdBy: scope.userId, updatedBy: scope.userId })
+      .onConflictDoUpdate({ target: [s.visitTargets.promoterId, s.visitTargets.storeId, s.visitTargets.brandId], set: { perWeek: i.perWeek, period, weekdays, ...(i.payValue !== undefined ? { payValue: i.payValue } : {}), updatedAt: new Date(), updatedBy: scope.userId } })
       .returning({ id: s.visitTargets.id });
     await audit({ agencyId: scope.agencyId, userId: scope.userId }, "target", row.id, "saved", { after: { ...i, period, weekdays } }, tx);
   });

@@ -33,6 +33,8 @@ import {
   Target,
   Upload,
   Users,
+  UtensilsCrossed,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -61,6 +63,8 @@ const MAIN: NavItem[] = [
   { href: "/painel/estoque", label: "Estoque e ruptura", icon: PackageSearch, also: ["/painel/rupturas", "/painel/validades", "/painel/avarias"] },
   { href: "/painel/promotores", label: "Promotores", icon: Users },
   { href: "/painel/pendencias", label: "Central de pendências", icon: ShieldAlert },
+  { href: "/painel/degustacoes", label: "Degustações", icon: UtensilsCrossed },
+  { href: "/painel/financeiro", label: "Financeiro", icon: Wallet, roles: ["admin"] },
 ];
 
 const SETTINGS: NavItem[] = [

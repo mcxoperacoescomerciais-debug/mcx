@@ -12,7 +12,7 @@ import type { Role } from "./domain";
 export interface Panel {
   key: string;
   label: string;
-  group: "Operação" | "Planejamento" | "Cadastros" | "Administração";
+  group: "Operação" | "Planejamento" | "Degustações e financeiro" | "Cadastros" | "Administração";
   paths: string[];
   /** Só o Gestor da agência pode ter (cadastros e administração). */
   adminOnly?: boolean;
@@ -31,6 +31,8 @@ export const PANELS: Panel[] = [
   { key: "programacao", label: "Programação", group: "Planejamento", paths: ["/painel/programacao"] },
   { key: "roteiros", label: "Roteiros", group: "Planejamento", paths: ["/painel/roteiros"] },
   { key: "exportacoes", label: "Exportações", group: "Planejamento", paths: ["/painel/relatorios"] },
+  { key: "degustacoes", label: "Degustações (agenda, degustadoras e painel)", group: "Degustações e financeiro", paths: ["/painel/degustacoes"] },
+  { key: "financeiro", label: "Financeiro", group: "Degustações e financeiro", paths: ["/painel/financeiro"], adminOnly: true },
   { key: "cad_marcas", label: "Marcas", group: "Cadastros", paths: ["/painel/cadastros/marcas"], adminOnly: true },
   { key: "cad_lojas", label: "Redes e lojas", group: "Cadastros", paths: ["/painel/cadastros/lojas"], adminOnly: true },
   { key: "cad_produtos", label: "Produtos", group: "Cadastros", paths: ["/painel/cadastros/produtos"], adminOnly: true },
