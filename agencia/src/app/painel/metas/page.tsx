@@ -8,15 +8,16 @@ import { portfolioPromoters, portfolioWeek } from "@/server/portfolio";
 import { parseFilters, withParams } from "@/lib/filters";
 import { addDays, fmtDate, todayIso } from "@/lib/dates";
 import { pct } from "@/lib/rules";
-import { WORK_MODE_LABEL } from "@/lib/domain";
 import { frequencyLabel, TARGET_STATUS_LABEL, TARGET_STATUS_TONE, weekdaysLabel, weekStart } from "@/lib/portfolio";
-import { EmptyState, PageHeader, Progress, StatusBadge, inputClass, selectClass } from "@/components/ui";
+import { Badge, EmptyState, PageHeader, Progress, StatusBadge } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
 import { KpiCard, SectionCard, Table, Td, Th } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
-import { deleteTargetAction, saveTargetAction } from "./actions";
+import { deleteTargetAction } from "./actions";
 
 export const metadata: Metadata = { title: "Carteira e metas" };
+
+const MODE = { route: "Roteiro", portfolio: "Carteira" } as const;
 
 /**
  * Carteira com meta semanal: o promotor escolhe o dia; aqui se acompanha se a
@@ -32,12 +33,14 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
   const weekLink = (d: string) => withParams({ ...keep, date: weekStart(d) === weekStart(todayIso()) ? null : d });
   const t = w.totals;
   const behind = w.rows.filter((r) => r.status === "behind").length;
+  const modeOf = new Map(promoters.map((p) => [p.id, p.mode]));
+  const byMode = { route: promoters.filter((p) => p.mode === "route").length, portfolio: promoters.filter((p) => p.mode === "portfolio").length };
 
   return (
     <>
       <PageHeader
         title="Carteira e metas"
-        subtitle={`Semana de ${fmtDate(w.from)} a ${fmtDate(w.to)} · visitas por semana em cada marca de cada loja — o promotor escolhe o dia`}
+        subtitle={`Semana de ${fmtDate(w.from)} a ${fmtDate(w.to)} · resultado de todos os promotores — atribuições (com ou sem dia fixo) e lojas programadas`}
         actions={
           <div className="inline-flex items-center rounded-lg border border-line-strong bg-surface">
             <Link href={weekLink(addDays(w.from, -7))} aria-label="Semana anterior" className="h-9 w-9 grid place-items-center text-ink-2 hover:bg-subtle rounded-l-lg">
@@ -74,21 +77,26 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
           sub={`Esperado até ${fmtDate(w.ref).slice(0, 5)}: ${t.expected} · feito: ${t.counted}`}
           icon={<TrendingUp className="size-4" />}
         />
-        <KpiCard label="Lojas × marcas atrasadas" value={behind} tone={behind ? "danger" : "success"} sub={`de ${w.rows.length} combinação(ões) com meta`} icon={<TriangleAlert className="size-4" />} />
-        <KpiCard label="Promotores com carteira" value={w.promoters.length} sub={`${w.promoters.filter((p) => p.totals.counted >= p.totals.target).length} já fecharam a semana`} icon={<Users className="size-4" />} />
+        <KpiCard label="Lojas × marcas atrasadas" value={behind} tone={behind ? "danger" : "success"} sub={`de ${w.rows.length} combinação(ões) na semana`} icon={<TriangleAlert className="size-4" />} />
+        <KpiCard label="Promotores cadastrados" value={w.registered} sub={`${byMode.route} por roteiro · ${byMode.portfolio} por carteira`} icon={<Users className="size-4" />} />
       </div>
 
       <div className="grid xl:grid-cols-3 gap-6 mt-6">
         <div className="xl:col-span-2 space-y-5">
           {w.promoters.length === 0 ? (
             <div className="bg-surface border border-line rounded-[var(--radius-card)]">
-              <EmptyState title="Nenhuma meta cadastrada">Cadastre ao lado quantas visitas por semana cada marca precisa em cada loja.</EmptyState>
+              <EmptyState title="Nada nesta semana">Nenhuma atribuição nem loja programada com estes filtros. As atribuições são feitas no cadastro de cada promotor.</EmptyState>
             </div>
           ) : null}
           {w.promoters.map((p) => (
             <SectionCard
               key={p.promoterId}
-              title={p.promoterName}
+              title={
+                <span className="inline-flex items-center gap-2">
+                  {p.promoterName}
+                  {modeOf.get(p.promoterId) ? <Badge tone="neutral">{MODE[modeOf.get(p.promoterId)!]}</Badge> : null}
+                </span>
+              }
               subtitle={`${p.totals.counted} de ${p.totals.target} visitas · ${pct(p.totals.counted, p.totals.target) ?? 0}%${p.behind ? ` · ${p.behind} atrasada(s)` : ""}`}
               action={<Progress value={p.totals.counted} total={p.totals.target} className="w-32" tone={p.totals.counted >= p.totals.target ? "success" : p.totals.counted >= p.totals.expected ? "info" : "warning"} />}
               bodyClass="pb-1"
@@ -114,7 +122,8 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
                       <Td>
                         {r.brandName}
                         <span className="block text-[11.5px] text-muted">
-                          {frequencyLabel(r.perWeek, r.period)} · {weekdaysLabel(r.weekdays)}
+                          {r.source === "schedule" ? `${r.perWeek}x programada(s) na semana` : frequencyLabel(r.perWeek, r.period)} · {weekdaysLabel(r.weekdays)}
+                          {r.source === "schedule" ? " · programação" : ""}
                         </span>
                       </Td>
                       <Td align="right" className="whitespace-nowrap">
@@ -131,7 +140,7 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
                       <Td className="tnum text-[12.5px] text-muted">{r.lastVisit ? fmtDate(r.lastVisit) : "nunca"}</Td>
                       {canEdit ? (
                         <Td align="right">
-                          <ActionForm action={deleteTargetAction} hidden={{ id: r.id }} submitLabel="Remover" variant="secondary" />
+                          {r.source === "assignment" ? <ActionForm action={deleteTargetAction} hidden={{ id: r.id }} submitLabel="Remover" variant="secondary" /> : null}
                         </Td>
                       ) : null}
                     </tr>
@@ -140,69 +149,24 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
               </Table>
             </SectionCard>
           ))}
+          {w.idle.length && !f.brand && !f.store && !f.city ? (
+            <SectionCard title={`Sem atribuição nem loja programada nesta semana (${w.idle.length})`} subtitle="Faça as atribuições no cadastro de cada promotor" bodyClass="px-5 pb-4">
+              <ul className="flex flex-wrap gap-2">
+                {w.idle.map((u) => (
+                  <li key={u.id}>
+                    <Link href={`/painel/cadastros/usuarios/${u.id}`} target="_blank" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line-strong text-[13px] font-medium hover:bg-subtle">
+                      {u.name}
+                      {modeOf.get(u.id) ? <span className="text-muted text-[11.5px]">· {MODE[modeOf.get(u.id)!]}</span> : null}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          ) : null}
         </div>
 
         {canEdit ? (
           <div className="space-y-5">
-            <SectionCard title="Adicionar ou alterar meta" subtitle="Se já existir meta para o mesmo promotor, loja e marca, ela é atualizada." bodyClass="px-5 pb-5">
-              <ActionForm action={saveTargetAction} hidden={{}} submitLabel="Salvar meta">
-                <select name="promoterId" required className={selectClass} aria-label="Promotor" defaultValue={f.promoter ?? ""}>
-                  <option value="" disabled>
-                    Promotor
-                  </option>
-                  {promoters.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.mode === "route" ? " (trabalha por roteiro)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <select name="storeId" required className={selectClass} aria-label="Loja" defaultValue={f.store ?? ""}>
-                  <option value="" disabled>
-                    Loja
-                  </option>
-                  {options.stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                <select name="brandId" required className={selectClass} aria-label="Marca" defaultValue={f.brand ?? ""}>
-                  <option value="" disabled>
-                    Marca
-                  </option>
-                  {options.brands.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-                <label className="block">
-                  <span className="text-[13px] font-semibold text-ink-2">Quantas visitas</span>
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <input name="perWeek" type="number" min={1} max={31} defaultValue={1} required className={inputClass} />
-                    <select name="period" defaultValue="week" className={selectClass}>
-                      <option value="week">por semana</option>
-                      <option value="fortnight">por quinzena</option>
-                      <option value="month">por mês</option>
-                    </select>
-                  </div>
-                </label>
-                <fieldset>
-                  <legend className="text-[13px] font-semibold text-ink-2">Dias fixos (opcional — sem marcar = só a quantidade)</legend>
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d, i) => (
-                      <label key={d} className="inline-flex items-center gap-1 text-[13px] border border-line-strong rounded-lg px-2 h-8">
-                        <input type="checkbox" name="weekdays" value={i + 1} /> {d}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              </ActionForm>
-              <p className="text-[12px] text-muted mt-3">
-                Com dias fixos, a loja entra na programação desses dias (Programação › Gerar). Sem dias, entra na carteira do promotor: ele escolhe o dia e cumpre a quantidade. O promotor vê no app na próxima vez que abrir com internet.
-              </p>
-            </SectionCard>
             <SectionCard title="Muitas metas de uma vez" bodyClass="px-5 pb-5">
               <p className="text-[13px] text-ink-2">
                 Use{" "}

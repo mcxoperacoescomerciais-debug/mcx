@@ -38,6 +38,10 @@ export interface PortfolioRow {
   lastVisit: string | null;
   windowFrom: string;
   windowTo: string;
+  /** assignment = atribuição (meta); schedule = lojas programadas na semana (roteiro ou à mão) sem atribuição. */
+  source: "assignment" | "schedule";
+  /** Só na programação: quantas estavam programadas até hoje. */
+  expectedFixed?: number;
 }
 
 /**
@@ -85,7 +89,47 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
   const windows = (["week", "fortnight", "month"] as const).map((p) => periodWindow(f.date, p));
   const minFrom = windows.reduce((m, w) => (w.from < m ? w.from : m), windows[0].from);
   const maxTo = windows.reduce((m, w) => (w.to > m ? w.to : m), windows[0].to);
-  const promoterIds = [...new Set(targets.map((t) => t.promoterId))];
+  // Lojas programadas na semana (roteiro ou programadas à mão) que não vêm de atribuição também contam.
+  const scheduled = await db
+    .select({
+      promoterId: s.schedules.promoterId,
+      promoterName: s.users.name,
+      storeId: s.schedules.storeId,
+      storeName: s.stores.name,
+      city: s.stores.city,
+      brandId: s.scheduleBrands.brandId,
+      brandName: s.brands.name,
+      date: sql<string>`${s.schedules.date}::text`,
+    })
+    .from(s.schedules)
+    .innerJoin(s.scheduleBrands, eq(s.scheduleBrands.scheduleId, s.schedules.id))
+    .innerJoin(s.users, and(eq(s.users.id, s.schedules.promoterId), eq(s.users.status, "active")))
+    .innerJoin(s.stores, eq(s.stores.id, s.schedules.storeId))
+    .innerJoin(s.brands, eq(s.brands.id, s.scheduleBrands.brandId))
+    .where(
+      and(
+        eq(s.schedules.agencyId, scope.agencyId),
+        eq(s.schedules.status, "active"),
+        gte(s.schedules.date, from),
+        lte(s.schedules.date, to),
+        brandFilter(scope, s.scheduleBrands.brandId),
+        promoterFilter(scope, s.schedules.promoterId),
+        f.promoter ? eq(s.schedules.promoterId, f.promoter) : undefined,
+        f.brand ? eq(s.scheduleBrands.brandId, f.brand) : undefined,
+        f.store ? eq(s.schedules.storeId, f.store) : undefined,
+        f.city ? eq(s.stores.city, f.city) : undefined,
+      ),
+    );
+  const covered = new Set(targets.map((t) => `${t.promoterId}:${t.storeId}:${t.brandId}`));
+  const extra = new Map<string, (typeof scheduled)[number] & { dates: string[] }>();
+  for (const r of scheduled) {
+    const k = `${r.promoterId}:${r.storeId}:${r.brandId}`;
+    if (covered.has(k)) continue;
+    const g = extra.get(k) ?? { ...r, dates: [] };
+    g.dates.push(r.date);
+    extra.set(k, g);
+  }
+  const promoterIds = [...new Set([...targets.map((t) => t.promoterId), ...[...extra.values()].map((e) => e.promoterId)])];
   const visits = promoterIds.length
     ? await db
         .select({ promoterId: s.visits.promoterId, storeId: s.visits.storeId, brandId: s.attendances.brandId, date: sql<string>`${s.visits.visitDate}::text` })
@@ -107,8 +151,35 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
     const w = periodWindow(f.date, t.period);
     const tRef = today < w.from ? w.from : today > w.to ? w.to : today;
     const n = visits.filter((v) => key(v) === key(t) && v.date >= w.from && v.date <= w.to).length;
-    return { ...t, done: n, expected: expectedByToday(t.perWeek, tRef, t.period), status: targetStatus(t.perWeek, n, tRef, t.period), lastVisit: lastBy.get(key(t)) ?? null, windowFrom: w.from, windowTo: w.to };
+    return { ...t, source: "assignment" as const, done: n, expected: expectedByToday(t.perWeek, tRef, t.period), status: targetStatus(t.perWeek, n, tRef, t.period), lastVisit: lastBy.get(key(t)) ?? null, windowFrom: w.from, windowTo: w.to };
   });
+  for (const e of extra.values()) {
+    const dates = [...new Set(e.dates)].sort();
+    const n = visits.filter((v) => key(v) === key(e) && v.date >= from && v.date <= to).length;
+    const expected = dates.filter((d) => d <= ref).length;
+    rows.push({
+      id: `sch:${key(e)}`,
+      promoterId: e.promoterId,
+      promoterName: e.promoterName,
+      storeId: e.storeId,
+      storeName: e.storeName,
+      city: e.city,
+      brandId: e.brandId,
+      brandName: e.brandName,
+      perWeek: dates.length,
+      period: "week",
+      weekdays: [...new Set(dates.map((d) => weekdayOf(d)))].sort((a, b) => a - b),
+      source: "schedule",
+      expectedFixed: expected,
+      done: n,
+      expected,
+      status: n >= dates.length ? "done" : n >= expected ? "on_track" : "behind",
+      lastVisit: lastBy.get(key(e)) ?? null,
+      windowFrom: from,
+      windowTo: to,
+    });
+  }
+  rows.sort((a, b) => a.promoterName.localeCompare(b.promoterName, "pt-BR") || a.storeName.localeCompare(b.storeName, "pt-BR") || a.brandName.localeCompare(b.brandName, "pt-BR"));
 
   const byPromoter = new Map<string, { promoterId: string; promoterName: string; rows: PortfolioRow[] }>();
   for (const r of rows) {
@@ -117,7 +188,14 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
     byPromoter.set(r.promoterId, g);
   }
   const promoters = [...byPromoter.values()].map((g) => ({ ...g, totals: weekTotals(g.rows, ref), behind: g.rows.filter((r) => r.status === "behind").length }));
-  return { from, to, ref, rows, promoters, totals: weekTotals(rows, ref) };
+  // Todos os promotores ativos (para mostrar também quem não tem meta nem loja programada na semana).
+  const everyone = await db
+    .select({ id: s.users.id, name: s.users.name })
+    .from(s.users)
+    .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id), f.promoter ? eq(s.users.id, f.promoter) : undefined))
+    .orderBy(asc(s.users.name));
+  const idle = everyone.filter((u) => !byPromoter.has(u.id));
+  return { from, to, ref, rows, promoters, idle, registered: everyone.length, totals: weekTotals(rows, ref) };
 }
 
 export type PortfolioWeek = Awaited<ReturnType<typeof portfolioWeek>>;
@@ -205,8 +283,14 @@ export async function saveStoreAssignment(scope: Scope, promoterId: string, stor
   }
   const db = await getDb();
   const storeBrandIds = (await db.select({ id: s.storeBrands.brandId }).from(s.storeBrands).where(eq(s.storeBrands.storeId, storeId))).map((x) => x.id);
-  if (rows.some((r) => !storeBrandIds.includes(r.brandId))) return fail("Uma das marcas não é atendida nesta loja (ajuste em Redes e lojas).");
+  // Marca nova para a loja ("Adicionar marca" no cadastro do promotor): passa a ser atendida na loja.
+  const newBrands = [...new Set(rows.map((r) => r.brandId).filter((b) => !storeBrandIds.includes(b)))];
+  if (newBrands.length) {
+    const ok = await db.select({ id: s.brands.id }).from(s.brands).where(and(inArray(s.brands.id, newBrands), eq(s.brands.agencyId, scope.agencyId), eq(s.brands.status, "active")));
+    if (ok.length !== newBrands.length) return fail("Marca não encontrada nesta agência.");
+  }
   await db.transaction(async (tx) => {
+    if (newBrands.length) await tx.insert(s.storeBrands).values(newBrands.map((brandId) => ({ storeId, brandId }))).onConflictDoNothing();
     const before = await tx.select().from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.storeId, storeId)));
     await tx.delete(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.storeId, storeId)));
     if (rows.length) {
@@ -229,6 +313,32 @@ export async function saveStoreAssignment(scope: Scope, promoterId: string, stor
   });
   await syncPromoterSchedules(scope.agencyId, scope.userId, [promoterId], storeId);
   return { ok: true, message: rows.length ? "Loja salva na carteira do promotor." : "Loja retirada do promotor." };
+}
+
+/**
+ * Quadro semanal do promotor: arrastar a loja de um dia para outro move as marcas
+ * daquele dia (fromDay -1 = sem dia fixo; toDay -1 = vira sem dia fixo).
+ */
+export async function moveStoreDay(scope: Scope, promoterId: string, storeId: string, fromDay: number, toDay: number): Promise<ActionResult> {
+  if (!canManage(scope)) return fail("Sem permissão.");
+  const valid = (d: number) => Number.isInteger(d) && d >= -1 && d <= 6;
+  if (!valid(fromDay) || !valid(toDay) || fromDay === toDay) return fail("Dia inválido.");
+  const bad = await checkPromoterStore(scope, promoterId, storeId);
+  if (bad) return fail(bad);
+  const db = await getDb();
+  const rows = await db.select().from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.storeId, storeId), eq(s.visitTargets.agencyId, scope.agencyId)));
+  const moving = rows.filter((r) => (fromDay === -1 ? r.weekdays.length === 0 : r.weekdays.includes(fromDay)));
+  if (!moving.length) return fail("Nada para mover neste dia.");
+  await db.transaction(async (tx) => {
+    for (const r of moving) {
+      const kept = r.weekdays.filter((d) => d !== fromDay);
+      const weekdays = toDay === -1 ? kept : [...new Set([...kept, toDay])].sort((a, b) => a - b);
+      await tx.update(s.visitTargets).set({ weekdays, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.visitTargets.id, r.id));
+    }
+    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", promoterId, "assignment_day_moved", { after: { storeId, fromDay, toDay, brands: moving.map((m) => m.brandId) } }, tx);
+  });
+  await syncPromoterSchedules(scope.agencyId, scope.userId, [promoterId], storeId);
+  return { ok: true, message: "Loja movida de dia." };
 }
 
 export interface AssignmentView {

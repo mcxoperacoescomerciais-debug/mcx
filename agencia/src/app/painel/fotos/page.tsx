@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Presentation } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { photoReport } from "@/server/analytics";
@@ -48,9 +48,14 @@ export default async function PhotosPage({ searchParams }: PageProps<"/painel/fo
         title="Relatório fotográfico"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · ${photos.length} foto(s) nesta página · ${rep.total} atendimento(s)`}
         actions={
-          <LinkButton href={`/api/reports/book${withParams({ from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter })}`} prefetch={false} target="_blank">
-            <BookOpen className="size-4" /> Gerar Book de Atendimento
-          </LinkButton>
+          <>
+            <LinkButton href={`/api/reports/book${withParams({ from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter })}`} prefetch={false} target="_blank">
+              <BookOpen className="size-4" /> Book em PDF
+            </LinkButton>
+            <LinkButton variant="secondary" href={`/api/reports/book${withParams({ from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, format: "pptx" })}`} prefetch={false}>
+              <Presentation className="size-4" /> Book em PowerPoint
+            </LinkButton>
+          </>
         }
       />
       <FilterBar

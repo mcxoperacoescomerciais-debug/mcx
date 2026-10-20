@@ -99,6 +99,25 @@ export async function validitySummary(scope: Scope, f: F) {
   return { by, total: rows.reduce((t, r) => t + r.n, 0) };
 }
 
+/** Visão geral: produtos (loja × produto) com validade vencida ou crítica no período. */
+export async function criticalValidities(scope: Scope, from: string, to: string): Promise<{ products: number; expired: number; critical: number }> {
+  const db = await getDb();
+  const f = { from, to, brand: null, store: null, promoter: null, chain: null, city: null, q: "" } as unknown as F;
+  const [r] = await db
+    .select({
+      products: sql<number>`count(distinct (${s.visits.storeId}, ${s.validities.productId}))::int`,
+      expired: sql<number>`count(distinct (${s.visits.storeId}, ${s.validities.productId})) filter (where ${s.validities.severity} = 'expired')::int`,
+      critical: sql<number>`count(distinct (${s.visits.storeId}, ${s.validities.productId})) filter (where ${s.validities.severity} = 'critical')::int`,
+    })
+    .from(s.validities)
+    .innerJoin(s.attendances, eq(s.attendances.id, s.validities.attendanceId))
+    .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+    .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+    .innerJoin(s.products, eq(s.products.id, s.validities.productId))
+    .where(and(eq(s.validities.agencyId, scope.agencyId), isNull(s.validities.deletedAt), sql`${s.validities.severity} in ('expired','critical')`, ...conds(scope, f)));
+  return { products: r?.products ?? 0, expired: r?.expired ?? 0, critical: r?.critical ?? 0 };
+}
+
 export function validitiesSheet(rows: Awaited<ReturnType<typeof validityList>>["rows"]): SheetSpec {
   return {
     name: "Validades",

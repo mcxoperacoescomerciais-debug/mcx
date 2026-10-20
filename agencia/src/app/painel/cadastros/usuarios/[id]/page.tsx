@@ -26,7 +26,7 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
   const [user] = isNew ? [null] : await db.select().from(s.users).where(and(eq(s.users.id, id), eq(s.users.agencyId, scope.agencyId)));
   if (!isNew && !user) notFound();
   const [brands, stores, managers, ub, us] = await Promise.all([
-    db.select({ id: s.brands.id, name: s.brands.name }).from(s.brands).where(eq(s.brands.agencyId, scope.agencyId)).orderBy(asc(s.brands.name)),
+    db.select({ id: s.brands.id, name: s.brands.name, status: s.brands.status }).from(s.brands).where(eq(s.brands.agencyId, scope.agencyId)).orderBy(asc(s.brands.name)),
     db
       .select({ id: s.stores.id, name: s.stores.name, code: s.stores.code, city: s.stores.city, chain: s.chains.name })
       .from(s.stores)
@@ -44,6 +44,7 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
         listAssignments(scope, user.id),
       ])
     : [[], []];
+  const activeBrands = brands.filter((b) => b.status === "active").map((b) => ({ id: b.id, name: b.name }));
   const storeOptions = stores.map((st) => ({ id: st.id, name: st.name, code: st.code, chain: st.chain, city: st.city, brands: storeBrandRows.filter((r) => r.storeId === st.id).map((r) => ({ id: r.brandId, name: r.brandName })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")) }));
 
   return (
@@ -125,7 +126,7 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
           subtitle="Selecione a loja, escolha as marcas que ele atende nela e, para cada marca, os dias e quantas vezes. É isso que gera a programação, a carteira e as metas dele."
           bodyClass="px-5 pb-5"
         >
-          <PromoterAssignments promoterId={user.id} stores={storeOptions} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
+          <PromoterAssignments promoterId={user.id} stores={storeOptions} allBrands={activeBrands} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
         </SectionCard>
       ) : null}
     </>

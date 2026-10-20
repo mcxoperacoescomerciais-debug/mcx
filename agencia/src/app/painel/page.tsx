@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarClock,
   Camera,
   CheckCircle2,
   FileDown,
@@ -18,7 +19,8 @@ import { getScope } from "@/server/auth";
 import { getRangeBoard } from "@/server/operations";
 import { listIssues } from "@/server/issues";
 import { parseDayRange, withParams } from "@/lib/filters";
-import { fmtAgo, fmtDate, fmtLongDate, fmtTime, todayIso } from "@/lib/dates";
+import { addDays, fmtAgo, fmtDate, fmtLongDate, fmtTime, todayIso } from "@/lib/dates";
+import { criticalValidities } from "@/server/items";
 import { pct } from "@/lib/rules";
 import { ISSUE_KIND_LABEL } from "@/lib/domain";
 import { Badge, EmptyState, LinkButton, PageHeader } from "@/components/ui";
@@ -42,7 +44,9 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
   const scope = await getScope();
   const f = parseDayRange(await searchParams);
   const day = { ...f, brand: null, chain: null, store: null, promoter: null, city: null };
-  const [board, issues] = await Promise.all([getRangeBoard(scope, day), listIssues(scope, { ...day, from: f.from, to: f.to })]);
+  // Validade crítica: num dia só, olha os últimos 30 dias (o que ainda está na gôndola); num período, o período.
+  const vFrom = f.from === f.to ? addDays(f.to, -29) : f.from;
+  const [board, issues, crit] = await Promise.all([getRangeBoard(scope, day), listIssues(scope, { ...day, from: f.from, to: f.to }), criticalValidities(scope, vFrom, f.to)]);
   const k = board.kpis;
   const today = f.from === todayIso() && f.to === todayIso();
   const dateQs = (extra: Record<string, string | null> = {}) => withParams(today ? {} : { from: f.from, to: f.to }, extra);
@@ -72,7 +76,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
       />
       <FilterBar range={{ from: f.from, to: f.to }} fields={["period"]} options={{}} />
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <KpiCard
           label="Lojas concluídas"
           value={
@@ -102,6 +106,14 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
           sub={issues.length ? `${unreviewed} ainda não analisada(s)` : "Nada exige ação"}
           href={`/painel/pendencias${withParams({ from: f.from, to: f.to })}`}
           icon={<ShieldAlert className="size-4" />}
+        />
+        <KpiCard
+          label="Validade crítica"
+          value={crit.products}
+          tone={crit.products ? "danger" : "success"}
+          sub={crit.products ? `${crit.expired} vencido(s) · ${crit.critical} crítico(s) · ${fmtDate(vFrom).slice(0, 5)} a ${fmtDate(f.to).slice(0, 5)}` : "Nenhum produto vencido ou crítico"}
+          href={`/painel/validades${withParams({ from: vFrom, to: f.to, status: "urgent" })}`}
+          icon={<CalendarClock className="size-4" />}
         />
       </div>
 

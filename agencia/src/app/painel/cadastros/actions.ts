@@ -199,6 +199,13 @@ export async function importAction(_: ImportState, fd: FormData): Promise<Import
 }
 
 /** Cadastro do promotor: marcas, dias e vezes numa loja (substitui as da loja; vazio = tira a loja). */
+export async function moveStoreDayAction(promoterId: string, storeId: string, fromDay: number, toDay: number) {
+  const { moveStoreDay } = await import("@/server/portfolio");
+  const r = await moveStoreDay(await getScope(), promoterId, storeId, fromDay, toDay);
+  if (r.ok) revalidatePath(`/painel/cadastros/usuarios/${promoterId}`);
+  return r;
+}
+
 export async function saveAssignmentAction(promoterId: string, storeId: string, rows: { brandId: string; perWeek: number; period: "week" | "fortnight" | "month"; weekdays: number[] }[]) {
   const { saveStoreAssignment } = await import("@/server/portfolio");
   const r = await saveStoreAssignment(await getScope(), promoterId, storeId, rows);

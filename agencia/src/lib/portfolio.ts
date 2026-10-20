@@ -88,13 +88,14 @@ export interface WeekTotals {
 }
 
 /** Totais: conta no máximo a meta de cada loja × marca. */
-export function weekTotals(rows: { perWeek: number; done: number; period?: TargetPeriod }[], today: string): WeekTotals {
+export function weekTotals(rows: { perWeek: number; done: number; period?: TargetPeriod; expectedFixed?: number }[], today: string): WeekTotals {
   return rows.reduce<WeekTotals>(
     (t, r) => ({
       target: t.target + r.perWeek,
       done: t.done + r.done,
       counted: t.counted + Math.min(r.done, r.perWeek),
-      expected: t.expected + expectedByToday(r.perWeek, today, r.period ?? "week"),
+      // Programação com dia marcado: o esperado é o que estava programado até hoje.
+      expected: t.expected + (r.expectedFixed ?? expectedByToday(r.perWeek, today, r.period ?? "week")),
     }),
     { target: 0, done: 0, counted: 0, expected: 0 },
   );
