@@ -9,6 +9,7 @@ const TABS = [
   { href: "/painel/degustacoes", label: "Painel", exact: true },
   { href: "/painel/degustacoes/agenda", label: "Agenda" },
   { href: "/painel/degustacoes/degustadoras", label: "Degustadoras" },
+  { href: "/painel/degustacoes/calculadora", label: "Calculadora" },
   { href: "/painel/degustacoes/importar", label: "Importar cronograma" },
 ];
 

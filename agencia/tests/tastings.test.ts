@@ -219,6 +219,14 @@ describe("degustações — fluxo", () => {
     const ov = await fin.financeOverview(withDefaults, month);
     assert.equal(ov.dre.planned.payroll, pay.total);
     assert.equal(ov.dre.planned.promotoriaRevenue, (await fin.promotoriaRevenue(admin, month)).planned);
+    // Visão estratégica: custo de campo rateado pelos atendimentos; soma das marcas = folha dos promotores com atribuição.
+    const [sb] = await db.select({ storeId: s.storeBrands.storeId, brandId: s.storeBrands.brandId, agencyId: s.stores.agencyId }).from(s.storeBrands).innerJoin(s.stores, eq(s.stores.id, s.storeBrands.storeId)).where(eq(s.stores.agencyId, admin.agencyId)).limit(1);
+    await db.insert(s.visitTargets).values({ agencyId: admin.agencyId, promoterId: fixed.id, storeId: sb.storeId, brandId: sb.brandId, perWeek: 2, period: "week", weekdays: [], payValue: 300 }).onConflictDoUpdate({ target: [s.visitTargets.promoterId, s.visitTargets.storeId, s.visitTargets.brandId], set: { payValue: 300 } });
+    const st = await fin.strategyOverview(withDefaults);
+    assert.ok(st.brands.length > 0);
+    const withTargets = st.promoters.filter((p) => p.visits > 0).reduce((t, p) => t + p.cost, 0);
+    assert.ok(Math.abs(st.totals.fieldCost - withTargets) < 0.05, "todo o custo de quem tem atribuição é rateado nas marcas");
+    for (const b of st.brands) assert.equal(b.result, Math.round((b.revenue - b.fieldCost) * 100) / 100);
   });
 
   test("dados de exemplo: criam e somem por completo", async () => {

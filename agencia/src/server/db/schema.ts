@@ -992,3 +992,20 @@ export const tastingFiles = pgTable(
   },
   (t) => [index("tasting_files_tasting_idx").on(t.tastingId), index("tasting_files_batch_idx").on(t.batchId)],
 );
+
+/** Orçamentos da calculadora de degustação (pedido da marca, por cidade). */
+export const tastingQuotes = pgTable(
+  "tasting_quotes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    name: text("name").notNull(),
+    brandId: uuid("brand_id").references(() => brands.id),
+    globals: jsonb("globals").$type<{ taxPct: number; adminPct: number; marginPct: number }>().notNull(),
+    cities: jsonb("cities").$type<unknown[]>().notNull().default([]),
+    notes: text("notes"),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [index("tasting_quotes_agency_idx").on(t.agencyId, t.updatedAt)],
+);

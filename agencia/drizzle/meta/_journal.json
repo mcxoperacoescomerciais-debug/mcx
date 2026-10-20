@@ -78,6 +78,13 @@
       "when": 1792492348593,
       "tag": "0010_custos_promotor",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792494847898,
+      "tag": "0011_orcamentos_degustacao",
+      "breakpoints": true
     }
   ]
 }

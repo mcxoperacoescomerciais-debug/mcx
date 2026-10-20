@@ -330,3 +330,141 @@ export async function cancelInvoice(scope: Scope, id: string): Promise<ActionRes
   });
   return { ok: true, message: "Fatura cancelada." };
 }
+
+// ───────────────────────────── Visão estratégica ─────────────────────────────
+
+export interface BrandStrategy {
+  brandId: string;
+  brandName: string;
+  stores: number;
+  cities: number;
+  promoters: number;
+  /** Atendimentos/mês com a meta cheia (demanda de trabalho). */
+  visits: number;
+  revenue: number;
+  revenueShare: number;
+  perStore: number | null;
+  perVisit: number | null;
+  /** Custo de campo: custo de cada promotor rateado pelos atendimentos que ele faz para a marca. */
+  fieldCost: number;
+  result: number;
+  margin: number | null;
+  missingValue: number;
+  /** Lojas que a agência já visita (mesma rede e cidade de uma loja da marca) e que não têm a marca. */
+  opportunities: { storeId: string; name: string; city: string }[];
+  potential: number;
+  reading: "star" | "niche" | "heavy_cheap" | "cheap" | "no_value";
+}
+
+export interface PromoterStrategy {
+  promoterId: string;
+  name: string;
+  employment: string | null;
+  stores: number;
+  cities: number;
+  brands: number;
+  visits: number;
+  revenue: number;
+  cost: number;
+  result: number;
+  perVisit: number | null;
+  costPerVisit: number | null;
+}
+
+/** DRE por marca e por promotor (mês cheio, receita prevista) para a diretoria decidir onde crescer e o que renegociar. */
+export async function strategyOverview(scope: Scope) {
+  const db = await getDb();
+  const rows = await db
+    .select({
+      promoterId: s.visitTargets.promoterId,
+      storeId: s.visitTargets.storeId,
+      storeName: s.stores.name,
+      city: s.stores.city,
+      chainId: s.stores.chainId,
+      brandId: s.visitTargets.brandId,
+      brandName: s.brands.name,
+      perWeek: s.visitTargets.perWeek,
+      period: s.visitTargets.period,
+      payValue: s.visitTargets.payValue,
+    })
+    .from(s.visitTargets)
+    .innerJoin(s.users, and(eq(s.users.id, s.visitTargets.promoterId), eq(s.users.status, "active")))
+    .innerJoin(s.stores, eq(s.stores.id, s.visitTargets.storeId))
+    .innerJoin(s.brands, eq(s.brands.id, s.visitTargets.brandId))
+    .where(and(eq(s.visitTargets.agencyId, scope.agencyId), brandFilter(scope, s.visitTargets.brandId), promoterFilter(scope, s.visitTargets.promoterId)));
+  const payroll = await payrollCost(scope);
+  const costOf = new Map(payroll.people.map((p) => [p.id, p.cost.total]));
+  // Custo por atendimento de cada promotor = custo mensal ÷ atendimentos/mês dele.
+  const visitsOf = new Map<string, number>();
+  for (const r of rows) visitsOf.set(r.promoterId, (visitsOf.get(r.promoterId) ?? 0) + monthlyMeta(r.perWeek, r.period));
+  const perVisitCost = (pid: string) => {
+    const v = visitsOf.get(pid) ?? 0;
+    return v ? (costOf.get(pid) ?? 0) / v : 0;
+  };
+  const totalRevenue = rows.reduce((t, r) => t + (r.payValue ?? 0), 0);
+  const visited = new Map<string, { storeId: string; name: string; city: string; chainId: string | null }>();
+  for (const r of rows) visited.set(r.storeId, { storeId: r.storeId, name: r.storeName, city: r.city, chainId: r.chainId });
+
+  const byBrand = new Map<string, typeof rows>();
+  for (const r of rows) byBrand.set(r.brandId, [...(byBrand.get(r.brandId) ?? []), r]);
+  const totalVisits = rows.reduce((t, r) => t + monthlyMeta(r.perWeek, r.period), 0);
+  const avgPerVisit = totalVisits ? totalRevenue / totalVisits : 0;
+  const brands: BrandStrategy[] = [...byBrand.values()].map((list) => {
+    const stores = new Set(list.map((r) => r.storeId));
+    const visits = list.reduce((t, r) => t + monthlyMeta(r.perWeek, r.period), 0);
+    const revenue = list.reduce((t, r) => t + (r.payValue ?? 0), 0);
+    const fieldCost = list.reduce((t, r) => t + monthlyMeta(r.perWeek, r.period) * perVisitCost(r.promoterId), 0);
+    const keys = new Set(list.map((r) => `${r.chainId}|${r.city}`));
+    const opportunities = [...visited.values()].filter((st) => !stores.has(st.storeId) && keys.has(`${st.chainId}|${st.city}`)).map(({ storeId, name, city }) => ({ storeId, name, city }));
+    const perStore = stores.size ? revenue / stores.size : null;
+    const perVisit = visits ? revenue / visits : null;
+    const reading: BrandStrategy["reading"] = !revenue ? "no_value" : perVisit! >= avgPerVisit ? (visits >= 200 ? "star" : "niche") : visits >= 250 ? "heavy_cheap" : "cheap";
+    return {
+      brandId: list[0].brandId,
+      brandName: list[0].brandName,
+      stores: stores.size,
+      cities: new Set(list.map((r) => r.city)).size,
+      promoters: new Set(list.map((r) => r.promoterId)).size,
+      visits,
+      revenue: r2(revenue),
+      revenueShare: totalRevenue ? Math.round((revenue / totalRevenue) * 1000) / 10 : 0,
+      perStore: perStore === null ? null : r2(perStore),
+      perVisit: perVisit === null ? null : r2(perVisit),
+      fieldCost: r2(fieldCost),
+      result: r2(revenue - fieldCost),
+      margin: revenue ? Math.round(((revenue - fieldCost) / revenue) * 1000) / 10 : null,
+      missingValue: list.filter((r) => r.payValue === null).length,
+      opportunities,
+      potential: r2(opportunities.length * (perStore ?? 0)),
+      reading,
+    };
+  }).sort((a, b) => b.revenue - a.revenue);
+
+  const byPromoter = new Map<string, typeof rows>();
+  for (const r of rows) byPromoter.set(r.promoterId, [...(byPromoter.get(r.promoterId) ?? []), r]);
+  const promoters: PromoterStrategy[] = payroll.people.map((p) => {
+    const list = byPromoter.get(p.id) ?? [];
+    const visits = visitsOf.get(p.id) ?? 0;
+    const revenue = list.reduce((t, r) => t + (r.payValue ?? 0), 0);
+    return {
+      promoterId: p.id,
+      name: p.name,
+      employment: p.employment,
+      stores: new Set(list.map((r) => r.storeId)).size,
+      cities: new Set(list.map((r) => r.city)).size,
+      brands: new Set(list.map((r) => r.brandId)).size,
+      visits,
+      revenue: r2(revenue),
+      cost: p.cost.total,
+      result: r2(revenue - p.cost.total),
+      perVisit: visits ? r2(revenue / visits) : null,
+      costPerVisit: visits && p.cost.total ? r2(p.cost.total / visits) : null,
+    };
+  }).sort((a, b) => b.revenue - a.revenue);
+
+  return {
+    brands,
+    promoters,
+    totals: { revenue: r2(totalRevenue), visits: totalVisits, avgPerVisit: r2(avgPerVisit), fieldCost: r2(brands.reduce((t, b) => t + b.fieldCost, 0)), payroll: payroll.total, withoutCost: payroll.withoutCost, stores: visited.size },
+  };
+}

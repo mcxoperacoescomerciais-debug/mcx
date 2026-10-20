@@ -176,3 +176,17 @@ export async function commitScheduleAction(batchId: string, brandId: string, row
   if (r.ok) revalidatePath(BASE, "layout");
   return r;
 }
+
+export async function saveQuoteAction(id: string | null, data: { name: string; brandId: string | null; globals: { taxPct: number; adminPct: number; marginPct: number }; cities: unknown; notes: string | null }) {
+  const { saveQuote } = await import("@/server/tasting-quotes");
+  const r = await saveQuote(await getScope(), id, data);
+  if (r.ok) revalidatePath(`${BASE}/calculadora`);
+  return r;
+}
+
+export async function deleteQuoteAction(id: string) {
+  const { deleteQuote } = await import("@/server/tasting-quotes");
+  const r = await deleteQuote(await getScope(), id);
+  if (r.ok) revalidatePath(`${BASE}/calculadora`);
+  return r;
+}
