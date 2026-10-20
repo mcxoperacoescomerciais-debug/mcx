@@ -250,7 +250,7 @@ export async function commitSchedule(scope: Scope, batchId: string, brandId: str
       description: r.description,
       materialsNote: r.materialsNote,
       notes: r.notes,
-      responsibleId: scope.userId,
+      responsibleId: scope.platform ? null : scope.userId,
       orderRef: r.orderRef,
       actionCode: r.actionCode,
       billingTerms: null,

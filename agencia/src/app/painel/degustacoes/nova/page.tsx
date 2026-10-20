@@ -37,7 +37,7 @@ export default async function NewTasting({ searchParams }: PageProps<"/painel/de
           description: null,
           materialsNote: null,
           notes: null,
-          responsibleId: scope.userId,
+          responsibleId: scope.platform ? null : scope.userId,
           orderRef: null,
           actionCode: null,
           billingTerms: null,

@@ -78,13 +78,21 @@ export async function seedSamples(scope: Scope): Promise<ActionResult> {
   for (const b of brands) if (picked.length < 4 && !picked.includes(b)) picked.push(b);
   if (!picked.length) return { ok: false, error: "Cadastre ao menos uma marca antes." };
 
+  // Reaproveita as degustadoras de exemplo que já existam (não duplica).
+  const existing = await db.select({ id: s.tasters.id, name: s.tasters.name }).from(s.tasters).where(and(eq(s.tasters.agencyId, scope.agencyId), eq(s.tasters.sample, true)));
   const tasterIds: string[] = [];
   for (const t of TASTERS) {
+    const found = existing.find((e) => e.name === t.name);
+    if (found) {
+      tasterIds.push(found.id);
+      continue;
+    }
     const [row] = await db.insert(s.tasters).values({ ...t, agencyId: scope.agencyId, state: "MG", notes: "Cadastro fictício para demonstração.", sample: true, createdBy: scope.userId }).returning({ id: s.tasters.id });
     tasterIds.push(row.id);
   }
   const today = todayIso();
   const billedIds: { brandId: string; ids: string[] } = { brandId: picked[0].id, ids: [] };
+  let created = 0;
   for (const p of PLANS) {
     const brand = picked[p.brand % picked.length];
     const st = STORES[p.store];
@@ -103,7 +111,8 @@ export async function seedSamples(scope: Scope): Promise<ActionResult> {
       description: "Degustação com abordagem dos clientes no corredor (EXEMPLO)",
       materialsNote: null,
       notes: "Dado fictício para demonstração.",
-      responsibleId: scope.userId,
+      // Equipe MCX não é usuário da agência: fica sem responsável interno.
+      responsibleId: scope.platform ? null : scope.userId,
       orderRef: `EX-${date.slice(5, 7)}${String(p.store + 1).padStart(2, "0")}`,
       actionCode: null,
       billingTerms: "Faturamento após comprovação",
@@ -120,7 +129,8 @@ export async function seedSamples(scope: Scope): Promise<ActionResult> {
       otherCost: null,
     };
     const r = await saveTasting(scope, null, input, { allowDuplicate: true, sample: true });
-    if (!r.ok || !r.id) continue;
+    if (!r.ok || !r.id) return { ok: false, error: `Não foi possível criar os exemplos: ${r.ok ? "sem id" : r.error}` };
+    created++;
     const taster = p.taster === null ? null : tasterIds[p.taster];
     const done = p.status === "completed";
     await db
@@ -157,5 +167,5 @@ export async function seedSamples(scope: Scope): Promise<ActionResult> {
       await receiveInvoice(scope, inv.id, addDays(today, -5), null);
     }
   }
-  return { ok: true, message: `Criados ${PLANS.length} eventos e ${TASTERS.length} degustadoras de exemplo.` };
+  return { ok: true, message: `Criados ${created} eventos e ${TASTERS.length} degustadoras de exemplo.` };
 }

@@ -213,5 +213,12 @@ describe("degustações — fluxo", () => {
     assert.ok((await ts.deleteSamples(admin)).ok);
     assert.equal((await db.select().from(s.tastings).where(eq(s.tastings.sample, true))).length, 0);
     assert.equal((await db.select().from(s.tasters).where(eq(s.tasters.sample, true))).length, 0);
+    // Equipe MCX dentro da agência (usuário de outra agência): também cria os exemplos.
+    const [mcx] = await db.select().from(s.users).where(eq(s.users.username, "mcx"));
+    const asMcx = { ...admin, userId: mcx.id, platform: true };
+    const r2 = await seedSamples(asMcx);
+    assert.ok(r2.ok, JSON.stringify(r2));
+    assert.ok((await db.select().from(s.tastings).where(eq(s.tastings.sample, true))).length >= 15);
+    assert.ok((await ts.deleteSamples(asMcx)).ok);
   });
 });
