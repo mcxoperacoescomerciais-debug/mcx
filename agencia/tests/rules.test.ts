@@ -148,4 +148,7 @@ test("validade: digitação 0510, faixas e alerta (crítico ou grande quantidade
   assert.ok(isAlertItem(10, 20, rule), "grande quantidade entra");
   assert.ok(!isAlertItem(10, 15, rule), "15 unidades não é 'acima de 15'");
   assert.ok(!isAlertItem(20, 100, rule), "fora do prazo de grande quantidade");
+  assert.ok(!isAlertItem(5, 5, rule), "sem validade próxima configurada, 5 dias com 5 un não entra");
+  assert.ok(isAlertItem(5, 5, { ...rule, nearDays: 7 }), "validade próxima: até 7 dias entra com qualquer quantidade");
+  assert.ok(!isAlertItem(8, 5, { ...rule, nearDays: 7 }));
 });

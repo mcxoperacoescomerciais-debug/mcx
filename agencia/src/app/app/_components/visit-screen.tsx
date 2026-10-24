@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronRight, CloudUpload, Flag, Loader2, MapPin, MapPinOff, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ChevronRight, CloudUpload, Flag, Loader2, MapPin, MapPinOff, Send, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtDuration, fmtTime } from "@/lib/dates";
-import { addPlannedBrand, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
+import { addPlannedBrand, cancelAttendance, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useVisit } from "../_lib/hooks";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
 import { Notice, Screen, SectionTitle, Sheet, TextArea, toast, TopBar } from "./primitives";
@@ -23,6 +23,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
     setShareId(null);
   };
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [notAttended, setNotAttended] = useState<string | null>(null);
 
   if (!visit) {
     return (
@@ -188,6 +189,12 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
                 </p>
               ) : null}
             </button>
+            {a?.status === "cancelled" && a.cancelReason ? <p className="mt-1 px-1 text-[12.5px] text-muted">Não atendida: “{a.cancelReason}”</p> : null}
+            {open && slot.planned && !isDoneStatus(slot.status) ? (
+              <button type="button" onClick={() => setNotAttended(slot.brandId)} className="mt-1 w-full h-10 text-[13px] font-semibold text-ink-2 inline-flex items-center justify-center gap-1.5 active:opacity-70">
+                <Ban className="size-4" /> Não consegui atender esta marca
+              </button>
+            ) : null}
             {a && a.status === "completed" ? (
               <button type="button" onClick={() => setShareId(a.id)} className="mt-1.5 w-full h-12 rounded-2xl bg-ok text-white text-[14px] font-bold inline-flex items-center justify-center gap-2 active:opacity-90">
                 <Send className="size-4" /> ENVIAR RELATÓRIO NO GRUPO
@@ -228,7 +235,8 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
       </Sheet>
 
       <DiscardSheet open={discardOpen} onClose={() => setDiscardOpen(false)} visitId={visitId} />
-      {closeOpen && open ? <CloseVisitSheet visitId={visitId} onClose={() => setCloseOpen(false)} /> : null}
+      {closeOpen && open ? <CloseVisitSheet visitId={visitId} onClose={() => setCloseOpen(false)} onNotAttended={setNotAttended} /> : null}
+      {notAttended ? <NotAttendedSheet visitId={visitId} brandId={notAttended} onClose={() => setNotAttended(null)} /> : null}
     </Screen>
   );
 }
@@ -295,10 +303,51 @@ function DiscardSheet({ open, onClose, visitId }: { open: boolean; onClose: () =
   );
 }
 
-function CloseVisitSheet({ visitId, onClose }: { visitId: string; onClose: () => void }) {
+/**
+ * Marca que o promotor não conseguiu atender: grava o atendimento como "não
+ * atendida" com a observação. A loja pode ser encerrada e o painel avisa a gestão.
+ */
+function NotAttendedSheet({ visitId, brandId, onClose }: { visitId: string; brandId: string; onClose: () => void }) {
   const visit = useVisit(visitId)!;
   const cat = useCatalog();
   const [reason, setReason] = useState("");
+  const brand = cat.brandById.get(brandId)?.name ?? "Marca";
+  const existing = Object.values(visit.attendances).find((a) => a.brandId === brandId);
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={`Não consegui atender ${brand}`}
+      footer={
+        <Button
+          size="xl"
+          variant="danger"
+          className="w-full"
+          disabled={reason.trim().length < 5}
+          onClick={async () => {
+            const id = existing?.id ?? (await startAttendance(visitId, brandId));
+            await cancelAttendance(visitId, id, reason.trim());
+            haptic(20);
+            toast(`${brand}: marcada como não atendida. O gestor será avisado.`, "warn");
+            onClose();
+          }}
+        >
+          Confirmar marca não atendida
+        </Button>
+      }
+    >
+      <p className="text-[14px] text-ink-2 mb-3">
+        A loja poderá ser encerrada mesmo sem esta marca. O gestor recebe um alerta com a sua observação.
+        {existing ? " O que você já registrou nesta marca fica guardado." : ""}
+      </p>
+      <TextArea label="Observação (obrigatória)" value={reason} onChange={setReason} placeholder="Ex.: produto em falta, gerente não liberou, setor em reforma" rows={3} />
+    </Sheet>
+  );
+}
+
+function CloseVisitSheet({ visitId, onClose, onNotAttended }: { visitId: string; onClose: () => void; onNotAttended: (brandId: string) => void }) {
+  const visit = useVisit(visitId)!;
+  const cat = useCatalog();
   const schedule = visit.scheduleId ? cat.scheduleById.get(visit.scheduleId) : undefined;
   const slots = brandSlots(visit, schedule?.brandIds ?? visit.plannedBrandIds);
   const planned = slots.filter((s) => s.planned);
@@ -308,12 +357,10 @@ function CloseVisitSheet({ visitId, onClose }: { visitId: string; onClose: () =>
   const withException = Object.values(visit.attendances).filter((a) => a.exceptionItems.length);
   const ruptures = Object.values(visit.attendances).reduce((n, a) => n + Object.keys(a.ruptures).length, 0);
   const unsynced = pendingPhotos(visit) + Object.values(visit.attendances).filter((a) => a.rev > a.syncedRev).length;
-  const allowIncomplete = cat.settings?.allowIncompleteVisit ?? false;
   const name = (id: string) => cat.brandById.get(id)?.name ?? "Marca";
-
-  const blocked = inProgress.length > 0 || (pending.length > 0 && !allowIncomplete);
-  const needsReason = pending.length > 0;
-  const canClose = !blocked && (!needsReason || reason.trim().length >= 5);
+  const notAttended = slots.filter((s) => s.status === "cancelled");
+  const unresolved = [...inProgress, ...pending];
+  const canClose = unresolved.length === 0;
 
   return (
     <Sheet
@@ -323,17 +370,17 @@ function CloseVisitSheet({ visitId, onClose }: { visitId: string; onClose: () =>
       footer={
         <Button
           size="xl"
-          variant={needsReason ? "danger" : "primary"}
+          variant="primary"
           className="w-full"
           disabled={!canClose}
           onClick={async () => {
-            await finishVisit(visitId, needsReason ? reason.trim() : null);
+            await finishVisit(visitId, null);
             haptic(30);
-            toast(needsReason ? "Visita encerrada com pendência justificada." : "Visita encerrada.");
+            toast(notAttended.length ? "Visita encerrada. O gestor verá as marcas não atendidas." : "Visita encerrada.");
             go("", true);
           }}
         >
-          {needsReason ? "Encerrar com marca pendente" : "ENCERRAR VISITA"}
+          ENCERRAR VISITA
         </Button>
       }
     >
@@ -362,19 +409,26 @@ function CloseVisitSheet({ visitId, onClose }: { visitId: string; onClose: () =>
       </ul>
 
       <div className="mt-4 space-y-3">
-        {inProgress.length ? (
-          <Notice tone="bad" icon={<AlertTriangle className="size-5" />}>
-            Finalize o atendimento de <strong>{inProgress.map((s) => name(s.brandId)).join(", ")}</strong> antes de encerrar a visita.
-          </Notice>
-        ) : null}
-        {pending.length ? (
+        {unresolved.length ? (
           <Notice tone="warn" icon={<AlertTriangle className="size-5" />}>
-            Marca(s) prevista(s) ainda não atendida(s): <strong>{pending.map((s) => name(s.brandId)).join(", ")}</strong>.
-            {allowIncomplete ? " Para encerrar mesmo assim, explique o motivo — o gestor será sinalizado." : " A operação não permite encerrar com marca pendente."}
+            Para encerrar, finalize cada marca ou marque como não atendida com uma observação.
           </Notice>
         ) : null}
-        {needsReason && allowIncomplete && !inProgress.length ? (
-          <TextArea label="Justificativa (obrigatória)" value={reason} onChange={setReason} placeholder="Ex.: setor em reforma, gerente pediu para voltar amanhã" rows={2} />
+        {unresolved.map((s) => (
+          <div key={s.brandId} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-[15px] truncate">{name(s.brandId)}</p>
+              <p className="text-[12.5px] text-muted">{s.status === "pending" ? "Não iniciada" : "Em andamento"}</p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => onNotAttended(s.brandId)}>
+              <Ban className="size-4" /> Não consegui atender
+            </Button>
+          </div>
+        ))}
+        {notAttended.length ? (
+          <p className="text-[13px] text-muted">
+            Não atendida(s): {notAttended.map((s) => name(s.brandId)).join(", ")}. O gestor será avisado.
+          </p>
         ) : null}
         {unsynced > 0 ? <p className="text-[13px] text-muted">Tudo continua salvo no celular e será enviado automaticamente quando houver sinal.</p> : null}
       </div>

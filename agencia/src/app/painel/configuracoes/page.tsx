@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getScope, requireRole } from "@/server/auth";
 import { ISSUE_KIND_LABEL, ISSUE_KINDS, WORK_MODE_LABEL } from "@/lib/domain";
-import { PageHeader, inputClass } from "@/components/ui";
+import { Badge, PageHeader, inputClass } from "@/components/ui";
 import { SectionCard } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
-import { saveSettingsAction, testWhatsAppAction } from "../cadastros/actions";
+import { resendAlertAction, saveSettingsAction, testWhatsAppAction } from "../cadastros/actions";
 import { SEVERITY_COLOR } from "@/lib/validity";
+import { alertLog } from "@/server/whatsapp-alert";
+import { fmtDate } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -14,6 +16,8 @@ export default async function SettingsPage() {
   await requireRole(["admin"]);
   const scope = await getScope();
   const st = scope.settings;
+  const log = await alertLog(scope, 30);
+  const near = Math.max(st.validityBands.critical, st.alerts.nearDays);
   return (
     <>
       <PageHeader title="Configurações" subtitle="Parâmetros da operação. Os valores iniciais são os mais seguros; toda alteração fica na auditoria." />
@@ -91,11 +95,14 @@ export default async function SettingsPage() {
           </SectionCard>
           <SectionCard
             title="Alerta de validade no WhatsApp"
-            subtitle={`Quando o promotor finaliza um atendimento com validade crítica, chega no WhatsApp: ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
+            subtitle={`Quando o promotor finaliza um atendimento com validade próxima, chega no WhatsApp: ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
             bodyClass="px-5 pb-5 space-y-3"
           >
+            <Row label="Validade próxima: avisar tudo que vence em até (dias), qualquer quantidade">
+              <input type="number" name="alert_nearDays" min={0} max={365} defaultValue={st.alerts.nearDays} className={inputClass} />
+            </Row>
             <p className="text-[12.5px] text-ink-2">
-              Crítico = <b>vencido ou vencendo em até {st.validityBands.critical} dias</b> (faixa “Crítico até”) <b>ou</b> grande quantidade:
+              Hoje avisa: <b>vencido ou vencendo em até {near} dias</b> <b>ou</b> grande quantidade:
             </p>
             <div className="grid grid-cols-2 gap-3">
               <Row label="Grande quantidade: vence em até (dias)">
@@ -130,6 +137,63 @@ export default async function SettingsPage() {
           <p className="text-[13px] text-ink-2">Envia uma mensagem de teste para o(s) número(s) salvo(s) no alerta de validade desta agência.</p>
         </ActionForm>
       </div>
+      <SectionCard
+        className="mt-6"
+        title="Alertas de validade dos últimos 30 dias"
+        subtitle={`Todo atendimento com produto que entra na regra acima (vence em até ${near} dias ou grande quantidade) e o que aconteceu com o WhatsApp dele.`}
+        bodyClass="pb-2"
+      >
+        {log.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wide text-muted text-left">
+                  <th className="font-semibold px-5 py-2">Visita</th>
+                  <th className="font-semibold px-2 py-2">Loja e marca</th>
+                  <th className="font-semibold px-2 py-2">Promotor</th>
+                  <th className="font-semibold px-2 py-2 text-right">Itens</th>
+                  <th className="font-semibold px-2 py-2">WhatsApp</th>
+                  <th className="px-5 py-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {log.map((r) => (
+                  <tr key={r.attendanceId} className="align-top">
+                    <td className="px-5 py-2.5 tnum whitespace-nowrap">{fmtDate(r.visitDate)}</td>
+                    <td className="px-2 py-2.5">
+                      <span className="font-semibold">{r.store}</span> <span className="text-muted">· {r.city}</span>
+                      <span className="block text-muted">{r.brand}</span>
+                    </td>
+                    <td className="px-2 py-2.5">{r.promoter}</td>
+                    <td className="px-2 py-2.5 text-right tnum">{r.items}</td>
+                    <td className="px-2 py-2.5">
+                      {!r.finished ? (
+                        <Badge tone="neutral">Atendimento não finalizado</Badge>
+                      ) : r.status === "sent" ? (
+                        <Badge tone="success">Enviado {r.sentAt ? fmtDate(r.sentAt.toISOString().slice(0, 10)).slice(0, 5) : ""}</Badge>
+                      ) : r.status === "error" ? (
+                        <>
+                          <Badge tone="danger">Falhou</Badge>
+                          <span className="block text-[11.5px] text-bad mt-1 max-w-64 break-words">{r.error}</span>
+                        </>
+                      ) : (
+                        <Badge tone="warning">Não enviado</Badge>
+                      )}
+                    </td>
+                    <td className="px-5 py-2">
+                      {r.finished ? (
+                        <ActionForm action={resendAlertAction} hidden={{ attendanceId: r.attendanceId }} submitLabel={r.status === "sent" ? "Reenviar" : "Enviar agora"} variant="secondary" resetOnSuccess={false} />
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="px-5 pb-3 text-[13px] text-muted">Nenhum produto com validade próxima registrado nos últimos 30 dias.</p>
+        )}
+      </SectionCard>
     </>
   );
 }

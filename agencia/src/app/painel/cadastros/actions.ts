@@ -146,6 +146,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
           monitor: Number(str(fd, "band_monitor")),
         },
         alerts: {
+          nearDays: Number(str(fd, "alert_nearDays")),
           bulkDays: Number(str(fd, "alert_bulkDays")),
           bulkMinQty: Number(str(fd, "alert_bulkMinQty")),
           whatsappPhone: normalizePhones(str(fd, "alert_phone")),
@@ -189,6 +190,13 @@ export async function testWhatsAppAction(_: FormState, _fd: FormData): Promise<F
   if (scope.role !== "admin") return done({ ok: false, error: "Somente administradores." });
   const { sendTestAlert } = await import("@/server/whatsapp-alert");
   return done(await sendTestAlert(scope));
+}
+
+export async function resendAlertAction(_: FormState, fd: FormData): Promise<FormState> {
+  const scope = await getScope();
+  const { resendAlert } = await import("@/server/whatsapp-alert");
+  const r = await resendAlert(scope, str(fd, "attendanceId"));
+  return done(r);
 }
 
 export type ImportState = { report?: ImportReport; error?: string } | null;

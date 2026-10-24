@@ -371,7 +371,9 @@ describe("fluxos críticos", () => {
       assert.equal(sent.length, 1, "um alerta por atendimento");
       const msg = sent[0];
       assert.ok(msg.includes(scope.agencyName), "nome da agência no alerta");
-      assert.match(msg, /Vencidos ou vencendo em até 3 dias \(1\)/);
+      assert.match(msg, /Vencidos ou vencendo em até 7 dias \(1\)/);
+      const log = await alert.alertLog(scope, 30);
+      assert.equal(log.find((r) => r.attendanceId === ids.bravoAtt)?.status, "sent", "conferência mostra o alerta enviado");
       assert.match(msg, /Grande quantidade .*\(1\)/);
       assert.ok(!msg.includes("5 un"), "5 unidades não é grande quantidade");
       const linkId = /\/r\/([0-9a-f-]{36})/.exec(msg)![1];
@@ -384,6 +386,57 @@ describe("fluxos críticos", () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+
+  test("painel: loja em que o promotor não foi e loja feita sem todas as marcas (com a observação)", async () => {
+    const day = (d: number) => new Date(Date.parse(`${todayIso()}T12:00:00Z`) + d * 86_400_000).toISOString().slice(0, 10);
+    // Programação de Lucas nesta loja nos dois dias anteriores (cria se os dados de demonstração não tiverem).
+    async function scheduleOn(date: string) {
+      const where = and(eq(s.schedules.storeId, ids.store), eq(s.schedules.date, date), eq(s.schedules.promoterId, scopes.lucas.userId), eq(s.schedules.status, "active"));
+      let [row] = await db.select().from(s.schedules).where(where);
+      if (!row) {
+        const r = await schedules.createSchedule(scopes.gestor, { promoterId: scopes.lucas.userId, storeId: ids.store, date, plannedStart: null, brandIds: [ids.BRAVO, ids.FOFINHO], notes: null });
+        assert.ok(r.ok, JSON.stringify(r));
+        [row] = await db.select().from(s.schedules).where(where);
+      }
+      // Visita de demonstração neste dia sai da conta (cancelada).
+      await db.update(s.visits).set({ status: "cancelled", scheduleId: null }).where(eq(s.visits.scheduleId, row.id));
+      await db.delete(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, row.id));
+      await db.insert(s.scheduleBrands).values([ids.BRAVO, ids.FOFINHO].map((brandId) => ({ scheduleId: row.id, brandId })));
+      return row;
+    }
+    await scheduleOn(day(-1));
+    const sch = await scheduleOn(day(-2));
+    const now = new Date().toISOString();
+    const bravo = attendancePayload({
+      brandId: ids.BRAVO,
+      status: "completed",
+      finishedAt: now,
+      photos: [photo("before"), photo("after")],
+      stock: (await productsOf(ids.BRAVO, ids.store)).map((p) => ({ productId: p, state: "quantity" as const, quantity: 3, note: null, recordedAt: now })),
+    });
+    // Marca que o promotor não conseguiu atender: atendimento "não atendida" com observação.
+    const fof = attendancePayload({ brandId: ids.FOFINHO, status: "cancelled", finishedAt: now, cancelReason: "Gerente não liberou o depósito" });
+    const visit = visitPayload({ storeId: ids.store, scheduleId: sch.id, visitDate: day(-2), attendances: [bravo, fof], status: "completed", finishedAt: now });
+    // Uma visita aberta por promotor: a de outro cenário fica de lado durante este envio.
+    const open = await db.select({ id: s.visits.id }).from(s.visits).where(and(eq(s.visits.promoterId, scopes.lucas.userId), eq(s.visits.status, "in_progress")));
+    for (const o of open) await db.update(s.visits).set({ status: "completed" }).where(eq(s.visits.id, o.id));
+    const [res] = await promoter.applySync(scopes.lucas, [visit]);
+    for (const o of open) await db.update(s.visits).set({ status: "in_progress" }).where(eq(s.visits.id, o.id));
+    assert.ok(res.ok, JSON.stringify(res));
+    const [v] = await db.select().from(s.visits).where(eq(s.visits.id, visit.id));
+    assert.equal(v.status, "completed", "a loja encerra mesmo com a marca não atendida");
+
+    const al = await ops.operationAlerts(scopes.gestor, todayIso());
+    const m = al.missed.find((x) => x.date === day(-1) && x.storeName === "Super BH Pio XII");
+    assert.ok(m, "loja programada sem visita aparece como 'não foi'");
+    assert.equal(m.promoterId, scopes.lucas.userId);
+    const inc = al.incomplete.find((x) => x.visitId === visit.id);
+    assert.ok(inc, "loja feita sem todas as marcas aparece no alerta");
+    assert.deepEqual(inc.brands.map((b) => b.reason), ["Gerente não liberou o depósito"]);
+    assert.equal(inc.doneBrands, 1);
+    assert.equal(inc.totalBrands, 2);
+    assert.ok(!al.incomplete.some((x) => x.date === day(-1) && x.storeName === m.storeName && x.promoterId === m.promoterId), "loja não visitada não conta como incompleta");
   });
 
   test("uma visita aberta por vez e programação sem duplicidade", async () => {

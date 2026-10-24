@@ -1,10 +1,10 @@
 /**
  * Alerta de validade crítica no WhatsApp da gestão (modo SUINCO), por agência.
  *
- * Quando o promotor FINALIZA um atendimento com validade crítica, a agência
+ * Quando o promotor FINALIZA um atendimento com validade próxima, a agência
  * recebe: nome da agência, marca, promotor, loja, cidade, os itens e o link do
- * PDF do atendimento. Crítico (ajustável em Configurações de cada agência):
- *   - vencido ou vencendo em até `validityBands.critical` dias;
+ * PDF do atendimento. Entra no alerta (ajustável em Configurações de cada agência):
+ *   - vencido ou vencendo em até `alerts.nearDays` dias (ou "Crítico até", se maior);
  *   - grande quantidade: vencendo em até `alerts.bulkDays` dias e quantidade
  *     acima de `alerts.bulkMinQty`.
  *
@@ -14,13 +14,14 @@
  * Cada atendimento é avisado uma vez só (tabela whatsapp_alerts).
  */
 import "server-only";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import type { ActionResult } from "./manager";
 import { VALIDITY_LOCATION_LABEL } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
-import { describeDays, formatIsoBr, isAlertItem } from "@/lib/validity";
+import { alertNearDays, describeDays, formatIsoBr, isAlertItem, type AlertRule } from "@/lib/validity";
+import { addDays, todayIso } from "@/lib/dates";
 import type { AgencySettings } from "@/lib/settings";
 
 export const LINK_DAYS = 30;
@@ -71,23 +72,24 @@ export async function buildAlertMessage(scope: Pick<Scope, "agencyId" | "agencyN
     .innerJoin(s.products, eq(s.products.id, s.validities.productId))
     .where(and(eq(s.validities.attendanceId, attendanceId), isNull(s.validities.deletedAt)))
     .orderBy(s.validities.daysToExpiry);
-  const rule = { bands: scope.settings.validityBands, bulkDays: scope.settings.alerts.bulkDays, bulkMinQty: scope.settings.alerts.bulkMinQty };
+  const rule = alertRule(scope.settings);
   const items = rows.filter((r) => isAlertItem(r.days, r.quantity, rule));
   if (!items.length) return null;
+  const near = alertNearDays(rule);
 
   const line = (i: (typeof items)[number]) =>
     `• ${i.product} – ${i.days < 0 ? `VENCIDO (${formatIsoBr(i.expiryDate, false)})` : `vence ${formatIsoBr(i.expiryDate, false)} (${describeDays(i.days)})`} · ${i.quantity} ${i.unit} · ${VALIDITY_LOCATION_LABEL[i.location]}`;
-  const urgent = items.filter((i) => i.days <= rule.bands.critical);
-  const bulk = items.filter((i) => i.days > rule.bands.critical);
+  const urgent = items.filter((i) => i.days <= near);
+  const bulk = items.filter((i) => i.days > near);
   const text = [
-    `⚠️ *Validade crítica – ${scope.agencyName}*`,
+    `⚠️ *Validade próxima – ${scope.agencyName}*`,
     `*Marca:* ${a.brand}`,
     `*Promotor:* ${a.promoter}`,
     `*Loja:* ${a.chain && !a.store.toLowerCase().includes(a.chain.toLowerCase()) ? `${a.chain} · ` : ""}${a.store}${a.code && !a.store.includes(a.code) ? ` · ${a.code}` : ""}`,
     `*Cidade:* ${a.city}`,
     `*Visita:* ${fmtDate(a.visitDate)}`,
     "",
-    ...(urgent.length ? [`*Vencidos ou vencendo em até ${rule.bands.critical} dias (${urgent.length}):*`, ...urgent.map(line)] : []),
+    ...(urgent.length ? [`*Vencidos ou vencendo em até ${near} dias (${urgent.length}):*`, ...urgent.map(line)] : []),
     ...(urgent.length && bulk.length ? [""] : []),
     ...(bulk.length ? [`*Grande quantidade – vence em até ${rule.bulkDays} dias, acima de ${rule.bulkMinQty} (${bulk.length}):*`, ...bulk.map(line)] : []),
     "",
@@ -112,34 +114,100 @@ export async function resolveAlertLink(id: string): Promise<{ agencyId: string; 
   return { agencyId: row.agencyId, attendanceId: row.attendanceId };
 }
 
+export function alertRule(st: AgencySettings): AlertRule {
+  return { bands: st.validityBands, nearDays: st.alerts.nearDays, bulkDays: st.alerts.bulkDays, bulkMinQty: st.alerts.bulkMinQty };
+}
+
+/**
+ * Envia o alerta de um atendimento. `resend` apaga o registro anterior (erro
+ * ou já enviado) e manda de novo — é o botão "Reenviar" das Configurações.
+ */
+async function sendAttendanceAlert(scope: Scope, attendanceId: string, resend: boolean): Promise<ActionResult> {
+  const to = recipients(scope.settings);
+  if (!to.length) return { ok: false, error: "Sem número e chave do CallMeBot nas Configurações." };
+  const db = await getDb();
+  if (resend) await db.delete(s.whatsappAlerts).where(and(eq(s.whatsappAlerts.attendanceId, attendanceId), eq(s.whatsappAlerts.agencyId, scope.agencyId)));
+  // Registra antes de enviar (índice único por atendimento): reenvios não duplicam.
+  const [row] = await db.insert(s.whatsappAlerts).values({ agencyId: scope.agencyId, attendanceId, items: 0 }).onConflictDoNothing().returning();
+  if (!row) return { ok: true, message: "Alerta já registrado para este atendimento." };
+  const msg = await buildAlertMessage(scope, attendanceId, row.id);
+  if (!msg) {
+    await db.delete(s.whatsappAlerts).where(eq(s.whatsappAlerts.id, row.id));
+    return { ok: false, error: "Nenhum item deste atendimento entra na regra do alerta." };
+  }
+  const errors: string[] = [];
+  for (const r of to) await sendCallMeBot(r.phone, r.apikey, msg.text).catch((e: Error) => errors.push(e.message));
+  await db
+    .update(s.whatsappAlerts)
+    .set({ items: msg.items, sentAt: errors.length < to.length ? new Date() : null, error: errors.length ? errors.join(" | ").slice(0, 500) : null })
+    .where(eq(s.whatsappAlerts.id, row.id));
+  if (errors.length) console.error("[alerta whatsapp]", attendanceId, errors);
+  return errors.length === to.length ? { ok: false, error: `Falha no envio: ${errors.join(" | ").slice(0, 200)}` } : { ok: true, message: "Alerta enviado no WhatsApp." };
+}
+
 /** Chamado depois que o atendimento finalizado é gravado. Nunca lança erro. */
 export async function notifyCriticalAttendance(scope: Scope, attendanceId: string): Promise<void> {
   try {
-    const to = recipients(scope.settings);
-    if (!to.length) return;
-    const db = await getDb();
-    // Registra antes de enviar (índice único por atendimento): reenvios não duplicam.
-    const [row] = await db
-      .insert(s.whatsappAlerts)
-      .values({ agencyId: scope.agencyId, attendanceId, items: 0 })
-      .onConflictDoNothing()
-      .returning();
-    if (!row) return;
-    const msg = await buildAlertMessage(scope, attendanceId, row.id);
-    if (!msg) {
-      await db.delete(s.whatsappAlerts).where(eq(s.whatsappAlerts.id, row.id));
-      return;
-    }
-    const errors: string[] = [];
-    for (const r of to) await sendCallMeBot(r.phone, r.apikey, msg.text).catch((e: Error) => errors.push(e.message));
-    await db
-      .update(s.whatsappAlerts)
-      .set({ items: msg.items, sentAt: errors.length < to.length ? new Date() : null, error: errors.length ? errors.join(" | ").slice(0, 500) : null })
-      .where(eq(s.whatsappAlerts.id, row.id));
-    if (errors.length) console.error("[alerta whatsapp]", attendanceId, errors);
+    await sendAttendanceAlert(scope, attendanceId, false);
   } catch (err) {
     console.error("[alerta whatsapp] falhou", attendanceId, err);
   }
+}
+
+export async function resendAlert(scope: Scope, attendanceId: string): Promise<ActionResult> {
+  if (scope.role !== "admin") return { ok: false, error: "Somente administradores." };
+  try {
+    return await sendAttendanceAlert(scope, attendanceId, true);
+  } catch (err) {
+    return { ok: false, error: `Falha no envio: ${(err as Error).message.slice(0, 200)}` };
+  }
+}
+
+export type AlertLogStatus = "sent" | "error" | "missing";
+
+/**
+ * Conferência dos últimos `days` dias: todo atendimento finalizado com item que
+ * entra na regra atual do alerta, e o que aconteceu com o WhatsApp dele.
+ */
+export async function alertLog(scope: Scope, days = 30) {
+  const db = await getDb();
+  const from = addDays(todayIso(), -(days - 1));
+  const rows = await db
+    .select({
+      attendanceId: s.attendances.id,
+      status: s.attendances.status,
+      finishedAt: s.attendances.finishedAt,
+      visitDate: s.visits.visitDate,
+      brand: s.brands.name,
+      store: s.stores.name,
+      city: s.stores.city,
+      promoter: s.users.name,
+      days: s.validities.daysToExpiry,
+      quantity: s.validities.quantity,
+    })
+    .from(s.validities)
+    .innerJoin(s.attendances, eq(s.attendances.id, s.validities.attendanceId))
+    .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+    .innerJoin(s.brands, eq(s.brands.id, s.attendances.brandId))
+    .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+    .innerJoin(s.users, eq(s.users.id, s.visits.promoterId))
+    .where(and(eq(s.validities.agencyId, scope.agencyId), isNull(s.validities.deletedAt), gte(s.visits.visitDate, from)))
+    .orderBy(desc(s.visits.visitDate));
+  const rule = alertRule(scope.settings);
+  const byAtt = new Map<string, { attendanceId: string; finished: boolean; visitDate: string; brand: string; store: string; city: string; promoter: string; items: number }>();
+  for (const r of rows) {
+    if (!isAlertItem(r.days, r.quantity, rule)) continue;
+    const g = byAtt.get(r.attendanceId) ?? { attendanceId: r.attendanceId, finished: r.status === "completed", visitDate: r.visitDate, brand: r.brand, store: r.store, city: r.city, promoter: r.promoter, items: 0 };
+    g.items++;
+    byAtt.set(r.attendanceId, g);
+  }
+  const ids = [...byAtt.keys()];
+  const sent = ids.length ? await db.select().from(s.whatsappAlerts).where(inArray(s.whatsappAlerts.attendanceId, ids)) : [];
+  return [...byAtt.values()].map((g) => {
+    const a = sent.find((x) => x.attendanceId === g.attendanceId);
+    const status: AlertLogStatus = a?.sentAt ? "sent" : a?.error ? "error" : "missing";
+    return { ...g, status, sentAt: a?.sentAt ?? null, error: a?.error ?? null };
+  });
 }
 
 /** Botão "Enviar mensagem de teste" das Configurações da agência. */
@@ -149,8 +217,8 @@ export async function sendTestAlert(scope: Scope): Promise<ActionResult> {
   const st = scope.settings;
   const text = [
     `✅ *Teste – alertas ${scope.agencyName}*`,
-    "Este número vai receber os avisos de validade crítica:",
-    `• vencidos ou vencendo em até ${st.validityBands.critical} dias`,
+    "Este número vai receber os avisos de validade próxima:",
+    `• vencidos ou vencendo em até ${Math.max(st.validityBands.critical, st.alerts.nearDays)} dias`,
     `• vencendo em até ${st.alerts.bulkDays} dias com mais de ${st.alerts.bulkMinQty} unidades`,
   ].join("\n");
   const errors: string[] = [];

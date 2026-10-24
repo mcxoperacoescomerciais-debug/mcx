@@ -133,6 +133,8 @@ export function describeDays(days: number): string {
 export interface AlertRule {
   /** Vencido ou vencendo em até `bands.critical` dias. */
   bands: SeverityBands;
+  /** Validade próxima: vencendo em até `nearDays` dias, qualquer quantidade. */
+  nearDays?: number;
   /** Grande quantidade: vencendo em até `bulkDays` dias e quantidade acima de `bulkMinQty`. */
   bulkDays: number;
   bulkMinQty: number;
@@ -140,5 +142,10 @@ export interface AlertRule {
 
 /** Item de validade que entra no alerta de WhatsApp (mesma regra no servidor e nos testes). */
 export function isAlertItem(daysToExpiry: number, quantity: number, rule: AlertRule): boolean {
-  return daysToExpiry <= rule.bands.critical || (daysToExpiry <= rule.bulkDays && quantity > rule.bulkMinQty);
+  return daysToExpiry <= alertNearDays(rule) || (daysToExpiry <= rule.bulkDays && quantity > rule.bulkMinQty);
+}
+
+/** Até quantos dias qualquer quantidade entra no alerta (o maior entre "Crítico até" e "Validade próxima"). */
+export function alertNearDays(rule: AlertRule): number {
+  return Math.max(rule.bands.critical, rule.nearDays ?? 0);
 }

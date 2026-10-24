@@ -62,7 +62,7 @@ export const ATTENDANCE_STATUS_LABEL: Record<AttendanceDisplayStatus, string> = 
   awaiting_sync: "Aguardando sincronização",
   completed: "Concluído",
   correction_requested: "Pendente de correção",
-  cancelled: "Cancelado",
+  cancelled: "Não atendida",
 };
 export const ATTENDANCE_STATUS_TONE: Record<AttendanceDisplayStatus, Tone> = {
   pending: "neutral",

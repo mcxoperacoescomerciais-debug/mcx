@@ -10,6 +10,8 @@ import { DEFAULT_BANDS, type SeverityBands } from "./validity";
 
 /** Alerta de validade crítica no WhatsApp da gestão (CallMeBot). Um por agência. */
 export interface AlertSettings {
+  /** Validade próxima: avisa tudo que vence em até nearDays dias, qualquer quantidade. */
+  nearDays: number;
   /** Também avisa itens vencendo em até bulkDays dias com quantidade acima de bulkMinQty. */
   bulkDays: number;
   bulkMinQty: number;
@@ -71,7 +73,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   stockDivergencePct: 50,
   issuePriority: DEFAULT_ISSUE_PRIORITY,
   validityBands: DEFAULT_BANDS,
-  alerts: { bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "", storageReport: false },
+  alerts: { nearDays: 7, bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "", storageReport: false },
   defaultWorkMode: "route",
   promoterCost: { salary: null, meal: null, fuel: null, other: null, chargesPct: DEFAULT_CHARGES_PCT },
 };
@@ -100,6 +102,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
       monitor: num(r.validityBands?.monitor, DEFAULT_BANDS.monitor, 0, 730),
     },
     alerts: {
+      nearDays: num(r.alerts?.nearDays, DEFAULT_SETTINGS.alerts.nearDays, 0, 365),
       bulkDays: num(r.alerts?.bulkDays, DEFAULT_SETTINGS.alerts.bulkDays, 0, 365),
       bulkMinQty: num(r.alerts?.bulkMinQty, DEFAULT_SETTINGS.alerts.bulkMinQty, 0, 100_000),
       whatsappPhone: typeof r.alerts?.whatsappPhone === "string" ? r.alerts.whatsappPhone : "",

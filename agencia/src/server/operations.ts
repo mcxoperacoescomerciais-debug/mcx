@@ -21,6 +21,7 @@ export interface BoardAttendance {
   brandId: string;
   brandName: string;
   status: AttendanceStatus;
+  cancelReason: string | null;
   startedAt: Date;
   finishedAt: Date | null;
   exceptionItems: string[];
@@ -167,6 +168,7 @@ export async function getDayBoard(scope: Scope, f: Pick<PanelFilters, "date" | "
           brandId: s.attendances.brandId,
           brandName: s.brands.name,
           status: s.attendances.status,
+          cancelReason: s.attendances.cancelReason,
           startedAt: s.attendances.startedAt,
           finishedAt: s.attendances.finishedAt,
           exceptionItems: s.attendances.exceptionItems,
@@ -442,4 +444,61 @@ export function summarizePromoters(board: DayBoard): PromoterSummary[] {
     else p.status = "not_started";
   }
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+// ───────────────────────────── Alertas da visão geral ─────────────────────────────
+
+export interface MissedStoreAlert {
+  key: string;
+  date: string;
+  promoterId: string;
+  promoterName: string;
+  storeName: string;
+  city: string;
+  brands: string[];
+}
+
+export interface IncompleteStoreAlert {
+  key: string;
+  date: string;
+  visitId: string;
+  promoterId: string;
+  promoterName: string;
+  storeName: string;
+  city: string;
+  /** Marcas sem atendimento concluído, com a justificativa do promotor (quando houver). */
+  brands: { name: string; reason: string | null }[];
+  doneBrands: number;
+  totalBrands: number;
+}
+
+/**
+ * Os dois alertas mais importantes do painel, nos últimos `days` dias até `to`:
+ * loja programada em que o promotor não foi, e loja feita sem todas as marcas
+ * (marca não atendida com justificativa, ou visita encerrada com marca pendente).
+ */
+export async function operationAlerts(scope: Scope, to: string, days = 7): Promise<{ from: string; to: string; missed: MissedStoreAlert[]; incomplete: IncompleteStoreAlert[] }> {
+  const from = addDays(to, -(days - 1));
+  const board = await getRangeBoard(scope, { from, to, brand: null, chain: null, store: null, promoter: null, city: null });
+  const missed: MissedStoreAlert[] = [];
+  const incomplete: IncompleteStoreAlert[] = [];
+  for (const st of board.stops) {
+    if (st.scheduleId && st.bucket === "missed") {
+      missed.push({ key: st.key, date: st.date, promoterId: st.promoterId, promoterName: st.promoterName, storeName: st.storeName, city: st.city, brands: st.plannedBrands.map((b) => b.name) });
+      continue;
+    }
+    const v = st.visit;
+    if (!v || v.status === "in_progress" || v.status === "cancelled") continue;
+    const names = new Map<string, string>([...st.plannedBrands.map((b) => [b.id, b.name] as const), ...st.attendances.map((a) => [a.brandId, a.brandName] as const)]);
+    const notDone: IncompleteStoreAlert["brands"] = [];
+    for (const [brandId, name] of names) {
+      const a = st.attendances.find((x) => x.brandId === brandId);
+      if (a?.status === "completed") continue;
+      notDone.push({ name, reason: a?.status === "cancelled" ? a.cancelReason : v.closeReason });
+    }
+    if (notDone.length)
+      incomplete.push({ key: st.key, date: st.date, visitId: v.id, promoterId: st.promoterId, promoterName: st.promoterName, storeName: st.storeName, city: st.city, brands: notDone, doneBrands: names.size - notDone.length, totalBrands: names.size });
+  }
+  const byRecent = (a: { date: string; promoterName: string }, b: { date: string; promoterName: string }) => b.date.localeCompare(a.date) || a.promoterName.localeCompare(b.promoterName, "pt-BR");
+  return { from, to, missed: missed.sort(byRecent), incomplete: incomplete.sort(byRecent) };
 }

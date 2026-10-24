@@ -441,7 +441,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
           </Button>
           {attendance.status === "in_progress" ? (
             <button type="button" onClick={() => setCancelOpen(true)} className="w-full text-center text-[13px] text-muted font-medium py-2 flex items-center justify-center gap-1.5">
-              <Ban className="size-4" /> Não vou atender esta marca hoje (cancelar com justificativa)
+              <Ban className="size-4" /> Não consegui atender esta marca
             </button>
           ) : null}
         </>
@@ -464,7 +464,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
           onClose={() => setCancelOpen(false)}
           onConfirm={async (reason) => {
             await cancelAttendance(visitId, attendance.id, reason);
-            toast("Atendimento cancelado com justificativa.", "warn");
+            toast("Marca marcada como não atendida. O gestor será avisado.", "warn");
             go(`visita/${visitId}`, true);
           }}
         />
