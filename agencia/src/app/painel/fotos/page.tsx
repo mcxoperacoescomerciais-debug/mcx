@@ -24,7 +24,7 @@ export default async function PhotosPage({ searchParams }: PageProps<"/painel/fo
   const f = parseFilters(await searchParams, 7);
   const kind = f.kind === "before" || f.kind === "after" ? f.kind : null;
   const [rep, options] = await Promise.all([photoReport(scope, { ...f, status: null, kind }, PAGE), filterOptions(scope)]);
-  const keep = { from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, kind };
+  const keep = { from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, kind, q: f.q || null };
   const photos: ViewerPhoto[] = rep.rows.flatMap((r) =>
     r.photos
       .filter((p) => (kind ? p.kind === kind : p.kind === "before" || p.kind === "after"))
@@ -60,7 +60,8 @@ export default async function PhotosPage({ searchParams }: PageProps<"/painel/fo
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}
-        fields={["period", "brand", "chain", "store", "promoter", "kind"]}
+        fields={["period", "brand", "chain", "store", "promoter", "kind", "q"]}
+        qPlaceholder="Loja, marca, promotor ou cidade"
         options={{
           ...options,
           kinds: [

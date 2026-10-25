@@ -4,7 +4,7 @@ import { ArrowRight, CheckCircle2, ClipboardList, FileDown, ShieldAlert, Store }
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { brandExecution } from "@/server/brand-execution";
-import { parseFilters, withParams } from "@/lib/filters";
+import { matchText, parseFilters, withParams } from "@/lib/filters";
 import { fmtDate, fmtTime } from "@/lib/dates";
 import { pct } from "@/lib/rules";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, ISSUE_KIND_LABEL } from "@/lib/domain";
@@ -30,7 +30,10 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
       </>
     );
   }
-  const r = await brandExecution(scope, { ...f, brand: brand?.id ?? null });
+  const raw = await brandExecution(scope, { ...f, brand: brand?.id ?? null });
+  const r = f.q
+    ? { ...raw, attendances: raw.attendances.filter((a) => matchText(f.q, a.storeName, a.city, a.promoterName, a.brandName)), issues: raw.issues.filter((i) => matchText(f.q, i.title, i.storeName, i.brandName, i.promoterName)) }
+    : raw;
   const qs = withParams({ brand: brand?.id, from: f.from, to: f.to, chain: f.chain, city: f.city, promoter: f.promoter });
 
   return (
@@ -52,7 +55,7 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
           ) : undefined
         }
       />
-      <FilterBar fields={["period", "brand", "chain", "city", "promoter"]} options={options} range={{ from: f.from, to: f.to }} />
+      <FilterBar fields={["period", "brand", "chain", "city", "promoter", "q"]} qPlaceholder="Loja, cidade ou promotor" options={options} range={{ from: f.from, to: f.to }} />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard label="Atendimentos previstos" value={r.planned} sub={r.plannedSource === "assignments" ? "Pelas atribuições (vezes por semana × período)" : "Marca prevista na programação"} icon={<ClipboardList className="size-4" />} />

@@ -5,6 +5,8 @@ import { filterOptions } from "@/server/operations";
 import { listRoutes } from "@/server/schedules";
 import { EmptyState, PageHeader, StatusBadge, inputClass, selectClass } from "@/components/ui";
 import { SectionCard } from "../_components/widgets";
+import { FilterBar } from "../_components/filter-bar";
+import { matchText } from "@/lib/filters";
 import { ActionForm, Disclosure } from "../_components/action-form";
 import { saveRouteAction } from "../programacao/actions";
 
@@ -14,18 +16,22 @@ const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 type Options = Awaited<ReturnType<typeof filterOptions>>;
 type RouteRow = Awaited<ReturnType<typeof listRoutes>>[number];
 
-export default async function RoutesPage() {
+export default async function RoutesPage({ searchParams }: PageProps<"/painel/roteiros">) {
   const scope = await getScope();
   if (scope.brandIds !== null) notFound();
-  const [routes, options] = await Promise.all([listRoutes(scope), filterOptions(scope)]);
+  const sp = await searchParams;
+  const q = typeof sp.q === "string" ? sp.q.trim() : "";
+  const [allRoutes, options] = await Promise.all([listRoutes(scope), filterOptions(scope)]);
+  const routes = q ? allRoutes.filter((r) => matchText(q, r.r.name, r.r.region, r.promoterName, ...r.stops.flatMap((st) => [st.storeName, st.city]))) : allRoutes;
   return (
     <>
       <PageHeader title="Roteiros" subtitle="Modelos reutilizáveis (lojas em ordem + dias da semana) que geram a programação diária. Freelancers podem trabalhar só com programação avulsa." />
+      <FilterBar fields={["q"]} options={{}} qPlaceholder="Roteiro, promotor, região, loja ou cidade" />
       <div className="grid xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-4">
           {routes.length === 0 ? (
             <div className="bg-surface border border-line rounded-[var(--radius-card)]">
-              <EmptyState title="Nenhum roteiro cadastrado" />
+              <EmptyState title={q ? "Nenhum roteiro encontrado" : "Nenhum roteiro cadastrado"} />
             </div>
           ) : null}
           {routes.map((r) => (

@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Target, TrendingUp, TriangleAlert, Users } f
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { portfolioPromoters, portfolioWeek } from "@/server/portfolio";
-import { parseFilters, withParams } from "@/lib/filters";
+import { matchText, parseFilters, withParams } from "@/lib/filters";
 import { addDays, fmtDate, todayIso } from "@/lib/dates";
 import { pct } from "@/lib/rules";
 import { frequencyLabel, TARGET_STATUS_LABEL, TARGET_STATUS_TONE, weekdaysLabel, weekStart } from "@/lib/portfolio";
@@ -34,6 +34,11 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
   const t = w.totals;
   const behind = w.rows.filter((r) => r.status === "behind").length;
   const modeOf = new Map(promoters.map((p) => [p.id, p.mode]));
+  // Busca: o nome do promotor mostra a carteira inteira; senão, só as linhas da loja, marca ou cidade.
+  const groups = f.q
+    ? w.promoters.map((p) => (matchText(f.q, p.promoterName) ? p : { ...p, rows: p.rows.filter((r) => matchText(f.q, r.storeName, r.brandName, r.city)) })).filter((p) => p.rows.length)
+    : w.promoters;
+  const idle = f.q ? w.idle.filter((u) => matchText(f.q, u.name)) : w.idle;
   const byMode = { route: promoters.filter((p) => p.mode === "route").length, portfolio: promoters.filter((p) => p.mode === "portfolio").length };
 
   return (
@@ -55,7 +60,7 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
           </div>
         }
       />
-      <FilterBar fields={["promoter", "brand", "store", "city"]} options={options} />
+      <FilterBar fields={["promoter", "brand", "store", "city", "q"]} options={options} qPlaceholder="Promotor, loja, marca ou cidade" />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
@@ -83,12 +88,12 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
 
       <div className="grid xl:grid-cols-3 gap-6 mt-6">
         <div className="xl:col-span-2 space-y-5">
-          {w.promoters.length === 0 ? (
+          {groups.length === 0 ? (
             <div className="bg-surface border border-line rounded-[var(--radius-card)]">
               <EmptyState title="Nada nesta semana">Nenhuma atribuição nem loja programada com estes filtros. As atribuições são feitas no cadastro de cada promotor.</EmptyState>
             </div>
           ) : null}
-          {w.promoters.map((p) => (
+          {groups.map((p) => (
             <SectionCard
               key={p.promoterId}
               title={
@@ -149,10 +154,10 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
               </Table>
             </SectionCard>
           ))}
-          {w.idle.length && !f.brand && !f.store && !f.city ? (
-            <SectionCard title={`Sem atribuição nem loja programada nesta semana (${w.idle.length})`} subtitle="Faça as atribuições no cadastro de cada promotor" bodyClass="px-5 pb-4">
+          {idle.length && !f.brand && !f.store && !f.city ? (
+            <SectionCard title={`Sem atribuição nem loja programada nesta semana (${idle.length})`} subtitle="Faça as atribuições no cadastro de cada promotor" bodyClass="px-5 pb-4">
               <ul className="flex flex-wrap gap-2">
-                {w.idle.map((u) => (
+                {idle.map((u) => (
                   <li key={u.id}>
                     <Link href={`/painel/cadastros/usuarios/${u.id}`} target="_blank" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line-strong text-[13px] font-medium hover:bg-subtle">
                       {u.name}

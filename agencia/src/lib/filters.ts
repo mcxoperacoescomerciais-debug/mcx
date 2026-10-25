@@ -3,6 +3,7 @@
  * compartilhado e o "voltar" do navegador funciona).
  */
 import { addDays, isIsoDate, todayIso } from "./dates";
+import { matchesQuery } from "./rules";
 
 export interface PanelFilters {
   /** Data de referência (painéis do dia). */
@@ -25,6 +26,11 @@ type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const id = (v: string) => (UUID.test(v) ? v : null);
+
+/** Busca de texto das abas do painel: a mesma regra de matchesQuery (sem acento, cada palavra digitada), em vários campos. */
+export function matchText(q: string, ...parts: (string | null | undefined)[]): boolean {
+  return matchesQuery(parts.filter(Boolean).join(" "), q);
+}
 
 export function parseFilters(params: Params, defaultDays = 7): PanelFilters {
   const today = todayIso();

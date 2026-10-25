@@ -4,7 +4,7 @@
  * e tempo de resolução só com amostra suficiente.
  */
 import "server-only";
-import { and, asc, desc, eq, gte, isNull, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
@@ -13,6 +13,13 @@ import { PAGE_SIZE, type PanelFilters } from "@/lib/filters";
 import type { RuptureSituation, StockState, Unit } from "@/lib/domain";
 
 type F = PanelFilters;
+
+/** Cada palavra digitada precisa aparecer em alguma das colunas (sem diferença de maiúsculas). */
+function textSearch(q: string, cols: AnyColumn[]): SQL | undefined {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 6);
+  if (!words.length) return undefined;
+  return and(...words.map((w) => sql`(${sql.join(cols.map((c) => sql`lower(coalesce(${c}, '')) like ${`%${w}%`}`), sql` or `)})`));
+}
 
 function commonConds(scope: Scope, f: F): (SQL | undefined)[] {
   return [
@@ -329,6 +336,7 @@ export async function photoReport(scope: Scope, f: F, pageSize = 24) {
     sql`${s.attendances.status} <> 'in_progress'`,
     f.status === "incomplete" ? and(sql`${s.attendances.status} <> 'cancelled'`, incomplete) : f.status ? eq(s.attendances.status, f.status as never) : undefined,
     f.kind ? sql`exists (select 1 from ${s.photos} p where p.attendance_id = ${s.attendances.id} and p.kind = ${f.kind} and p.deleted_at is null)` : undefined,
+    f.q ? textSearch(f.q, [s.stores.name, s.stores.city, s.brands.name, s.users.name, s.chains.name]) : undefined,
     ...commonConds(scope, f),
   );
   const rows = await db

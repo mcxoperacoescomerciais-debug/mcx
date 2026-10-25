@@ -7,7 +7,7 @@ import { getScope } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { filterOptions } from "@/server/operations";
 import { allowedBrands, listDaySchedules } from "@/server/schedules";
-import { parseFilters } from "@/lib/filters";
+import { matchText, parseFilters } from "@/lib/filters";
 import { addDays, fmtDateTime, fmtLongDate, todayIso } from "@/lib/dates";
 import { VISIT_STATUS_LABEL, VISIT_STATUS_TONE, type VisitStatus } from "@/lib/domain";
 import { EmptyState, PageHeader, StatusBadge, inputClass, selectClass } from "@/components/ui";
@@ -24,7 +24,8 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
   const scope = await getScope();
   if (scope.brandIds !== null) notFound();
   const f = parseFilters(await searchParams);
-  const [rows, options] = await Promise.all([listDaySchedules(scope, f.date, f.promoter), filterOptions(scope)]);
+  const [allRows, options] = await Promise.all([listDaySchedules(scope, f.date, f.promoter), filterOptions(scope)]);
+  const rows = f.q ? allRows.filter((r) => matchText(f.q, r.promoterName, r.storeName, r.city, ...r.brands.map((b) => b.name))) : allRows;
   const allowed = new Map(await Promise.all(rows.map(async (r) => [r.id, await allowedBrands(r.promoterId, r.storeId)] as const)));
   const brandName = new Map(options.brands.map((b) => [b.id, b.name]));
   const byPromoter = new Map<string, typeof rows>();
@@ -42,7 +43,7 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
   return (
     <>
       <PageHeader title="Programação" subtitle={<span className="first-letter:uppercase inline-block">{fmtLongDate(f.date)} · lojas e marcas de cada promotor</span>} actions={<Link href="/painel/roteiros" className="text-[13px] font-semibold text-brand-700">Gerenciar roteiros →</Link>} />
-      <FilterBar fields={["date", "promoter"]} options={options} />
+      <FilterBar fields={["date", "promoter", "q"]} options={options} qPlaceholder="Promotor, loja, cidade ou marca" />
 
       <div className="grid xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-5">

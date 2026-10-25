@@ -5,6 +5,8 @@ import { requireRole, getScope } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { PageHeader, StatusBadge, inputClass, selectClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../_components/widgets";
+import { FilterBar } from "../../_components/filter-bar";
+import { matchText } from "@/lib/filters";
 import { ActionForm, Disclosure } from "../../_components/action-form";
 import { saveBrandAction } from "../actions";
 
@@ -12,9 +14,11 @@ export const metadata: Metadata = { title: "Marcas" };
 
 type Brand = typeof s.brands.$inferSelect;
 
-export default async function BrandsPage() {
+export default async function BrandsPage({ searchParams }: PageProps<"/painel/cadastros/marcas">) {
   await requireRole(["admin"]);
   const scope = await getScope();
+  const sp = await searchParams;
+  const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const db = await getDb();
   const brands = await db
     .select({
@@ -25,11 +29,13 @@ export default async function BrandsPage() {
     })
     .from(s.brands)
     .where(eq(s.brands.agencyId, scope.agencyId))
-    .orderBy(asc(s.brands.name));
+    .orderBy(asc(s.brands.name))
+    .then((rows) => (q ? rows.filter(({ b }) => matchText(q, b.name, b.code)) : rows));
 
   return (
     <>
       <PageHeader title="Marcas" subtitle={`${brands.length} marca(s) · regras de atendimento, fotos mínimas e atividades de cada marca`} />
+      <FilterBar fields={["q"]} options={{}} qPlaceholder="Nome ou identificador da marca" />
       <div className="grid xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-surface border border-line rounded-[var(--radius-card)] overflow-hidden">
           <Table>

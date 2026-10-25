@@ -152,3 +152,12 @@ test("validade: digitação 0510, faixas e alerta (crítico ou grande quantidade
   assert.ok(isAlertItem(5, 5, { ...rule, nearDays: 7 }), "validade próxima: até 7 dias entra com qualquer quantidade");
   assert.ok(!isAlertItem(8, 5, { ...rule, nearDays: 7 }));
 });
+
+test("busca das abas: sem acento, sem maiúsculas, todas as palavras", async () => {
+  const { matchText } = await import("../src/lib/filters");
+  assert.ok(matchText("sao jose", "Supermercado São José", "Formiga"));
+  assert.ok(matchText("ABC formiga", "ABC LOJA 63", "Formiga"));
+  assert.ok(!matchText("abc uberaba", "ABC LOJA 63", "Formiga"));
+  assert.ok(matchText("  ", "qualquer coisa"), "busca vazia mostra tudo");
+  assert.ok(matchText("thaina", null, "Thainá"));
+});

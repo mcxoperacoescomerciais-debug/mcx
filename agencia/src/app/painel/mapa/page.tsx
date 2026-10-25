@@ -4,7 +4,7 @@ import { MapPinOff } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { mapData, suggestedStoreLocations } from "@/server/map";
-import { parseDayRange } from "@/lib/filters";
+import { matchText, parseDayRange } from "@/lib/filters";
 import { fmtDate, fmtLongDate, fmtTime } from "@/lib/dates";
 import { PageHeader } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
@@ -18,8 +18,11 @@ export const metadata: Metadata = { title: "Mapa operacional" };
 
 export default async function MapPage({ searchParams }: PageProps<"/painel/mapa">) {
   const scope = await getScope();
-  const f = parseDayRange(await searchParams);
-  const [{ stores, generatedAt }, options] = await Promise.all([mapData(scope, f), filterOptions(scope)]);
+  const sp = await searchParams;
+  const f = parseDayRange(sp);
+  const [{ stores: all, generatedAt }, options] = await Promise.all([mapData(scope, f), filterOptions(scope)]);
+  const q = typeof sp.q === "string" ? sp.q.trim() : "";
+  const stores = q ? all.filter((st) => matchText(q, st.name, st.chain, st.city, ...st.stops.flatMap((x) => [x.promoterName, ...x.brands.map((b) => b.name)]))) : all;
   const located = stores.filter((st) => st.lat != null);
   const missing = stores.filter((st) => st.lat == null);
   const suggestions = scope.role === "admin" ? await suggestedStoreLocations(scope, missing.map((m) => m.id)) : new Map();
@@ -36,7 +39,8 @@ export default async function MapPage({ searchParams }: PageProps<"/painel/mapa"
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}
-        fields={["period", "city", "chain", "brand", "promoter", "status"]}
+        fields={["period", "city", "chain", "brand", "promoter", "status", "q"]}
+        qPlaceholder="Loja, cidade, promotor ou marca"
         options={{ ...options, statuses: (Object.keys(MAP_STATUS_LABEL) as MapStatus[]).map((id) => ({ id, name: MAP_STATUS_LABEL[id] })) }}
         statusLabel="Todas as situações"
       />

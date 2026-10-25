@@ -4,7 +4,7 @@ import { ArrowUpRight, CheckCircle2 } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { listIssues } from "@/server/issues";
 import { filterOptions } from "@/server/operations";
-import { parseFilters } from "@/lib/filters";
+import { matchText, parseFilters } from "@/lib/filters";
 import { ISSUE_KIND_LABEL, ISSUE_KINDS, ISSUE_REVIEW_LABEL, type IssueKind } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { Badge, EmptyState, PageHeader, StatusBadge, inputClass } from "@/components/ui";
@@ -32,6 +32,7 @@ export default async function IssuesPage({ searchParams }: PageProps<"/painel/pe
   const [all, options] = await Promise.all([listIssues(scope, f, { includeConcluded: view === "concluded" || view === "all" }), filterOptions(scope)]);
   const issues = all
     .filter((i) => !f.kind || i.kind === f.kind)
+    .filter((i) => !f.q || matchText(f.q, i.title, i.storeName, i.brandName, i.promoterName))
     .filter((i) => (view === "open" ? !i.review : view === "analyzed" ? i.review?.status === "analyzed" : view === "concluded" ? i.review?.status === "concluded" : view === "pending" ? i.review?.status !== "concluded" : true));
   const counts = new Map<IssueKind, number>();
   for (const i of all) if (i.review?.status !== "concluded") counts.set(i.kind, (counts.get(i.kind) ?? 0) + 1);
@@ -44,7 +45,8 @@ export default async function IssuesPage({ searchParams }: PageProps<"/painel/pe
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}
-        fields={["period", "brand", "promoter", "store", "status", "kind"]}
+        fields={["period", "brand", "promoter", "store", "status", "kind", "q"]}
+        qPlaceholder="Loja, marca, promotor ou tipo"
         options={{
           ...options,
           statuses: [
