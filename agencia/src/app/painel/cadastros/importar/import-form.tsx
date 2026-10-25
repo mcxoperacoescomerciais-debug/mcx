@@ -2,7 +2,7 @@
 /* Downloads de arquivos (rotas de API), não navegação entre páginas. */
 /* eslint-disable @next/next/no-html-link-for-pages */
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { AlertTriangle, CheckCircle2, Download, Loader2, Upload } from "lucide-react";
 import { buttonClass, selectClass } from "@/components/ui";
 import { importAction, type ImportState } from "../actions";
@@ -10,13 +10,16 @@ import { importAction, type ImportState } from "../actions";
 export function ImportForm() {
   const [state, run, pending] = useActionState<ImportState, FormData>(importAction, null);
   const r = state?.report;
+  // Controlados: o formulário é limpo depois de cada envio, mas o tipo e a opção de validar continuam como a pessoa deixou.
+  const [kind, setKind] = useState("produtos");
+  const [dryRun, setDryRun] = useState(true);
   return (
     <div className="space-y-5">
       <form action={run} className="space-y-3">
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="block">
             <span className="block text-[12.5px] font-semibold text-ink-2 mb-1">O que importar</span>
-            <select name="kind" className={selectClass} defaultValue="produtos">
+            <select name="kind" className={selectClass} value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="produtos">Produtos</option>
               <option value="lojas">Lojas (com redes e marcas autorizadas)</option>
               <option value="promotores">Promotores (com marcas e lojas)</option>
@@ -32,7 +35,7 @@ export function ImportForm() {
           </label>
         </div>
         <label className="inline-flex items-center gap-2 text-[13px]">
-          <input type="checkbox" name="dryRun" defaultChecked /> Somente validar (não grava nada — recomendado na primeira vez)
+          <input type="checkbox" name="dryRun" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} /> Somente validar (não grava nada — recomendado na primeira vez)
         </label>
         <div className="flex flex-wrap gap-2">
           <button type="submit" disabled={pending} className={buttonClass("primary")}>
