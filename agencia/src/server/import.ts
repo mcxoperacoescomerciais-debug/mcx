@@ -14,6 +14,7 @@ import { saveChain, saveProduct, saveStore, saveUser, validateProduct } from "./
 import { saveTarget, syncPromoterSchedules } from "./portfolio";
 import { parseMoney } from "./tasting-import";
 import { importMix, importRoutes, parseWeekdays } from "./import-extra";
+import { importPartners } from "./import-partners";
 import { parseCoords, productNameKey } from "@/lib/rules";
 import type { Unit } from "@/lib/domain";
 
@@ -24,6 +25,7 @@ export const TEMPLATES = {
   metas: ["promotor", "loja", "marca", "vezes", "periodo", "dias", "valor"],
   mix: ["rede", "mix", "loja", "marca", "sku", "descricao"],
   roteiros: ["promotor", "dias", "loja", "horario", "roteiro"],
+  parceiros: ["rede", "loja", "cidade", "marca", "promotor", "frequencia", "parceiro", "responsavel", "contato"],
 } as const;
 export type ImportKind = keyof typeof TEMPLATES;
 
@@ -33,6 +35,7 @@ export const TEMPLATE_HELP: Record<ImportKind, string> = {
   promotores: "vinculo: fixo ou freelancer. marcas = identificadores separados por vírgula. lojas = códigos ou nomes das lojas separados por “;”. A senha inicial deve ser trocada no primeiro acesso. forma_trabalho: roteiro ou carteira (vazio = padrão da agência).",
   mix: "Uma linha por produto. Para o mix de um FORMATO da rede (ex.: ABC VAREJO, PLUS, CASH): preencha rede + mix e deixe loja vazia — quando a rede tem mais de um formato, o promotor escolhe o da loja no primeiro atendimento. Para a lista de UMA loja: preencha loja (código ou nome). marca = identificador; sku = código do produto; descricao é só para conferência.",
   roteiros: "Uma linha por loja do roteiro, na ordem da visita. promotor = usuário; dias = SEG/QUI, TER/SEX, SEG/QUA/SEX…; loja = código ou nome; horario (opcional) = 08:00; roteiro (opcional) = nome — sem nome, um roteiro por promotor + dias. Depois gere a programação em Programação › Gerar a partir dos roteiros.",
+  parceiros: "ATENDIMENTOS VIA PARCEIROS: uma linha por loja × marca. rede + loja localizam a loja (criada se não existir, com a cidade); marca = nome ou identificador (criada sem produtos se não existir — os SKUs entram depois em Produtos); parceiro = empresa parceira e responsavel/contato = pessoa e telefone (sem empresa, o responsável identifica o parceiro); promotor (opcional) = usuário do promotor — vazio ou S/promotor = sem promotor; frequencia = 1, 2… por semana ou mensal. Reimportar não duplica: a loja × marca e a atribuição são atualizadas.",
   metas: "ATRIBUIÇÕES (planilha padrão): uma linha por promotor × loja × marca. promotor = usuário do promotor; loja = código ou nome da loja; marca = identificador ou nome; vezes = quantas visitas no período; periodo = semana (padrão), quinzena ou mês; dias = dias fixos (ex.: SEG/QUI) — vazio = sem dia fixo, o promotor escolhe e só a quantidade conta. valor (opcional) = VR ATEND: quanto a marca paga à agência por mês por esta loja × marca com a meta cheia (o Financeiro mostra o previsto e o realizado proporcional às visitas feitas). É isso que define a programação, a carteira e as metas. Se a atribuição já existir, é atualizada; a loja e a marca passam a ser autorizadas ao promotor.",
 };
 
@@ -91,6 +94,8 @@ export interface ImportReport {
   updated: number;
   errors: { line: number; message: string }[];
   dryRun: boolean;
+  /** Avisos que não impedem a linha (ex.: promotor ainda sem usuário). */
+  notes?: { line: number; message: string }[];
 }
 
 const isActive = (v: string | undefined) => !v || !/^(inativo|inactive|nao|não|0)$/i.test(v.trim());
@@ -101,7 +106,7 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
     report.errors.push({ line: 0, message: "Máximo de 5.000 linhas por arquivo." });
     return report;
   }
-  const required: Record<ImportKind, string[]> = { produtos: ["nome", "sku"], lojas: ["nome", "cidade"], promotores: ["nome", "usuario"], metas: ["promotor", "loja", "marca"], mix: ["marca", "sku"], roteiros: ["promotor", "dias", "loja"] };
+  const required: Record<ImportKind, string[]> = { produtos: ["nome", "sku"], lojas: ["nome", "cidade"], promotores: ["nome", "usuario"], metas: ["promotor", "loja", "marca"], mix: ["marca", "sku"], roteiros: ["promotor", "dias", "loja"], parceiros: ["loja", "marca", "cidade"] };
   const missing = required[kind].filter((h) => rows.length && !(h in rows[0]));
   if (missing.length) {
     report.errors.push({ line: 1, message: `Colunas obrigatórias ausentes: ${missing.join(", ")}. Baixe o modelo.` });
@@ -113,6 +118,10 @@ export async function runImport(scope: Scope, kind: ImportKind, rows: Record<str
   }
   if (kind === "roteiros") {
     await importRoutes(scope, rows, report);
+    return report;
+  }
+  if (kind === "parceiros") {
+    await importPartners(scope, rows, report);
     return report;
   }
   const db = await getDb();

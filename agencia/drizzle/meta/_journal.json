@@ -92,6 +92,13 @@
       "when": 1792513919369,
       "tag": "0012_despesas_fixas",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792962391122,
+      "tag": "0013_parceiros",
+      "breakpoints": true
     }
   ]
 }

@@ -226,11 +226,35 @@ export const stores = pgTable(
 );
 
 /** Marcas autorizadas em cada loja. */
+/**
+ * Parceiro de atendimento: outra empresa (ou pessoa responsável) que executa a
+ * loja × marca para a agência. name = empresa; sem empresa na origem, o nome do
+ * responsável (contactName fica igual).
+ */
+export const partners = pgTable(
+  "partners",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    name: text("name").notNull(),
+    contactName: text("contact_name"),
+    phone: text("phone"),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [uniqueIndex("partners_agency_name_uq").on(t.agencyId, sql`lower(${t.name})`)],
+);
+
 export const storeBrands = pgTable(
   "store_brands",
   {
     storeId: uuid("store_id").notNull().references(() => stores.id),
     brandId: uuid("brand_id").notNull().references(() => brands.id),
+    /** Parceiro que atende esta loja × marca (vazio = a própria agência). */
+    partnerId: uuid("partner_id").references(() => partners.id),
+    /** Frequência combinada (visitas por semana; mensal = período "month") quando ainda não há promotor atribuído. */
+    visitsPerPeriod: integer("visits_per_period"),
+    period: text("period").$type<"week" | "fortnight" | "month">(),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.storeId, t.brandId] }), index("store_brands_brand_idx").on(t.brandId)],

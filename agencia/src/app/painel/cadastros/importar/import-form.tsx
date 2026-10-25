@@ -23,6 +23,7 @@ export function ImportForm() {
               <option value="metas">Atribuições: promotor × loja × marca × dias × vezes (planilha padrão)</option>
               <option value="mix">Mix de produtos (por formato da rede ou por loja)</option>
               <option value="roteiros">Roteiros (promotor, dias e lojas)</option>
+              <option value="parceiros">Atendimentos via parceiros (loja, marca, promotor e parceiro)</option>
             </select>
           </label>
           <label className="block">
@@ -55,6 +56,9 @@ export function ImportForm() {
           <a href="/api/templates/roteiros" className={buttonClass("ghost")}>
             <Download className="size-4" /> Modelo de roteiros
           </a>
+          <a href="/api/templates/parceiros" className={buttonClass("ghost")}>
+            <Download className="size-4" /> Modelo de atendimentos via parceiros
+          </a>
         </div>
       </form>
 
@@ -80,6 +84,19 @@ export function ImportForm() {
                 </li>
               ))}
             </ul>
+          ) : null}
+          {r.notes?.length ? (
+            <details className="mt-3">
+              <summary className="text-[13px] font-semibold cursor-pointer">{r.notes.length} aviso(s) — não impedem a importação</summary>
+              <ul className="mt-2 max-h-72 overflow-y-auto text-[13px] space-y-1 text-ink-2">
+                {r.notes.map((e, i) => (
+                  <li key={i}>
+                    {e.line ? <span className="font-semibold tnum">Linha {e.line}: </span> : null}
+                    {e.message}
+                  </li>
+                ))}
+              </ul>
+            </details>
           ) : null}
           {r.dryRun && !r.errors.length ? <p className="text-[13px] text-ok mt-2">Tudo certo. Desmarque “Somente validar” e processe de novo para gravar.</p> : null}
           {r.dryRun && r.errors.length ? <p className="text-[13px] text-muted mt-2">Linhas com erro são ignoradas na importação; as demais são gravadas.</p> : null}

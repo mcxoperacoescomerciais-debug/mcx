@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
+  Handshake,
   ArrowLeftRight,
   Boxes,
   Building,
@@ -73,6 +74,7 @@ const SETTINGS: NavItem[] = [
   { href: "/painel/cadastros/marcas", label: "Marcas", icon: Tags, roles: ["admin"] },
   { href: "/painel/cadastros/lojas", label: "Redes e lojas", icon: Building2, roles: ["admin"] },
   { href: "/painel/cadastros/produtos", label: "Produtos", icon: Boxes, roles: ["admin"] },
+  { href: "/painel/cadastros/parceiros", label: "Parceiros", icon: Handshake, roles: ["admin"] },
   { href: "/painel/cadastros/usuarios", label: "Usuários", icon: Users, roles: ["admin"] },
   { href: "/painel/cadastros/importar", label: "Importar planilha", icon: Upload, roles: ["admin"] },
   { href: "/painel/relatorios", label: "Exportações", icon: FileText },

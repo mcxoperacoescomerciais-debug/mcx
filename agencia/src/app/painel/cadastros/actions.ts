@@ -205,7 +205,7 @@ export async function importAction(_: ImportState, fd: FormData): Promise<Import
   const scope = await getScope();
   if (scope.role !== "admin") return { error: "Somente administradores." };
   const kind = str(fd, "kind") as ImportKind;
-  if (!["produtos", "lojas", "promotores", "metas", "mix", "roteiros"].includes(kind)) return { error: "Tipo de importação inválido." };
+  if (!["produtos", "lojas", "promotores", "metas", "mix", "roteiros", "parceiros"].includes(kind)) return { error: "Tipo de importação inválido." };
   const file = fd.get("file");
   if (!(file instanceof File) || !file.size) return { error: "Escolha o arquivo." };
   if (file.size > 10 * 1024 * 1024) return { error: "Arquivo muito grande (máx. 10 MB)." };
