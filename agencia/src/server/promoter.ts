@@ -27,6 +27,7 @@ import type {
 } from "@/lib/sync-types";
 import { brandChecklist, type AttendanceStatus, type WorkMode } from "@/lib/domain";
 import { classify } from "@/lib/validity";
+import { galleryAllowedFor } from "@/lib/settings";
 import { daysBetween } from "@/lib/dates";
 import { notifyCriticalAttendance } from "./whatsapp-alert";
 import { applyPromoterMixChoices, mixesForStores } from "./mixes";
@@ -89,7 +90,9 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
   const db = await getDb();
   const promoterId = scope.userId;
   const today = todayIso();
-  const [user] = await db.select({ id: s.users.id, name: s.users.name, employment: s.users.employment, mustChangePassword: s.users.mustChangePassword, workMode: s.users.workMode }).from(s.users).where(eq(s.users.id, promoterId));
+  const [user] = await db.select({ id: s.users.id, name: s.users.name, employment: s.users.employment, mustChangePassword: s.users.mustChangePassword, workMode: s.users.workMode, galleryAllowed: s.users.galleryAllowed }).from(s.users).where(eq(s.users.id, promoterId));
+  void touchLastSeen(promoterId);
+  const gallery = galleryAllowedFor(scope.settings.galleryPolicy, user.galleryAllowed);
   const workMode = effectiveWorkMode(user.workMode, scope.settings.defaultWorkMode);
   const access = await promoterAccess(db, promoterId, scope.agencyId);
   const storeIds = [...access.keys()];
@@ -201,7 +204,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
         minAfterPhotos: b.minAfterPhotos,
         requireStock: b.requireStock,
         rupturePhotoRequired: b.rupturePhotoRequired,
-        allowGallery: b.allowGallery,
+        allowGallery: b.allowGallery && gallery,
         activities: brandChecklist(b.activities),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
@@ -435,7 +438,18 @@ class SyncError extends Error {
   }
 }
 
+/** "Online" no mapa: o app falou com o servidor agora. Nunca atrasa nem derruba a chamada. */
+async function touchLastSeen(promoterId: string) {
+  try {
+    const db = await getDb();
+    await db.update(s.users).set({ lastSeenAt: new Date() }).where(eq(s.users.id, promoterId));
+  } catch (err) {
+    console.error("[online] falhou", err);
+  }
+}
+
 export async function applySync(scope: Scope, visits: VisitInput[]): Promise<VisitSyncResult[]> {
+  void touchLastSeen(scope.userId);
   // Ordem cronológica: encerrar a visita anterior antes de abrir a seguinte.
   const ordered = [...visits].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   const results: VisitSyncResult[] = [];

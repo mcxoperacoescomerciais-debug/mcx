@@ -8,11 +8,12 @@ import "server-only";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
-import { getRangeBoard } from "./operations";
+import { getDayBoard, getRangeBoard, summarizePromoters, type PromoterOpStatus } from "./operations";
 import { brandFilter, promoterFilter } from "./scope";
 import type { PanelFilters } from "@/lib/filters";
 import type { StopBucket } from "@/lib/domain";
 import { distanceM } from "@/lib/rules";
+import { todayIso } from "@/lib/dates";
 
 export type MapStatus = StopBucket | "unscheduled";
 
@@ -141,4 +142,119 @@ export async function suggestedStoreLocations(scope: Scope, storeIds: string[]) 
 export async function storeCoordsFromVisit(scope: Scope, storeId: string) {
   const suggestion = (await suggestedStoreLocations(scope, [storeId])).get(storeId);
   return suggestion ?? null;
+}
+
+// ───────────────────────────── Acompanhamento ao vivo ─────────────────────────────
+
+/** App aberto e falando com o servidor nos últimos minutos (atualiza a cada 2 min). */
+export const ONLINE_MINUTES = 5;
+
+export interface LivePlace {
+  storeId: string;
+  storeName: string;
+  city: string;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface LivePromoter {
+  promoterId: string;
+  name: string;
+  online: boolean;
+  lastSeenAt: string | null;
+  status: PromoterOpStatus;
+  /** Loja em que está agora (visita aberta). */
+  current: (LivePlace & { visitId: string; since: string; brands: { name: string; status: string | null }[] }) | null;
+  /** Próxima loja do roteiro ainda não iniciada. */
+  next: (LivePlace & { plannedStart: string | null; late: boolean }) | null;
+  /** Última loja encerrada hoje. */
+  last: (LivePlace & { finishedAt: string }) | null;
+  /** Atendimentos de marca finalizados hoje (concluídos ou não atendidos). */
+  done: { attendanceId: string; brandName: string; storeName: string; status: string; at: string }[];
+  scheduled: number;
+  completed: number;
+}
+
+export interface LiveEvent {
+  id: string;
+  at: string;
+  kind: "checkin" | "checkout" | "attendance" | "not_attended";
+  promoterId: string;
+  promoterName: string;
+  storeName: string;
+  text: string;
+}
+
+/**
+ * Onde cada promotor está agora, a partir dos registros do dia (não é
+ * rastreamento contínuo): loja da visita aberta, próxima loja do roteiro e o
+ * que já foi feito; "online" = o app falou com o servidor há poucos minutos.
+ */
+export async function liveOperations(scope: Scope): Promise<{ generatedAt: string; promoters: LivePromoter[]; events: LiveEvent[] }> {
+  const db = await getDb();
+  const date = todayIso();
+  const board = await getDayBoard(scope, { date, brand: null, chain: null, store: null, promoter: null, city: null });
+  const summary = new Map(summarizePromoters(board).map((p) => [p.promoterId, p]));
+  const storeIds = [...new Set(board.stops.map((st) => st.storeId))];
+  const coords = storeIds.length ? await db.select({ id: s.stores.id, lat: s.stores.lat, lng: s.stores.lng }).from(s.stores).where(inArray(s.stores.id, storeIds)) : [];
+  const coordOf = new Map(coords.map((c) => [c.id, c]));
+  const seen = await db
+    .select({ id: s.users.id, name: s.users.name, lastSeenAt: s.users.lastSeenAt })
+    .from(s.users)
+    .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id)));
+  const now = Date.now();
+  const place = (st: (typeof board.stops)[number]): LivePlace => {
+    const c = coordOf.get(st.storeId);
+    return { storeId: st.storeId, storeName: st.storeName, city: st.city, lat: c?.lat ?? null, lng: c?.lng ?? null };
+  };
+
+  const promoters: LivePromoter[] = [];
+  const events: LiveEvent[] = [];
+  for (const u of seen) {
+    const mine = board.stops.filter((st) => st.promoterId === u.id).sort((a, b) => a.seq - b.seq || (a.plannedStart ?? "99").localeCompare(b.plannedStart ?? "99"));
+    const online = Boolean(u.lastSeenAt && now - u.lastSeenAt.getTime() <= ONLINE_MINUTES * 60_000);
+    // Sem programação e sem sinal hoje: não entra no acompanhamento.
+    if (!mine.length && !(u.lastSeenAt && u.lastSeenAt.toISOString().slice(0, 10) >= date)) continue;
+    const open = mine.find((st) => st.visit?.status === "in_progress");
+    const next = mine.find((st) => !st.visit && (st.bucket === "pending" || st.bucket === "late"));
+    const finished = mine.filter((st) => st.visit?.finishedAt).sort((a, b) => b.visit!.finishedAt!.getTime() - a.visit!.finishedAt!.getTime())[0];
+    const done = mine
+      .flatMap((st) => st.attendances.filter((a) => (a.status === "completed" || a.status === "cancelled") && a.finishedAt).map((a) => ({ attendanceId: a.id, brandName: a.brandName, storeName: st.storeName, status: a.status, at: a.finishedAt!.toISOString() })))
+      .sort((a, b) => b.at.localeCompare(a.at));
+    const sm = summary.get(u.id);
+    promoters.push({
+      promoterId: u.id,
+      name: u.name,
+      online,
+      lastSeenAt: u.lastSeenAt?.toISOString() ?? null,
+      status: sm?.status ?? "no_schedule",
+      current: open
+        ? {
+            ...place(open),
+            visitId: open.visit!.id,
+            since: open.visit!.startedAt.toISOString(),
+            brands: [...new Map([...open.plannedBrands.map((b) => [b.id, b.name] as const), ...open.attendances.map((a) => [a.brandId, a.brandName] as const)])].map(([id, name]) => ({ name, status: open.attendances.find((a) => a.brandId === id)?.status ?? null })),
+          }
+        : null,
+      next: next ? { ...place(next), plannedStart: next.plannedStart, late: next.bucket === "late" } : null,
+      last: finished ? { ...place(finished), finishedAt: finished.visit!.finishedAt!.toISOString() } : null,
+      done,
+      scheduled: sm?.scheduled ?? 0,
+      completed: sm?.completed ?? 0,
+    });
+    for (const st of mine) {
+      if (!st.visit) continue;
+      const base = { promoterId: u.id, promoterName: u.name, storeName: st.storeName };
+      events.push({ ...base, id: `in:${st.visit.id}`, at: st.visit.startedAt.toISOString(), kind: "checkin", text: `chegou em ${st.storeName}` });
+      if (st.visit.finishedAt) events.push({ ...base, id: `out:${st.visit.id}`, at: st.visit.finishedAt.toISOString(), kind: "checkout", text: `encerrou ${st.storeName} (${st.brandsDone}/${st.brandsTotal} marcas)` });
+      for (const a of st.attendances) {
+        if (!a.finishedAt || (a.status !== "completed" && a.status !== "cancelled")) continue;
+        events.push({ ...base, id: `att:${a.id}`, at: a.finishedAt.toISOString(), kind: a.status === "completed" ? "attendance" : "not_attended", text: a.status === "completed" ? `concluiu ${a.brandName} em ${st.storeName}` : `não atendeu ${a.brandName} em ${st.storeName}` });
+      }
+    }
+  }
+  const order: Record<PromoterOpStatus, number> = { in_store: 0, late: 1, between: 2, not_started: 3, missed: 4, done: 5, no_schedule: 6 };
+  promoters.sort((a, b) => order[a.status] - order[b.status] || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, "pt-BR"));
+  events.sort((a, b) => b.at.localeCompare(a.at));
+  return { generatedAt: new Date().toISOString(), promoters, events: events.slice(0, 60) };
 }

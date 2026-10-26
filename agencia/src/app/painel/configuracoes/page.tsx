@@ -9,6 +9,9 @@ import { resendAlertAction, saveSettingsAction, testWhatsAppAction } from "../ca
 import { SEVERITY_COLOR } from "@/lib/validity";
 import { alertLog } from "@/server/whatsapp-alert";
 import { fmtDate } from "@/lib/dates";
+import { and, asc, eq } from "drizzle-orm";
+import { getDb, schema as s } from "@/server/db";
+import { GALLERY_POLICY_LABEL, type GalleryPolicy } from "@/lib/settings";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -16,7 +19,15 @@ export default async function SettingsPage() {
   await requireRole(["admin"]);
   const scope = await getScope();
   const st = scope.settings;
-  const log = await alertLog(scope, 30);
+  const db = await getDb();
+  const [log, promoters] = await Promise.all([
+    alertLog(scope, 30),
+    db
+      .select({ id: s.users.id, name: s.users.name, username: s.users.username, galleryAllowed: s.users.galleryAllowed })
+      .from(s.users)
+      .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active")))
+      .orderBy(asc(s.users.name)),
+  ]);
   const near = Math.max(st.validityBands.critical, st.alerts.nearDays);
   return (
     <>
@@ -55,6 +66,40 @@ export default async function SettingsPage() {
               </Row>
             </div>
             <p className="text-[12px] text-muted mt-2">Padrão 27,44% = FGTS 8% + 13º 8,33% + férias com 1/3 11,11% (empresa do Simples Nacional). Freelancer não tem encargos.</p>
+          </SectionCard>
+          <SectionCard
+            title="Fotos da galeria"
+            subtitle="Quem pode escolher uma foto já salva no celular em vez de tirar na hora. A marca também precisa permitir (Cadastros › Marcas). Cada foto mostra no painel se veio da câmera ou da galeria."
+            bodyClass="px-5 pb-5 space-y-3"
+          >
+            <Row label="Fotos da galeria">
+              <select name="galleryPolicy" defaultValue={st.galleryPolicy} className={inputClass}>
+                {(Object.keys(GALLERY_POLICY_LABEL) as GalleryPolicy[]).map((k) => (
+                  <option key={k} value={k}>
+                    {GALLERY_POLICY_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </Row>
+            <input type="hidden" name="gallery_list" value="1" />
+            {promoters.length ? (
+              <fieldset>
+                <legend className="text-[12.5px] font-semibold text-ink-2 mb-1.5">Promotores autorizados (vale quando a opção acima é “Só os promotores autorizados”)</legend>
+                <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  {promoters.map((p) => (
+                    <label key={p.id} className="flex items-center gap-2 text-[13px]">
+                      <input type="checkbox" name="gallery_user" value={p.id} defaultChecked={p.galleryAllowed} />
+                      <span className="truncate">
+                        {p.name} <span className="text-muted">· {p.username}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : (
+              <p className="text-[12.5px] text-muted">Nenhum promotor ativo cadastrado.</p>
+            )}
+            <p className="text-[12px] text-muted">A mudança chega no celular do promotor na próxima atualização do app (em até 2 minutos com o app aberto, ou no botão Atualizar).</p>
           </SectionCard>
           <SectionCard title="Regras de campo" bodyClass="px-5 pb-5 space-y-3">
             <Check name="allowExceptions" checked={st.allowExceptions} label="Permitir exceção justificada para foto/estoque obrigatórios" help="A exceção exige motivo + justificativa e aparece para o gestor." />

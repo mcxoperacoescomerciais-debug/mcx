@@ -142,6 +142,10 @@ export const users = pgTable(
     /** Incrementar derruba todas as sessões abertas do usuário. */
     sessionVersion: integer("session_version").notNull().default(1),
     lastLoginAt: ts("last_login_at"),
+    /** Última vez que o app do promotor falou com o servidor (atualização ou envio): "online" no mapa. */
+    lastSeenAt: ts("last_seen_at"),
+    /** Promotor autorizado a usar foto da galeria (quando a agência libera só para autorizados). */
+    galleryAllowed: boolean("gallery_allowed").notNull().default(false),
     deactivatedAt: ts("deactivated_at"),
     ...timestamps,
     ...authorship,

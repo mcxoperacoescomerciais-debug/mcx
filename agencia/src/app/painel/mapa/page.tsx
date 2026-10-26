@@ -5,12 +5,13 @@ import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { mapData, suggestedStoreLocations } from "@/server/map";
 import { matchText, parseDayRange } from "@/lib/filters";
-import { fmtDate, fmtLongDate, fmtTime } from "@/lib/dates";
+import { fmtDate, fmtLongDate, fmtTime, todayIso } from "@/lib/dates";
 import { PageHeader } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
 import { SectionCard, Table, Td, Th } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
 import { MAP_STATUS_LABEL, OperationsMap } from "./operations-map";
+import { LiveMap } from "./live-map";
 import { applyVisitLocationAction } from "./actions";
 import type { MapStatus } from "@/server/map";
 
@@ -44,7 +45,8 @@ export default async function MapPage({ searchParams }: PageProps<"/painel/mapa"
         options={{ ...options, statuses: (Object.keys(MAP_STATUS_LABEL) as MapStatus[]).map((id) => ({ id, name: MAP_STATUS_LABEL[id] })) }}
         statusLabel="Todas as situações"
       />
-      <OperationsMap stores={located} />
+      {/* Hoje: acompanhamento ao vivo (promotores agora + avisos). Outros dias: só a situação das lojas. */}
+      {f.from === todayIso() && f.to === todayIso() ? <LiveMap stores={located} /> : <OperationsMap stores={located} />}
 
       {missing.length ? (
         <SectionCard

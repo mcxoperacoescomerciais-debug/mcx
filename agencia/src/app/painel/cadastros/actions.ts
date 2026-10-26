@@ -125,6 +125,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
   const priority = Object.fromEntries(ISSUE_KINDS.map((k) => [k, Number(str(fd, `p_${k}`) || 5)]));
   const name = str(fd, "agencyName");
   if (name && name !== scope.agencyName) await admin.saveAgencyName(scope, name);
+  if (fd.has("gallery_list")) await admin.saveGalleryAuthorized(scope, fd.getAll("gallery_user").map(String));
   return done(
     await admin.saveSettings(
       scope,
@@ -135,6 +136,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         captureLocation: bool(fd, "captureLocation"),
         allowExceptions: bool(fd, "allowExceptions"),
         defaultWorkMode: str(fd, "defaultWorkMode"),
+        galleryPolicy: str(fd, "galleryPolicy") as never,
         lateToleranceMin: Number(str(fd, "lateToleranceMin")),
         dayEndsAt: str(fd, "dayEndsAt"),
         stockDivergencePct: Number(str(fd, "stockDivergencePct")),

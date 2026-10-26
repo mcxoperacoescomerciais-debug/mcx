@@ -377,6 +377,21 @@ export async function saveSettings(scope: Scope, patch: Partial<AgencySettings>)
   return { ok: true, message: "Configurações salvas." };
 }
 
+/** Promotores autorizados a usar foto da galeria (os demais da agência ficam sem autorização). */
+export async function saveGalleryAuthorized(scope: Scope, promoterIds: string[]): Promise<ActionResult> {
+  if (!isAdmin(scope)) return fail("Somente administradores.");
+  const db = await getDb();
+  const promoters = await db.select({ id: s.users.id, name: s.users.name, galleryAllowed: s.users.galleryAllowed }).from(s.users).where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter")));
+  const want = new Set(promoterIds);
+  for (const p of promoters) {
+    const next = want.has(p.id);
+    if (p.galleryAllowed === next) continue;
+    await db.update(s.users).set({ galleryAllowed: next, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.users.id, p.id));
+    await audit(actor(scope), "user", p.id, "gallery_permission", { before: { galleryAllowed: p.galleryAllowed }, after: { galleryAllowed: next } });
+  }
+  return { ok: true };
+}
+
 export async function saveAgencyName(scope: Scope, name: string): Promise<ActionResult> {
   if (!isAdmin(scope)) return fail("Somente administradores.");
   if (name.trim().length < 2) return fail("Informe o nome da agência.");

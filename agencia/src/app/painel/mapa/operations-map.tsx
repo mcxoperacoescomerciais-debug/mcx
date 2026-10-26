@@ -12,7 +12,7 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { ATTENDANCE_STATUS_LABEL, STOP_BUCKET_LABEL, type AttendanceDisplayStatus } from "@/lib/domain";
 import { fmtTime } from "@/lib/dates";
-import type { MapStatus, MapStore } from "@/server/map";
+import type { LivePromoter, MapStatus, MapStore } from "@/server/map";
 
 export const MAP_STATUS_COLOR: Record<MapStatus, string> = {
   completed: "#1f7a4d",
@@ -60,8 +60,33 @@ function popupHtml(st: MapStore): string {
   </div>`;
 }
 
-export function OperationsMap({ stores }: { stores: MapStore[] }) {
+const initials = (name: string) =>
+  name
+    .split(/s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
+
+/**
+ * Camada ao vivo: promotor dentro da loja (visita aberta) = selo cheio na loja;
+ * quem ainda vai para a próxima loja = selo vazado na próxima loja do roteiro.
+ */
+function liveIcon(L: typeof import("leaflet"), p: LivePromoter, here: boolean) {
+  const ring = here ? "#1d5ea6" : "#64748b";
+  const dot = p.online ? "#16a34a" : "#9ca3af";
+  return L.divIcon({
+    className: "",
+    html: `<span style="position:relative;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;font:700 11px/1 Inter,system-ui,sans-serif;${here ? `background:${ring};color:#fff` : `background:#fff;color:${ring};border:2px dashed ${ring}`};box-shadow:0 1px 4px rgba(0,0,0,.35)${here && p.online ? ";animation:mcxPulse 1.8s ease-out infinite" : ""}">${esc(initials(p.name))}<span style="position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;background:${dot};border:2px solid #fff"></span></span>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  });
+}
+
+export function OperationsMap({ stores, live, focus }: { stores: MapStore[]; live?: LivePromoter[]; focus?: { lat: number; lng: number; key: number } | null }) {
   const el = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<{ L: typeof import("leaflet"); map: import("leaflet").Map } | null>(null);
+  const [ready, setReady] = useState(0);
   const [showRegistered, setShowRegistered] = useState(true);
   const hasRegistered = stores.some((st) => st.stops.some((x) => x.registered));
 
@@ -115,15 +140,44 @@ export function OperationsMap({ stores }: { stores: MapStore[] }) {
       }
       if (bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
       else map.setView([-19.92, -43.94], 11); // Belo Horizonte
+      mapRef.current = { L, map };
+      setReady((n) => n + 1);
     })();
     return () => {
       disposed = true;
+      mapRef.current = null;
       map?.remove();
     };
   }, [stores, showRegistered]);
 
+  // Promotores ao vivo: camada própria, trocada a cada atualização sem recriar o mapa.
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || !live) return;
+    const layer = m.L.layerGroup();
+    for (const p of live) {
+      const here = p.current;
+      const target = here ?? (p.status === "done" ? null : p.next);
+      if (!target || target.lat == null || target.lng == null) continue;
+      const label = here
+        ? `<b>${esc(p.name)}</b> está em <b>${esc(here.storeName)}</b> desde ${fmtTime(here.since)}${p.online ? " · online" : ""}`
+        : `<b>${esc(p.name)}</b> · próxima loja: <b>${esc(target.storeName)}</b>${p.next?.plannedStart ? ` (prevista ${esc(p.next.plannedStart)})` : ""}${p.next?.late ? " · atrasada" : ""}`;
+      m.L.marker([target.lat, target.lng], { icon: liveIcon(m.L, p, Boolean(here)), zIndexOffset: here ? 1000 : 500, title: p.name }).bindTooltip(label, { direction: "top", offset: [0, -14] }).addTo(layer);
+    }
+    layer.addTo(m.map);
+    return () => {
+      layer.remove();
+    };
+  }, [live, ready]);
+
+  useEffect(() => {
+    const m = mapRef.current;
+    if (m && focus) m.map.flyTo([focus.lat, focus.lng], 16, { duration: 0.8 });
+  }, [focus, ready]);
+
   return (
     <div>
+      <style>{`@keyframes mcxPulse{0%{box-shadow:0 0 0 0 rgba(29,94,166,.55)}70%{box-shadow:0 0 0 14px rgba(29,94,166,0)}100%{box-shadow:0 0 0 0 rgba(29,94,166,0)}}`}</style>
       <div ref={el} className="h-[520px] w-full rounded-[var(--radius-card)] border border-line overflow-hidden bg-subtle z-0" role="region" aria-label="Mapa das lojas" />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-[12.5px] text-ink-2">
         {(Object.keys(MAP_STATUS_LABEL) as MapStatus[]).map((k) => (

@@ -48,6 +48,20 @@ export interface AgencySettings {
   defaultWorkMode: WorkMode;
   /** Custo mensal padrão do promotor (preenche o cadastro de cada um; vazio = não informado). */
   promoterCost: PromoterCostDefaults;
+  /** Foto da galeria: "brand" = regra de cada marca; "none" = só câmera; "authorized" = só promotores autorizados (e a marca permitir). */
+  galleryPolicy: GalleryPolicy;
+}
+
+export type GalleryPolicy = "brand" | "none" | "authorized";
+export const GALLERY_POLICY_LABEL: Record<GalleryPolicy, string> = {
+  brand: "Liberar conforme a regra de cada marca",
+  none: "Ninguém: só fotos tiradas na hora (câmera)",
+  authorized: "Só os promotores autorizados abaixo",
+};
+
+/** O promotor pode escolher foto da galeria? (a marca também precisa permitir) */
+export function galleryAllowedFor(policy: GalleryPolicy, promoterAuthorized: boolean): boolean {
+  return policy === "brand" || (policy === "authorized" && promoterAuthorized);
 }
 
 export interface PromoterCostDefaults {
@@ -76,6 +90,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   alerts: { nearDays: 7, bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "", storageReport: false },
   defaultWorkMode: "route",
   promoterCost: { salary: null, meal: null, fuel: null, other: null, chargesPct: DEFAULT_CHARGES_PCT },
+  galleryPolicy: "brand",
 };
 
 export function mergeSettings(raw: unknown): AgencySettings {
@@ -86,6 +101,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
   const priority = { ...DEFAULT_ISSUE_PRIORITY };
   for (const k of ISSUE_KINDS) priority[k] = num(r.issuePriority?.[k], DEFAULT_ISSUE_PRIORITY[k], 1, 9);
   return {
+    galleryPolicy: r.galleryPolicy === "none" || r.galleryPolicy === "authorized" ? r.galleryPolicy : DEFAULT_SETTINGS.galleryPolicy,
     requireApproval: bool(r.requireApproval, DEFAULT_SETTINGS.requireApproval),
     allowIncompleteVisit: bool(r.allowIncompleteVisit, DEFAULT_SETTINGS.allowIncompleteVisit),
     allowExtraVisits: bool(r.allowExtraVisits, DEFAULT_SETTINGS.allowExtraVisits),

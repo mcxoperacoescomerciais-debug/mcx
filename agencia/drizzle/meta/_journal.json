@@ -99,6 +99,13 @@
       "when": 1792962391122,
       "tag": "0013_parceiros",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793038830754,
+      "tag": "0014_online_galeria",
+      "breakpoints": true
     }
   ]
 }
