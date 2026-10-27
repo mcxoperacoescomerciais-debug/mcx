@@ -12,7 +12,7 @@ import { getDayBoard, getRangeBoard, summarizePromoters, type PromoterOpStatus }
 import { brandFilter, promoterFilter } from "./scope";
 import type { PanelFilters } from "@/lib/filters";
 import type { StopBucket } from "@/lib/domain";
-import { distanceM } from "@/lib/rules";
+import { checkinPresence, distanceM, type PresenceState } from "@/lib/rules";
 import { todayIso } from "@/lib/dates";
 
 export type MapStatus = StopBucket | "unscheduled";
@@ -26,10 +26,14 @@ export interface MapStop {
   visit: { id: string; startedAt: string; finishedAt: string | null } | null;
   /** Localização registrada pelo aparelho ao iniciar a visita. */
   registered: { lat: number; lng: number; at: string; accuracyM: number | null; distanceM: number | null } | null;
+  /** Presença: check-in dentro do raio do endereço da loja, longe, sem localização ou loja sem endereço. */
+  presence: PresenceState | null;
   geoStatus: string | null;
 }
 
 export interface MapStore {
+  /** Sem endereço no cadastro: posição do check-in, só para não sumir do mapa. */
+  approximate?: boolean;
   id: string;
   name: string;
   chain: string | null;
@@ -105,6 +109,7 @@ export async function mapData(scope: Scope, f: Pick<PanelFilters, "from" | "to" 
       ],
       visit: st.visit ? { id: st.visit.id, startedAt: st.visit.startedAt.toISOString(), finishedAt: st.visit.finishedAt?.toISOString() ?? null } : null,
       registered: g && g.lat != null && g.lng != null ? { lat: g.lat, lng: g.lng, at: g.startedAt.toISOString(), accuracyM: g.accuracyM, distanceM: null } : null,
+      presence: null,
       geoStatus: g?.geoStatus ?? null,
     });
     byStore.set(st.storeId, list);
@@ -122,12 +127,15 @@ export async function mapData(scope: Scope, f: Pick<PanelFilters, "from" | "to" 
     if (f.city && r.city !== f.city) continue;
     if (f.store && r.id !== f.store) continue;
     const valid = r.lat != null && r.lng != null && Math.abs(r.lat) <= 90 && Math.abs(r.lng) <= 180 && !(r.lat === 0 && r.lng === 0);
-    for (const st of stops) if (st.registered && valid) st.registered.distanceM = distanceM({ lat: r.lat!, lng: r.lng! }, st.registered);
+    for (const st of stops) {
+      if (st.registered && valid) st.registered.distanceM = Math.round(distanceM({ lat: r.lat!, lng: r.lng! }, st.registered));
+      if (st.visit) st.presence = checkinPresence({ lat: st.registered?.lat ?? null, lng: st.registered?.lng ?? null, accuracyM: st.registered?.accuracyM ?? null }, { lat: valid ? r.lat : null, lng: valid ? r.lng : null }, scope.settings.checkinRadiusM).state;
+    }
     const worst = stops.length ? stops.map((x) => x.bucket).sort((a, b) => BUCKET_WEIGHT[a] - BUCKET_WEIGHT[b])[0] : null;
     if (f.status && f.status !== "unscheduled" && worst !== f.status) continue;
-    // Onde o promotor estava ao entrar na loja; sem esse registro, o endereço cadastrado da loja.
-    const here = stops.find((x) => x.registered)?.registered;
-    stores.push({ id: r.id, name: r.name, chain: r.chain, city: r.city, address: r.address, lat: here?.lat ?? (valid ? r.lat : null), lng: here?.lng ?? (valid ? r.lng : null), status: worst ?? "unscheduled", stops });
+    // A loja fica no endereço cadastrado. Sem endereço no mapa: provisoriamente onde o promotor fez o check-in (aproximado).
+    const here = valid ? null : stops.find((x) => x.registered)?.registered;
+    stores.push({ id: r.id, name: r.name, chain: r.chain, city: r.city, address: r.address, lat: valid ? r.lat : (here?.lat ?? null), lng: valid ? r.lng : (here?.lng ?? null), approximate: !valid && Boolean(here), status: worst ?? "unscheduled", stops });
   }
   stores.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   return { stores, generatedAt: board.generatedAt };

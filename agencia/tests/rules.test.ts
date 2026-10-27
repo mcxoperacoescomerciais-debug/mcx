@@ -161,3 +161,16 @@ test("busca das abas: sem acento, sem maiúsculas, todas as palavras", async () 
   assert.ok(matchText("  ", "qualquer coisa"), "busca vazia mostra tudo");
   assert.ok(matchText("thaina", null, "Thainá"));
 });
+
+test("presença na loja: raio, precisão do GPS a favor do promotor, sem localização e loja sem endereço", async () => {
+  const { checkinPresence, fmtDistance } = await import("../src/lib/rules");
+  const store = { lat: -19.92, lng: -43.94 };
+  // ~111 m por 0,001 grau de latitude.
+  assert.equal(checkinPresence({ lat: -19.9215, lng: -43.94, accuracyM: 10 }, store, 300).state, "inside");
+  assert.equal(checkinPresence({ lat: -19.925, lng: -43.94, accuracyM: 10 }, store, 300).state, "far", "~556 m");
+  assert.equal(checkinPresence({ lat: -19.9235, lng: -43.94, accuracyM: 150 }, store, 300).state, "inside", "~390 m com 150 m de imprecisão");
+  assert.equal(checkinPresence({ lat: null, lng: null, accuracyM: null }, store, 300).state, "no_location");
+  assert.equal(checkinPresence({ lat: -19.9, lng: -43.9, accuracyM: 5 }, { lat: null, lng: null }, 300).state, "no_store_address");
+  assert.equal(fmtDistance(1520), "1,5 km");
+  assert.equal(fmtDistance(80), "80 m");
+});

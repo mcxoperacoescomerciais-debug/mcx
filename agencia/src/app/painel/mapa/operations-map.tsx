@@ -34,8 +34,17 @@ function popupHtml(st: MapStore): string {
       const brands = x.brands
         .map((b) => `<li>${esc(b.name)} — <b>${esc(b.status ? ATTENDANCE_STATUS_LABEL[b.status as AttendanceDisplayStatus] ?? b.status : "Não iniciada")}</b>${b.finishedAt ? ` às ${fmtTime(b.finishedAt)}` : ""}</li>`)
         .join("");
+      const dist = x.registered?.distanceM != null ? (x.registered.distanceM >= 1000 ? `${(x.registered.distanceM / 1000).toFixed(1)} km` : `${x.registered.distanceM} m`) : null;
+      const presence =
+        x.presence === "far"
+          ? `<div style="margin-top:4px;color:#b42318;font-weight:700">⚠ Check-in fora da loja: a ${dist} do endereço</div>`
+          : x.presence === "inside"
+            ? `<div style="margin-top:4px;color:#1f7a4d;font-weight:600">✓ Check-in na loja (${dist} do endereço)</div>`
+            : x.presence === "no_location"
+              ? `<div style="margin-top:4px;color:#b54708;font-weight:600">Check-in sem localização</div>`
+              : "";
       const where = x.registered
-        ? `Localização registrada pelo promotor às ${fmtTime(x.registered.at)}${x.registered.distanceM != null ? ` · a ${x.registered.distanceM >= 1000 ? `${(x.registered.distanceM / 1000).toFixed(1)} km` : `${x.registered.distanceM} m`} da loja` : ""} (registro único, não é posição atual)`
+        ? `Localização registrada pelo promotor às ${fmtTime(x.registered.at)}${x.registered.accuracyM ? ` (precisão ${Math.round(x.registered.accuracyM)} m)` : ""}`
         : x.visit
           ? x.geoStatus === "denied"
             ? "Promotor não autorizou a localização"
@@ -45,6 +54,7 @@ function popupHtml(st: MapStore): string {
         <div><b>${esc(x.promoterName)}</b>${x.extra ? " · visita extraordinária" : ""}</div>
         <div style="color:#555">Previsto ${esc(x.plannedStart ?? "—")} · Início ${x.visit ? fmtTime(x.visit.startedAt) : "—"} · Fim ${x.visit?.finishedAt ? fmtTime(x.visit.finishedAt) : "—"}</div>
         <div style="margin-top:2px"><span style="font-weight:600">${esc(STOP_BUCKET_LABEL[x.bucket])}</span></div>
+        ${presence}
         <ul style="margin:4px 0 0 16px;padding:0">${brands || "<li>Sem marcas previstas</li>"}</ul>
         ${where ? `<div style="color:#555;margin-top:4px;font-size:11.5px">${esc(where)}</div>` : ""}
         ${x.visit ? `<a href="/painel/visitas/${esc(x.visit.id)}" target="_blank" style="display:inline-block;margin-top:4px;font-weight:600">Abrir visita →</a>` : ""}
@@ -54,6 +64,7 @@ function popupHtml(st: MapStore): string {
   return `<div style="font:13px/1.4 Inter,system-ui,sans-serif;min-width:230px;max-width:300px">
     <div style="font-weight:700;font-size:14px">${esc(st.name)}</div>
     <div style="color:#555">${esc([st.chain, st.address, st.city].filter(Boolean).join(" · "))}</div>
+    ${st.approximate ? `<div style="color:#b54708;font-size:11.5px;margin-top:2px">Loja sem endereço no mapa: posição aproximada pelo check-in</div>` : ""}
     <div style="margin-top:4px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${MAP_STATUS_COLOR[st.status]};border:1.5px solid #0c323a;margin-right:5px"></span>${esc(MAP_STATUS_LABEL[st.status])}</div>
     ${stops}
     <a href="/painel/lojas/${esc(st.id)}" target="_blank" style="display:inline-block;margin-top:6px;color:#555">Histórico da loja</a>
@@ -109,9 +120,10 @@ export function OperationsMap({ stores, live, focus }: { stores: MapStore[]; liv
       for (const st of stores) {
         if (st.lat == null || st.lng == null) continue;
         const color = MAP_STATUS_COLOR[st.status];
+        const far = st.stops.some((x) => x.presence === "far");
         const icon = L.divIcon({
           className: "",
-          html: `<span style="display:block;width:18px;height:18px;border-radius:50%;background:${color};border:3px solid ${st.status === "pending" ? "#ffffff" : "#0c323a"};box-shadow:0 1px 3px rgba(0,0,0,.35)"></span>`,
+          html: `<span style="display:block;width:18px;height:18px;border-radius:50%;background:${color};border:3px ${st.approximate ? "dashed" : "solid"} ${far ? "#ff1a1a" : st.status === "pending" ? "#ffffff" : "#0c323a"};box-shadow:${far ? "0 0 0 3px rgba(255,26,26,.35)" : "0 1px 3px rgba(0,0,0,.35)"}"></span>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9],
         });
@@ -192,6 +204,14 @@ export function OperationsMap({ stores, live, focus }: { stores: MapStore[]; liv
             {MAP_STATUS_LABEL[k]}
           </span>
         ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-3 rounded-full border-2" style={{ borderColor: "#ff1a1a", boxShadow: "0 0 0 2px rgba(255,26,26,.3)" }} />
+          Check-in fora da loja
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-3 rounded-full border-2 border-dashed border-brand-900" />
+          Loja sem endereço (posição aproximada pelo check-in)
+        </span>
         {hasRegistered ? (
           <label className="inline-flex items-center gap-1.5 ml-auto">
             <input type="checkbox" checked={showRegistered} onChange={(e) => setShowRegistered(e.target.checked)} />

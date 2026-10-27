@@ -48,6 +48,8 @@ export interface AgencySettings {
   defaultWorkMode: WorkMode;
   /** Custo mensal padrão do promotor (preenche o cadastro de cada um; vazio = não informado). */
   promoterCost: PromoterCostDefaults;
+  /** Distância máxima (m) entre a localização do check-in e o endereço da loja para contar como "dentro da loja". */
+  checkinRadiusM: number;
   /** Foto da galeria: "brand" = regra de cada marca; "none" = só câmera; "authorized" = só promotores autorizados (e a marca permitir). */
   galleryPolicy: GalleryPolicy;
 }
@@ -91,6 +93,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   defaultWorkMode: "route",
   promoterCost: { salary: null, meal: null, fuel: null, other: null, chargesPct: DEFAULT_CHARGES_PCT },
   galleryPolicy: "brand",
+  checkinRadiusM: 300,
 };
 
 export function mergeSettings(raw: unknown): AgencySettings {
@@ -101,6 +104,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
   const priority = { ...DEFAULT_ISSUE_PRIORITY };
   for (const k of ISSUE_KINDS) priority[k] = num(r.issuePriority?.[k], DEFAULT_ISSUE_PRIORITY[k], 1, 9);
   return {
+    checkinRadiusM: num(r.checkinRadiusM, DEFAULT_SETTINGS.checkinRadiusM, 50, 5000),
     galleryPolicy: r.galleryPolicy === "none" || r.galleryPolicy === "authorized" ? r.galleryPolicy : DEFAULT_SETTINGS.galleryPolicy,
     requireApproval: bool(r.requireApproval, DEFAULT_SETTINGS.requireApproval),
     allowIncompleteVisit: bool(r.allowIncompleteVisit, DEFAULT_SETTINGS.allowIncompleteVisit),

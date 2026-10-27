@@ -106,6 +106,10 @@ export default async function SettingsPage() {
             <Check name="allowIncompleteVisit" checked={st.allowIncompleteVisit} label="Permitir encerrar visita com marca pendente (com justificativa)" />
             <Check name="allowExtraVisits" checked={st.allowExtraVisits} label="Permitir visita fora da programação em loja autorizada (com justificativa)" />
             <Check name="captureLocation" checked={st.captureLocation} label="Registrar localização no início da visita (se o promotor permitir)" />
+            <Row label="Distância máxima do check-in até a loja (metros)">
+              <input type="number" name="checkinRadiusM" min={50} max={5000} step={10} defaultValue={st.checkinRadiusM} className={inputClass} />
+            </Row>
+            <p className="text-[12px] text-muted -mt-1">Check-in mais longe que isso do endereço da loja vira a pendência “Check-in fora da loja”. A imprecisão do GPS (até 200 m) conta a favor do promotor.</p>
             <Check name="requireApproval" checked={st.requireApproval} label="Gestor aprova ou reprova atendimentos concluídos" />
           </SectionCard>
           <SectionCard title="Acompanhamento" bodyClass="px-5 pb-5 space-y-3">

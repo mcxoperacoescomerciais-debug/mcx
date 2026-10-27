@@ -91,6 +91,30 @@ export function parseCoords(lat: string, lng?: string): { lat: number; lng: numb
 }
 
 /** Distância em metros (haversine). */
+export type PresenceState = "inside" | "far" | "no_location" | "no_store_address";
+
+/**
+ * Presença na loja: compara a localização do check-in com o endereço da loja.
+ * A precisão do GPS conta a favor do promotor (até 200 m): só é "fora" quando,
+ * descontada a imprecisão, a distância passa do raio aceito.
+ */
+export function checkinPresence(
+  checkin: { lat: number | null; lng: number | null; accuracyM: number | null },
+  store: { lat: number | null; lng: number | null },
+  radiusM: number,
+): { state: PresenceState; distanceM: number | null } {
+  if (checkin.lat == null || checkin.lng == null) return { state: "no_location", distanceM: null };
+  if (store.lat == null || store.lng == null) return { state: "no_store_address", distanceM: null };
+  const d = Math.round(distanceM({ lat: store.lat, lng: store.lng }, { lat: checkin.lat, lng: checkin.lng }));
+  const slack = Math.min(Math.max(checkin.accuracyM ?? 0, 0), 200);
+  return { state: d - slack > radiusM ? "far" : "inside", distanceM: d };
+}
+
+export function fmtDistance(m: number | null | undefined): string {
+  if (m === null || m === undefined) return "—";
+  return m >= 1000 ? `${(m / 1000).toFixed(1).replace(".", ",")} km` : `${m} m`;
+}
+
 export function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 6_371_000;
   const rad = (d: number) => (d * Math.PI) / 180;

@@ -16,6 +16,7 @@ import { getDayBoard } from "./operations";
 import { EXCEPTION_ITEM_LABEL, OCCURRENCE_CATEGORY_LABEL, type ExceptionItem, type IssueKind, type IssueReviewStatus } from "@/lib/domain";
 import { addDays, fmtDateTime, hhmmToMinutes, minutesOfDay, todayIso } from "@/lib/dates";
 import type { PanelFilters } from "@/lib/filters";
+import { checkinPresence, fmtDistance } from "@/lib/rules";
 
 export interface Issue {
   key: string;
@@ -168,6 +169,49 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
       // Esquecida aberta depois do fim do dia: sempre no topo (prioridade 1).
       if (v.status === "in_progress") issues.push({ ...base, at: v.startedAt, key: `visit_open:${v.id}`, kind: "visit_open", priority: 1, title: "Esqueceu de encerrar a visita no fim do dia", detail: `Aberta desde ${fmtDateTime(v.startedAt)} e não encerrada: o aplicativo ficou com a visita aberta.` });
       else issues.push({ ...base, at: v.finishedAt, key: `exception:visit:${v.id}`, kind: "exception", priority: pr.exception, title: "Visita encerrada com marca pendente", detail: `Justificativa: “${v.closeReason ?? ""}”` });
+    }
+  }
+
+  // Presença na loja: localização do check-in comparada com o endereço da loja.
+  if (!f.brand) {
+    const checkins = await db
+      .select({
+        id: s.visits.id,
+        date: s.visits.visitDate,
+        startedAt: s.visits.startedAt,
+        lat: s.visits.lat,
+        lng: s.visits.lng,
+        accuracyM: s.visits.accuracyM,
+        geoStatus: s.visits.geoStatus,
+        storeLat: s.stores.lat,
+        storeLng: s.stores.lng,
+        storeName: s.stores.name,
+        promoterName: s.users.name,
+      })
+      .from(s.visits)
+      .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+      .innerJoin(s.users, eq(s.users.id, s.visits.promoterId))
+      .where(
+        and(
+          eq(s.visits.agencyId, scope.agencyId),
+          gte(s.visits.visitDate, f.from),
+          lte(s.visits.visitDate, f.to),
+          ne(s.visits.status, "cancelled"),
+          promoterFilter(scope, s.visits.promoterId),
+          f.store ? eq(s.visits.storeId, f.store) : undefined,
+          f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
+          f.chain ? eq(s.stores.chainId, f.chain) : undefined,
+          f.city ? eq(s.stores.city, f.city) : undefined,
+        ),
+      );
+    const radius = scope.settings.checkinRadiusM;
+    for (const v of checkins) {
+      const p = checkinPresence({ lat: v.lat, lng: v.lng, accuracyM: v.accuracyM }, { lat: v.storeLat, lng: v.storeLng }, radius);
+      const base = { date: v.date, at: v.startedAt, storeName: v.storeName, brandName: null, promoterName: v.promoterName, href: `/painel/visitas/${v.id}`, review: null };
+      if (p.state === "far")
+        issues.push({ ...base, key: `checkin_far:${v.id}`, kind: "checkin_far", priority: pr.checkin_far, title: `Check-in a ${fmtDistance(p.distanceM)} da loja`, detail: `Iniciou a visita fora da loja (aceito até ${radius} m${v.accuracyM ? `; precisão do GPS ${Math.round(v.accuracyM)} m` : ""}).` });
+      else if (p.state === "no_location" && scope.settings.captureLocation)
+        issues.push({ ...base, key: `checkin_no_location:${v.id}`, kind: "checkin_no_location", priority: pr.checkin_no_location, title: "Check-in sem localização", detail: v.geoStatus === "denied" ? "O promotor não liberou a localização ao iniciar a visita." : "O celular não informou a localização ao iniciar a visita." });
     }
   }
 

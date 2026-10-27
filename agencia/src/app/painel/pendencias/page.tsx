@@ -22,6 +22,7 @@ const GROUPS: { id: string; title: string; text: string; kinds: IssueKind[] }[] 
   { id: "atrasadas", title: "Visitas atrasadas", text: "Hoje, passou do horário e não iniciou", kinds: ["visit_late"] },
   { id: "nao-realizadas", title: "Visitas não realizadas", text: "Programadas e não iniciadas", kinds: ["visit_missed"] },
   { id: "ocorrencias", title: "Ocorrências em acompanhamento", text: "Registradas em loja e ainda não tratadas", kinds: ["occurrence_open"] },
+  { id: "presenca", title: "Presença na loja", text: "Check-in longe do endereço da loja ou sem localização", kinds: ["checkin_far", "checkin_no_location"] },
 ];
 
 export default async function IssuesPage({ searchParams }: PageProps<"/painel/pendencias">) {
@@ -59,7 +60,7 @@ export default async function IssuesPage({ searchParams }: PageProps<"/painel/pe
         statusLabel="Todas"
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-2.5 mb-6">
         {GROUPS.map((g) => {
           const n = g.kinds.reduce((sum, k) => sum + (counts.get(k) ?? 0), 0);
           return (

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowRight, FileDown, MapPin } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { getVisitDetail } from "@/server/details";
+import { checkinPresence, fmtDistance } from "@/lib/rules";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, EXCEPTION_ITEM_LABEL, VISIT_ORIGIN_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE, withPlacement } from "@/lib/domain";
 import { fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates";
 import { LinkButton, PageHeader, StatusBadge } from "@/components/ui";
@@ -20,6 +21,7 @@ export default async function VisitPage({ params }: PageProps<"/painel/visitas/[
   const d = await getVisitDetail(scope, id);
   if (!d) notFound();
   const v = d.visit;
+  const presence = checkinPresence({ lat: v.lat, lng: v.lng, accuracyM: v.accuracyM }, { lat: d.store.lat, lng: d.store.lng }, scope.settings.checkinRadiusM);
   const brandIds = [...new Set([...d.planned.map((b) => b.id), ...d.attendances.map((x) => x.a.brandId)])];
   const viewer = (p: (typeof d.photos)[number], label: string): ViewerPhoto => ({ id: p.id, kind: p.kind, label: withPlacement(label, p.placement), takenAt: fmtDateTime(p.takenAt), uploaded: Boolean(p.uploadedAt), source: p.source });
 
@@ -66,6 +68,19 @@ export default async function VisitPage({ params }: PageProps<"/painel/visitas/[
           }
         />
       </div>
+
+      {presence.state === "far" ? (
+        <div className="flex gap-3 rounded-xl px-4 py-3 text-[13.5px] bg-bad-bg text-bad mb-6">
+          <AlertTriangle className="size-5 shrink-0" />
+          <div>
+            <strong>Check-in fora da loja:</strong> a visita começou a {fmtDistance(presence.distanceM)} do endereço da loja (aceito até {scope.settings.checkinRadiusM} m{v.accuracyM ? `; precisão do GPS ${Math.round(v.accuracyM)} m` : ""}).
+          </div>
+        </div>
+      ) : presence.state === "inside" ? (
+        <p className="text-[13px] text-ok font-semibold mb-4">✓ Check-in na loja: {fmtDistance(presence.distanceM)} do endereço cadastrado.</p>
+      ) : presence.state === "no_store_address" ? (
+        <p className="text-[13px] text-muted mb-4">Loja sem endereço no mapa: não dá para conferir a distância do check-in. Cadastre a localização em Redes e lojas.</p>
+      ) : null}
 
       {v.status === "closed_incomplete" ? (
         <div className="flex gap-3 rounded-xl px-4 py-3 text-[13.5px] bg-warn-bg text-warn mb-6">

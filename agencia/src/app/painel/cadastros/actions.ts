@@ -135,6 +135,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         allowExtraVisits: bool(fd, "allowExtraVisits"),
         captureLocation: bool(fd, "captureLocation"),
         allowExceptions: bool(fd, "allowExceptions"),
+        checkinRadiusM: Number(str(fd, "checkinRadiusM")),
         defaultWorkMode: str(fd, "defaultWorkMode"),
         galleryPolicy: str(fd, "galleryPolicy") as never,
         lateToleranceMin: Number(str(fd, "lateToleranceMin")),
