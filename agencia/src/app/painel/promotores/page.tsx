@@ -4,6 +4,8 @@ import { ArrowDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions, getRangeBoard, PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TONE, summarizePromoters, type PromoterOpStatus } from "@/server/operations";
 import { listPromoters } from "@/server/history";
+import { workTimes } from "@/server/work-time";
+import { fmtMinutes } from "@/lib/work-time";
 import { parseDayRange, withParams } from "@/lib/filters";
 import { EMPLOYMENT_LABEL } from "@/lib/domain";
 import { fmtAgo, fmtDate, fmtLongDate } from "@/lib/dates";
@@ -14,14 +16,14 @@ import { Table, Td, Th } from "../_components/widgets";
 
 export const metadata: Metadata = { title: "Promotores" };
 
-const SORTS = { name: "Promotor", scheduled: "Lojas programadas", completed: "Concluídas", issues: "Pendências", last: "Último registro" } as const;
+const SORTS = { name: "Promotor", hours: "Horas trabalhadas", scheduled: "Lojas programadas", completed: "Concluídas", issues: "Pendências", last: "Último registro" } as const;
 
 export default async function PromotersPage({ searchParams }: PageProps<"/painel/promotores">) {
   const scope = await getScope();
   const raw = await searchParams;
   const f = parseDayRange(raw);
   const sort = (typeof raw.sort === "string" && raw.sort in SORTS ? raw.sort : "name") as keyof typeof SORTS;
-  const [board, people, options] = await Promise.all([getRangeBoard(scope, f), listPromoters(scope), filterOptions(scope)]);
+  const [board, people, options, times] = await Promise.all([getRangeBoard(scope, f), listPromoters(scope), filterOptions(scope), workTimes(scope, f.from, f.to)]);
   const summaries = new Map(summarizePromoters(board).map((p) => [p.promoterId, p]));
   let rows = people
     .filter((p) => p.status === "active" || summaries.has(p.id))
@@ -37,6 +39,7 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
         issues: sum?.issues ?? 0,
         last: sum?.lastActivity ?? null,
         opStatus: (sum?.status ?? "no_schedule") as PromoterOpStatus,
+        work: times.get(p.id) ?? null,
       };
     })
     .filter((p) => matchesQuery(`${p.name} ${p.region ?? ""} ${p.internalCode ?? ""}`, f.q))
@@ -45,7 +48,7 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
   // Gestor restrito a marcas: só promotores que atuaram com essas marcas na data.
   if (scope.brandIds !== null || f.brand || f.chain || f.city || f.store) rows = rows.filter((p) => summaries.has(p.id));
   rows.sort((a, b) =>
-    sort === "scheduled" ? b.scheduled - a.scheduled : sort === "completed" ? b.completed - a.completed : sort === "issues" ? b.issues - a.issues : sort === "last" ? (b.last?.getTime() ?? 0) - (a.last?.getTime() ?? 0) : a.name.localeCompare(b.name, "pt-BR"),
+    sort === "hours" ? (b.work?.shiftMinutes ?? 0) - (a.work?.shiftMinutes ?? 0) : sort === "scheduled" ? b.scheduled - a.scheduled : sort === "completed" ? b.completed - a.completed : sort === "issues" ? b.issues - a.issues : sort === "last" ? (b.last?.getTime() ?? 0) - (a.last?.getTime() ?? 0) : a.name.localeCompare(b.name, "pt-BR"),
   );
   const keep = { from: f.from, to: f.to, brand: f.brand, chain: f.chain, city: f.city, q: f.q || null, status: f.status };
 
@@ -67,6 +70,7 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
                 {(["name"] as const).map((k) => (
                   <SortTh key={k} k={k} sort={sort} keep={keep} />
                 ))}
+                <SortTh k="hours" sort={sort} keep={keep} align="right" />
                 <Th>Roteiro / região</Th>
                 <SortTh k="scheduled" sort={sort} keep={keep} align="right" />
                 <Th align="right">Visitas iniciadas</Th>
@@ -89,6 +93,16 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
                       {p.internalCode ? ` · ${p.internalCode}` : ""}
                       {p.status === "inactive" ? " · inativo" : ""}
                     </span>
+                  </Td>
+                  <Td align="right" className="whitespace-nowrap">
+                    {p.work?.shiftMinutes ? (
+                      <>
+                        <span className="font-semibold tnum">{fmtMinutes(p.work.shiftMinutes)}</span>
+                        <span className="block text-[11.5px] text-muted tnum">{fmtMinutes(p.work.storeMinutes)} em loja</span>
+                      </>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
                   </Td>
                   <Td className="text-ink-2">{p.region ?? "—"}</Td>
                   <Td align="right">{p.scheduled}</Td>
@@ -124,7 +138,7 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
         )}
       </div>
       <p className="text-[12px] text-muted mt-3">
-        “Com atraso” só aparece quando o horário previsto mais a tolerância ({scope.settings.lateToleranceMin} min) passou sem a visita começar. Ausência de registro recente, sozinha, não indica atraso.
+        Horas trabalhadas = da entrada na primeira loja ao fim da última loja de cada dia do período (abaixo, o tempo somado dentro das lojas). Visita deixada aberta de um dia para o outro não conta. “Com atraso” só aparece quando o horário previsto mais a tolerância ({scope.settings.lateToleranceMin} min) passou sem a visita começar. Ausência de registro recente, sozinha, não indica atraso.
       </p>
     </>
   );

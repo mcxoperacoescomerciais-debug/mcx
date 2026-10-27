@@ -148,6 +148,14 @@ export const users = pgTable(
     lastSeenAt: ts("last_seen_at"),
     /** Promotor autorizado a usar foto da galeria (quando a agência libera só para autorizados). */
     galleryAllowed: boolean("gallery_allowed").notNull().default(false),
+    /** Permissão de localização do celular (granted | denied | prompt | unsupported), informada pelo app. */
+    geoPermission: text("geo_permission"),
+    geoCheckedAt: ts("geo_checked_at"),
+    /** Última posição enviada pelo app aberto (a cada atualização, com a localização permitida). */
+    lastLat: doublePrecision("last_lat"),
+    lastLng: doublePrecision("last_lng"),
+    lastAccuracyM: doublePrecision("last_accuracy_m"),
+    lastGeoAt: ts("last_geo_at"),
     deactivatedAt: ts("deactivated_at"),
     ...timestamps,
     ...authorship,

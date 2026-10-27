@@ -15,6 +15,7 @@ import { StoresScreen } from "./stores-screen";
 import { HistoryScreen, ProfileScreen } from "./history-profile";
 import { VisitScreen } from "./visit-screen";
 import { AttendanceScreen } from "./attendance-screen";
+import { LocationGuard } from "./location-guard";
 
 /** Registra o Service Worker e aquece o cache com os arquivos já carregados. */
 function registerServiceWorker() {
@@ -69,6 +70,7 @@ export function PromoterApp() {
   return (
     <>
       {screen}
+      <LocationGuard />
       <ToastHost />
     </>
   );

@@ -7,10 +7,11 @@
  * atendeu, encerrou a loja) aparece como aviso na tela.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Bell, BellOff, CheckCircle2, ChevronDown, CircleSlash, LogIn, LogOut, MapPin, RefreshCw, X } from "lucide-react";
 import clsx from "clsx";
 import { fmtAgo, fmtTime } from "@/lib/dates";
-import type { LiveEvent, LivePromoter, MapStore } from "@/server/map";
+import type { LiveEvent, LivePromoter, LiveTotals, MapStore } from "@/server/map";
 import { OperationsMap } from "./operations-map";
 
 const POLL_MS = 30_000;
@@ -28,7 +29,7 @@ const STATUS: Record<LivePromoter["status"], { label: string; cls: string }> = {
 const EVENT_ICON = { checkin: LogIn, checkout: LogOut, attendance: CheckCircle2, not_attended: CircleSlash } as const;
 const EVENT_TONE = { checkin: "text-info", checkout: "text-ink-2", attendance: "text-ok", not_attended: "text-bad" } as const;
 
-type Live = { generatedAt: string; promoters: LivePromoter[]; events: LiveEvent[] };
+type Live = { generatedAt: string; promoters: LivePromoter[]; events: LiveEvent[]; totals: LiveTotals };
 
 export function LiveMap({ stores }: { stores: MapStore[] }) {
   const [data, setData] = useState<Live | null>(null);
@@ -38,6 +39,9 @@ export function LiveMap({ stores }: { stores: MapStore[] }) {
   const [focus, setFocus] = useState<{ lat: number; lng: number; key: number } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const seen = useRef<Set<string> | null>(null);
+  // Os mesmos filtros da página (marca, rede, promotor, cidade) valem para o acompanhamento.
+  const params = useSearchParams();
+  const qs = ["brand", "chain", "promoter", "city"].map((k) => (params.get(k) ? `${k}=${encodeURIComponent(params.get(k)!)}` : "")).filter(Boolean).join("&");
   const alertsRef = useRef(alertsOn);
   useEffect(() => {
     alertsRef.current = alertsOn;
@@ -45,7 +49,7 @@ export function LiveMap({ stores }: { stores: MapStore[] }) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/map/live", { cache: "no-store" });
+      const res = await fetch(`/api/map/live${qs ? `?${qs}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const next = (await res.json()) as Live;
       // Na primeira carga tudo já é "visto": avisa só o que acontecer daqui em diante.
@@ -59,7 +63,7 @@ export function LiveMap({ stores }: { stores: MapStore[] }) {
     } catch {
       setError(true);
     }
-  }, []);
+  }, [qs]);
 
   useEffect(() => {
     void load();
@@ -89,8 +93,16 @@ export function LiveMap({ stores }: { stores: MapStore[] }) {
     if (t?.lat != null && t.lng != null) setFocus((old) => ({ lat: t.lat!, lng: t.lng!, key: (old?.key ?? 0) + 1 }));
   };
 
+  const t = data?.totals;
   return (
     <>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+        <Count label="Promotores em loja agora" value={t?.inStore} tone="text-info" />
+        <Count label="Lojas concluídas hoje" value={t?.storesDone} tone="text-ok" sub={t ? `de ${t.storesPlanned} programada(s)` : undefined} />
+        <Count label="Lojas em andamento" value={t?.storesInProgress} tone="text-info" />
+        <Count label="Atendimentos de marca concluídos" value={t?.attendancesDone} />
+        <Count label="Promotores online" value={t?.online} sub="app aberto nos últimos 5 min" />
+      </div>
       <div className="grid xl:grid-cols-[1fr_370px] gap-4 items-start">
         <OperationsMap stores={stores} live={promoters} focus={focus} />
         <section className="bg-surface border border-line rounded-[var(--radius-card)] overflow-hidden">
@@ -217,5 +229,15 @@ export function LiveMap({ stores }: { stores: MapStore[] }) {
         })}
       </div>
     </>
+  );
+}
+
+function Count({ label, value, sub, tone }: { label: string; value: number | undefined; sub?: string; tone?: string }) {
+  return (
+    <div className="bg-surface border border-line rounded-[var(--radius-card)] px-4 py-3">
+      <p className="text-[12px] text-muted leading-tight">{label}</p>
+      <p className={clsx("text-[24px] font-bold tnum leading-tight mt-1", tone)}>{value ?? "—"}</p>
+      {sub ? <p className="text-[11.5px] text-muted">{sub}</p> : null}
+    </div>
   );
 }

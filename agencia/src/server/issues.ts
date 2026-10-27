@@ -14,7 +14,7 @@ import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
 import { getDayBoard } from "./operations";
 import { EXCEPTION_ITEM_LABEL, OCCURRENCE_CATEGORY_LABEL, type ExceptionItem, type IssueKind, type IssueReviewStatus } from "@/lib/domain";
-import { addDays, todayIso } from "@/lib/dates";
+import { addDays, fmtDateTime, hhmmToMinutes, minutesOfDay, todayIso } from "@/lib/dates";
 import type { PanelFilters } from "@/lib/filters";
 
 export interface Issue {
@@ -141,7 +141,10 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
     }
   }
 
-  // Visitas: não finalizadas (dias anteriores) e encerradas incompletas.
+  // Visitas: esquecidas abertas (o promotor não encerrou no fim do dia — inclusive de dias antes do
+  // período, para não sumirem da visão de hoje) e encerradas incompletas.
+  const afterDayEnd = minutesOfDay() >= (hhmmToMinutes(scope.settings.dayEndsAt) ?? 24 * 60);
+  const openFrom = addDays(f.from, -30);
   const visits = await db
     .select({ id: s.visits.id, status: s.visits.status, date: s.visits.visitDate, startedAt: s.visits.startedAt, finishedAt: s.visits.finishedAt, closeReason: s.visits.closeReason, storeName: s.stores.name, promoterName: s.users.name, origin: s.visits.origin, extraReason: s.visits.extraReason })
     .from(s.visits)
@@ -150,20 +153,20 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
     .where(
       and(
         eq(s.visits.agencyId, scope.agencyId),
-        gte(s.visits.visitDate, f.from),
         lte(s.visits.visitDate, f.to),
         promoterFilter(scope, s.visits.promoterId),
         f.store ? eq(s.visits.storeId, f.store) : undefined,
         f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
         f.chain ? eq(s.stores.chainId, f.chain) : undefined,
         f.city ? eq(s.stores.city, f.city) : undefined,
-        sql`(${s.visits.status} = 'closed_incomplete' or (${s.visits.status} = 'in_progress' and ${s.visits.visitDate} < ${today}))`,
+        sql`((${s.visits.status} = 'closed_incomplete' and ${s.visits.visitDate} >= ${f.from}) or (${s.visits.status} = 'in_progress' and ${s.visits.visitDate} >= ${openFrom} and (${s.visits.visitDate} < ${today} or ${afterDayEnd})))`,
       ),
     );
   if (!f.brand) {
     for (const v of visits) {
       const base = { date: v.date, storeName: v.storeName, brandName: null, promoterName: v.promoterName, href: `/painel/visitas/${v.id}`, review: null };
-      if (v.status === "in_progress") issues.push({ ...base, at: v.startedAt, key: `visit_open:${v.id}`, kind: "visit_open", priority: pr.visit_open, title: "Visita não finalizada", detail: "Iniciada e não encerrada pelo promotor." });
+      // Esquecida aberta depois do fim do dia: sempre no topo (prioridade 1).
+      if (v.status === "in_progress") issues.push({ ...base, at: v.startedAt, key: `visit_open:${v.id}`, kind: "visit_open", priority: 1, title: "Esqueceu de encerrar a visita no fim do dia", detail: `Aberta desde ${fmtDateTime(v.startedAt)} e não encerrada: o aplicativo ficou com a visita aberta.` });
       else issues.push({ ...base, at: v.finishedAt, key: `exception:visit:${v.id}`, kind: "exception", priority: pr.exception, title: "Visita encerrada com marca pendente", detail: `Justificativa: “${v.closeReason ?? ""}”` });
     }
   }

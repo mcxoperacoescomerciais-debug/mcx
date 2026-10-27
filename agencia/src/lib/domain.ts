@@ -332,7 +332,7 @@ export const ISSUE_KIND_LABEL: Record<IssueKind, string> = {
   missing_before: "Sem foto do antes",
   missing_after: "Sem foto do depois",
   stock_incomplete: "Estoque incompleto",
-  visit_open: "Visita não finalizada",
+  visit_open: "Visita esquecida aberta",
   correction_pending: "Aguardando correção",
   photo_unsynced: "Foto aguardando sincronização",
   exception: "Exceção operacional",

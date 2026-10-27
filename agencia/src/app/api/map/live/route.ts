@@ -4,8 +4,13 @@ import { liveOperations } from "@/server/map";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+const UUID = /^[0-9a-f-]{36}$/i;
+
+export async function GET(request: Request) {
   const scope = await getApiScope(["admin", "manager"]);
   if (!scope) return unauthorized();
-  return Response.json(await liveOperations(scope), { headers: { "Cache-Control": "no-store" } });
+  const p = new URL(request.url).searchParams;
+  const id = (k: string) => (UUID.test(p.get(k) ?? "") ? p.get(k) : null);
+  const f = { brand: id("brand"), chain: id("chain"), store: id("store"), promoter: id("promoter"), city: p.get("city")?.slice(0, 80) || null };
+  return Response.json(await liveOperations(scope, f), { headers: { "Cache-Control": "no-store" } });
 }

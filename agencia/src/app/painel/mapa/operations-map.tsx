@@ -87,8 +87,9 @@ export function OperationsMap({ stores, live, focus }: { stores: MapStore[]; liv
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<{ L: typeof import("leaflet"); map: import("leaflet").Map } | null>(null);
   const [ready, setReady] = useState(0);
-  const [showRegistered, setShowRegistered] = useState(true);
-  const hasRegistered = stores.some((st) => st.stops.some((x) => x.registered));
+  // A loja já aparece onde o promotor estava ao entrar: o losango de registro fica desligado.
+  const [showRegistered, setShowRegistered] = useState(false);
+  const hasRegistered = false;
 
   useEffect(() => {
     let disposed = false;
@@ -157,12 +158,17 @@ export function OperationsMap({ stores, live, focus }: { stores: MapStore[]; liv
     const layer = m.L.layerGroup();
     for (const p of live) {
       const here = p.current;
-      const target = here ?? (p.status === "done" ? null : p.next);
+      // Onde está agora: a posição enviada pelo celular; sem ela, a loja aberta (ou a próxima do roteiro).
+      const pos = p.position;
+      const target = pos ?? here ?? (p.status === "done" ? null : p.next);
       if (!target || target.lat == null || target.lng == null) continue;
-      const label = here
-        ? `<b>${esc(p.name)}</b> está em <b>${esc(here.storeName)}</b> desde ${fmtTime(here.since)}${p.online ? " · online" : ""}`
-        : `<b>${esc(p.name)}</b> · próxima loja: <b>${esc(target.storeName)}</b>${p.next?.plannedStart ? ` (prevista ${esc(p.next.plannedStart)})` : ""}${p.next?.late ? " · atrasada" : ""}`;
-      m.L.marker([target.lat, target.lng], { icon: liveIcon(m.L, p, Boolean(here)), zIndexOffset: here ? 1000 : 500, title: p.name }).bindTooltip(label, { direction: "top", offset: [0, -14] }).addTo(layer);
+      const where = here
+        ? `está em <b>${esc(here.storeName)}</b> desde ${fmtTime(here.since)}`
+        : p.next && p.status !== "done"
+          ? `próxima loja: <b>${esc(p.next.storeName)}</b>${p.next.plannedStart ? ` (prevista ${esc(p.next.plannedStart)})` : ""}${p.next.late ? " · atrasada" : ""}`
+          : "sem loja aberta";
+      const label = `<b>${esc(p.name)}</b> ${where}${pos ? `<br>posição do celular às ${fmtTime(pos.at)}${pos.accuracyM ? ` (±${Math.round(pos.accuracyM)} m)` : ""}` : ""}${p.online ? " · online" : ""}`;
+      m.L.marker([target.lat, target.lng], { icon: liveIcon(m.L, p, Boolean(here) || Boolean(pos)), zIndexOffset: here ? 1000 : 500, title: p.name }).bindTooltip(label, { direction: "top", offset: [0, -14] }).addTo(layer);
     }
     layer.addTo(m.map);
     return () => {
@@ -180,7 +186,7 @@ export function OperationsMap({ stores, live, focus }: { stores: MapStore[]; liv
       <style>{`@keyframes mcxPulse{0%{box-shadow:0 0 0 0 rgba(29,94,166,.55)}70%{box-shadow:0 0 0 14px rgba(29,94,166,0)}100%{box-shadow:0 0 0 0 rgba(29,94,166,0)}}`}</style>
       <div ref={el} className="h-[520px] w-full rounded-[var(--radius-card)] border border-line overflow-hidden bg-subtle z-0" role="region" aria-label="Mapa das lojas" />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-[12.5px] text-ink-2">
-        {(Object.keys(MAP_STATUS_LABEL) as MapStatus[]).map((k) => (
+        {(["completed", "in_progress"] as MapStatus[]).map((k) => (
           <span key={k} className="inline-flex items-center gap-1.5">
             <span className="size-3 rounded-full border-2 border-brand-900" style={{ background: MAP_STATUS_COLOR[k] }} />
             {MAP_STATUS_LABEL[k]}

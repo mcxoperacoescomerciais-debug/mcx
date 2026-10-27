@@ -43,6 +43,20 @@ export interface MapStore {
 
 const BUCKET_WEIGHT: Record<StopBucket, number> = { late: 0, missed: 1, in_progress: 2, pending: 3, exception: 4, completed: 5 };
 
+/**
+ * Mapa em tempo real (hoje): só lojas com visita concluída (verde) ou em andamento (azul).
+ * Concluída com exceção conta como concluída.
+ */
+export async function liveMapStores(scope: Scope, f: Pick<PanelFilters, "brand" | "chain" | "store" | "promoter" | "city" | "status">) {
+  const date = todayIso();
+  const status = f.status === "completed" || f.status === "in_progress" ? f.status : null;
+  const { stores, generatedAt } = await mapData(scope, { ...f, from: date, to: date, status: null });
+  const live = stores
+    .map((st) => ({ ...st, status: (st.stops.some((x) => x.bucket === "in_progress") ? "in_progress" : st.stops.some((x) => x.bucket === "completed" || x.bucket === "exception") ? "completed" : st.status) as MapStatus }))
+    .filter((st) => (st.status === "completed" || st.status === "in_progress") && (!status || st.status === status));
+  return { stores: live, generatedAt };
+}
+
 export async function mapData(scope: Scope, f: Pick<PanelFilters, "from" | "to" | "brand" | "chain" | "store" | "promoter" | "city" | "status">) {
   const db = await getDb();
   const board = await getRangeBoard(scope, f);
@@ -111,7 +125,9 @@ export async function mapData(scope: Scope, f: Pick<PanelFilters, "from" | "to" 
     for (const st of stops) if (st.registered && valid) st.registered.distanceM = distanceM({ lat: r.lat!, lng: r.lng! }, st.registered);
     const worst = stops.length ? stops.map((x) => x.bucket).sort((a, b) => BUCKET_WEIGHT[a] - BUCKET_WEIGHT[b])[0] : null;
     if (f.status && f.status !== "unscheduled" && worst !== f.status) continue;
-    stores.push({ id: r.id, name: r.name, chain: r.chain, city: r.city, address: r.address, lat: valid ? r.lat : null, lng: valid ? r.lng : null, status: worst ?? "unscheduled", stops });
+    // Onde o promotor estava ao entrar na loja; sem esse registro, o endereço cadastrado da loja.
+    const here = stops.find((x) => x.registered)?.registered;
+    stores.push({ id: r.id, name: r.name, chain: r.chain, city: r.city, address: r.address, lat: here?.lat ?? (valid ? r.lat : null), lng: here?.lng ?? (valid ? r.lng : null), status: worst ?? "unscheduled", stops });
   }
   stores.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   return { stores, generatedAt: board.generatedAt };
@@ -162,6 +178,9 @@ export interface LivePromoter {
   name: string;
   online: boolean;
   lastSeenAt: string | null;
+  /** Última posição enviada pelo celular hoje (app aberto e localização permitida). */
+  position: { lat: number; lng: number; accuracyM: number | null; at: string } | null;
+  geoPermission: string | null;
   status: PromoterOpStatus;
   /** Loja em que está agora (visita aberta). */
   current: (LivePlace & { visitId: string; since: string; brands: { name: string; status: string | null }[] }) | null;
@@ -190,16 +209,29 @@ export interface LiveEvent {
  * rastreamento contínuo): loja da visita aberta, próxima loja do roteiro e o
  * que já foi feito; "online" = o app falou com o servidor há poucos minutos.
  */
-export async function liveOperations(scope: Scope): Promise<{ generatedAt: string; promoters: LivePromoter[]; events: LiveEvent[] }> {
+export type LiveFilters = Pick<PanelFilters, "brand" | "chain" | "store" | "promoter" | "city">;
+
+export interface LiveTotals {
+  /** Promotores dentro de uma loja agora (no filtro). */
+  inStore: number;
+  online: number;
+  storesPlanned: number;
+  storesDone: number;
+  storesInProgress: number;
+  attendancesDone: number;
+}
+
+export async function liveOperations(scope: Scope, f: Partial<LiveFilters> = {}): Promise<{ generatedAt: string; promoters: LivePromoter[]; events: LiveEvent[]; totals: LiveTotals }> {
   const db = await getDb();
   const date = todayIso();
-  const board = await getDayBoard(scope, { date, brand: null, chain: null, store: null, promoter: null, city: null });
+  const filtered = Boolean(f.brand || f.chain || f.store || f.promoter || f.city);
+  const board = await getDayBoard(scope, { date, brand: f.brand ?? null, chain: f.chain ?? null, store: f.store ?? null, promoter: f.promoter ?? null, city: f.city ?? null });
   const summary = new Map(summarizePromoters(board).map((p) => [p.promoterId, p]));
   const storeIds = [...new Set(board.stops.map((st) => st.storeId))];
   const coords = storeIds.length ? await db.select({ id: s.stores.id, lat: s.stores.lat, lng: s.stores.lng }).from(s.stores).where(inArray(s.stores.id, storeIds)) : [];
   const coordOf = new Map(coords.map((c) => [c.id, c]));
   const seen = await db
-    .select({ id: s.users.id, name: s.users.name, lastSeenAt: s.users.lastSeenAt })
+    .select({ id: s.users.id, name: s.users.name, lastSeenAt: s.users.lastSeenAt, geoPermission: s.users.geoPermission, lastLat: s.users.lastLat, lastLng: s.users.lastLng, lastAccuracyM: s.users.lastAccuracyM, lastGeoAt: s.users.lastGeoAt })
     .from(s.users)
     .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id)));
   const now = Date.now();
@@ -213,8 +245,8 @@ export async function liveOperations(scope: Scope): Promise<{ generatedAt: strin
   for (const u of seen) {
     const mine = board.stops.filter((st) => st.promoterId === u.id).sort((a, b) => a.seq - b.seq || (a.plannedStart ?? "99").localeCompare(b.plannedStart ?? "99"));
     const online = Boolean(u.lastSeenAt && now - u.lastSeenAt.getTime() <= ONLINE_MINUTES * 60_000);
-    // Sem programação e sem sinal hoje: não entra no acompanhamento.
-    if (!mine.length && !(u.lastSeenAt && u.lastSeenAt.toISOString().slice(0, 10) >= date)) continue;
+    // Sem programação e sem sinal hoje: não entra no acompanhamento. Com filtro, só quem tem loja no filtro.
+    if (!mine.length && (filtered || !(u.lastSeenAt && u.lastSeenAt.toISOString().slice(0, 10) >= date))) continue;
     const open = mine.find((st) => st.visit?.status === "in_progress");
     const next = mine.find((st) => !st.visit && (st.bucket === "pending" || st.bucket === "late"));
     const finished = mine.filter((st) => st.visit?.finishedAt).sort((a, b) => b.visit!.finishedAt!.getTime() - a.visit!.finishedAt!.getTime())[0];
@@ -227,6 +259,11 @@ export async function liveOperations(scope: Scope): Promise<{ generatedAt: strin
       name: u.name,
       online,
       lastSeenAt: u.lastSeenAt?.toISOString() ?? null,
+      position:
+        u.lastLat != null && u.lastLng != null && u.lastGeoAt && u.lastGeoAt.toISOString().slice(0, 10) >= date
+          ? { lat: u.lastLat, lng: u.lastLng, accuracyM: u.lastAccuracyM, at: u.lastGeoAt.toISOString() }
+          : null,
+      geoPermission: u.geoPermission,
       status: sm?.status ?? "no_schedule",
       current: open
         ? {
@@ -256,5 +293,45 @@ export async function liveOperations(scope: Scope): Promise<{ generatedAt: strin
   const order: Record<PromoterOpStatus, number> = { in_store: 0, late: 1, between: 2, not_started: 3, missed: 4, done: 5, no_schedule: 6 };
   promoters.sort((a, b) => order[a.status] - order[b.status] || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, "pt-BR"));
   events.sort((a, b) => b.at.localeCompare(a.at));
-  return { generatedAt: new Date().toISOString(), promoters, events: events.slice(0, 60) };
+  const scheduled = board.stops.filter((st) => st.scheduleId || st.visit);
+  const totals: LiveTotals = {
+    inStore: promoters.filter((p) => p.current).length,
+    online: promoters.filter((p) => p.online).length,
+    storesPlanned: scheduled.length,
+    storesDone: scheduled.filter((st) => st.bucket === "completed" || st.bucket === "exception").length,
+    storesInProgress: scheduled.filter((st) => st.bucket === "in_progress").length,
+    attendancesDone: board.stops.reduce((n, st) => n + st.attendances.filter((a) => a.status === "completed").length, 0),
+  };
+  return { generatedAt: new Date().toISOString(), promoters, events: events.slice(0, 60), totals };
+}
+
+export type GeoPermissionState = "denied" | "prompt" | "unsupported" | "unknown";
+
+/** Promotores ativos que não liberaram a localização (para o gestor cobrar). */
+export async function geoPermissionList(scope: Scope, promoterId?: string | null) {
+  const db = await getDb();
+  const rows = await db
+    .select({ id: s.users.id, name: s.users.name, permission: s.users.geoPermission, checkedAt: s.users.geoCheckedAt, lastSeenAt: s.users.lastSeenAt })
+    .from(s.users)
+    .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id), promoterId ? eq(s.users.id, promoterId) : undefined));
+  return rows
+    .filter((r) => r.permission !== "granted")
+    .map((r) => ({ ...r, permission: (r.permission === "denied" || r.permission === "prompt" || r.permission === "unsupported" ? r.permission : "unknown") as GeoPermissionState }))
+    .sort((a, b) => (a.permission === "denied" ? 0 : 1) - (b.permission === "denied" ? 0 : 1) || a.name.localeCompare(b.name, "pt-BR"));
+}
+
+/** Sinal do app do promotor: online, permissão de localização e (se permitida) a posição atual. */
+export async function promoterHeartbeat(promoterId: string, i: { permission: string; lat?: number | null; lng?: number | null; accuracy?: number | null }) {
+  const db = await getDb();
+  const now = new Date();
+  const permission = ["granted", "denied", "prompt", "unsupported"].includes(i.permission) ? i.permission : null;
+  const validPos = typeof i.lat === "number" && typeof i.lng === "number" && Math.abs(i.lat) <= 90 && Math.abs(i.lng) <= 180 && !(i.lat === 0 && i.lng === 0);
+  await db
+    .update(s.users)
+    .set({
+      lastSeenAt: now,
+      ...(permission ? { geoPermission: permission, geoCheckedAt: now } : {}),
+      ...(validPos ? { lastLat: i.lat!, lastLng: i.lng!, lastAccuracyM: typeof i.accuracy === "number" && Number.isFinite(i.accuracy) ? Math.round(i.accuracy) : null, lastGeoAt: now } : {}),
+    })
+    .where(eq(s.users.id, promoterId));
 }

@@ -8,6 +8,9 @@ import { getDb, schema as s } from "@/server/db";
 import { canSeePromoter } from "@/server/scope";
 import { getDayBoard, filterOptions, summarizePromoters, PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TONE } from "@/server/operations";
 import { listVisits } from "@/server/history";
+import { workTimes } from "@/server/work-time";
+import { fmtClock, fmtMinutes, type Stat } from "@/lib/work-time";
+import { KpiCard } from "../../_components/widgets";
 import { parseFilters } from "@/lib/filters";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, EMPLOYMENT_LABEL, STOP_BUCKET_LABEL, STOP_BUCKET_TONE, VISIT_STATUS_LABEL, VISIT_STATUS_TONE } from "@/lib/domain";
 import { addDays, fmtDate, fmtLongDate, fmtTime } from "@/lib/dates";
@@ -34,6 +37,7 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
     listVisits(scope, { ...f, from, to, promoter: id }),
     filterOptions(scope),
   ]);
+  const work = (await workTimes(scope, from, to, id)).get(id) ?? null;
   const summary = summarizePromoters(board)[0];
   const [manager] = p.managerId ? await db.select({ name: s.users.name }).from(s.users).where(eq(s.users.id, p.managerId)) : [];
 
@@ -50,6 +54,77 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
         subtitle={[p.employment ? EMPLOYMENT_LABEL[p.employment] : null, p.region, p.internalCode, manager ? `gestor: ${manager.name}` : null, p.status === "inactive" ? "inativo" : null].filter(Boolean).join(" · ")}
       />
       <FilterBar range={{ from, to }} fields={["period", "brand"]} options={options} />
+
+      <SectionCard
+        title={`Tempo de trabalho · ${fmtDate(from)} a ${fmtDate(to)}`}
+        subtitle="Calculado pelos horários de entrada e saída de cada loja registrados no aplicativo. Ajuste o período no filtro acima."
+        className="mb-6"
+        bodyClass="px-5 pb-5"
+      >
+        {work && work.days.length ? (
+          <>
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              <KpiCard label="Horas trabalhadas" value={fmtMinutes(work.shiftMinutes)} sub={`${work.days.length} dia(s) · ${fmtMinutes(work.storeMinutes)} dentro das lojas`} />
+              <KpiCard label="Tempo médio em cada loja" value={fmtMinutes(work.store.avg)} sub={`mín. ${fmtMinutes(work.store.min)} · máx. ${fmtMinutes(work.store.max)}`} />
+              <KpiCard label="Tempo médio entre lojas" value={fmtMinutes(work.travel.avg)} sub={`mín. ${fmtMinutes(work.travel.min)} · máx. ${fmtMinutes(work.travel.max)}`} />
+              <KpiCard label="Jornada média" value={`${fmtClock(work.start.avg)} às ${fmtClock(work.end.avg)}`} sub={`${fmtMinutes(work.shift.avg)} por dia`} tone={work.openForgotten ? "danger" : undefined} />
+            </div>
+            <Table className="mt-4">
+              <thead>
+                <tr>
+                  <Th>Indicador</Th>
+                  <Th align="right">Média</Th>
+                  <Th align="right">Mínimo</Th>
+                  <Th align="right">Máximo</Th>
+                </tr>
+              </thead>
+              <tbody>
+                <StatRow label="Tempo em cada loja" s={work.store} f={fmtMinutes} />
+                <StatRow label="Tempo de uma loja a outra" s={work.travel} f={fmtMinutes} />
+                <StatRow label="Horário em que pega o serviço (1ª loja)" s={work.start} f={fmtClock} />
+                <StatRow label="Horário em que finaliza a última loja" s={work.end} f={fmtClock} />
+                <StatRow label="Jornada do dia (1ª entrada ao fim da última loja)" s={work.shift} f={fmtMinutes} />
+              </tbody>
+            </Table>
+            <h3 className="font-semibold text-[14px] mt-5 mb-1">Detalhado por dia</h3>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Dia</Th>
+                  <Th align="right">Lojas</Th>
+                  <Th align="right">Início</Th>
+                  <Th align="right">Fim</Th>
+                  <Th align="right">Jornada</Th>
+                  <Th align="right">Em loja</Th>
+                  <Th align="right">Média por loja</Th>
+                  <Th align="right">Deslocamento</Th>
+                  <Th align="right">Média entre lojas</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {work.days.map((d) => (
+                  <tr key={d.date}>
+                    <Td className="whitespace-nowrap">
+                      {fmtDate(d.date)}
+                      {d.openForgotten ? <span className="block text-[11.5px] text-bad font-semibold">visita deixada aberta</span> : null}
+                    </Td>
+                    <Td align="right">{d.visits}</Td>
+                    <Td align="right" className="tnum">{fmtClock(d.firstStart)}</Td>
+                    <Td align="right" className="tnum">{fmtClock(d.lastEnd)}</Td>
+                    <Td align="right" className="tnum font-semibold">{fmtMinutes(d.shiftMinutes || null)}</Td>
+                    <Td align="right" className="tnum">{fmtMinutes(d.storeMinutes || null)}</Td>
+                    <Td align="right" className="tnum">{fmtMinutes(d.avgStore)}</Td>
+                    <Td align="right" className="tnum">{fmtMinutes(d.travelMinutes || null)}</Td>
+                    <Td align="right" className="tnum">{fmtMinutes(d.avgTravel)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </>
+        ) : (
+          <EmptyState title="Nenhuma visita neste período" />
+        )}
+      </SectionCard>
 
       <SectionCard title={<span className="first-letter:uppercase inline-block">Roteiro de {fmtLongDate(to)}</span>} subtitle={summary ? `${summary.completed} de ${summary.scheduled} loja(s) concluída(s) · ${summary.attendancesDone}/${summary.attendancesTotal} marca(s)` : undefined}>
         {board.stops.length ? (
@@ -169,5 +244,16 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
         )}
       </SectionCard>
     </>
+  );
+}
+
+function StatRow({ label, s, f }: { label: string; s: Stat; f: (v: number | null) => string }) {
+  return (
+    <tr>
+      <Td>{label}</Td>
+      <Td align="right" className="tnum font-semibold">{f(s.avg)}</Td>
+      <Td align="right" className="tnum">{f(s.min)}</Td>
+      <Td align="right" className="tnum">{f(s.max)}</Td>
+    </tr>
   );
 }
