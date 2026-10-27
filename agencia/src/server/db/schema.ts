@@ -33,6 +33,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Severity } from "../../lib/validity";
+import type { ScopeAnswer, ScopeSection } from "../../lib/scope-forms";
 import type { BillingStatus, ContactStatus, DocStatus, PaymentStatus, ReceiptStatus, TastingFileKind, TastingStatus } from "../../lib/tasting";
 import type {
   AttendanceStatus,
@@ -1057,3 +1058,52 @@ export const fixedExpenses = pgTable(
   },
   (t) => [index("fixed_expenses_agency_idx").on(t.agencyId, t.startMonth)],
 );
+
+/**
+ * Escopos de serviço da MCX para potenciais clientes (fora das agências).
+ * O cliente abre /escopo/<token> sem login; só a equipe MCX cria e vê.
+ */
+export const scopeForms = pgTable(
+  "scope_forms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Parte secreta do link enviado ao cliente. */
+    token: text("token").notNull(),
+    clientName: text("client_name").notNull(),
+    title: text("title").notNull(),
+    intro: text("intro"),
+    details: text("details"),
+    closingText: text("closing_text"),
+    sections: jsonb("sections").$type<ScopeSection[]>().notNull().default([]),
+    archivedAt: ts("archived_at"),
+    ...timestamps,
+    ...authorship,
+  },
+  (t) => [uniqueIndex("scope_forms_token_uq").on(t.token)],
+);
+
+/** Resposta do cliente, com os itens congelados como estavam no envio. */
+export const scopeResponses = pgTable(
+  "scope_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    formId: uuid("form_id").notNull().references(() => scopeForms.id),
+    answers: jsonb("answers").$type<ScopeAnswer[]>().notNull(),
+    generalNote: text("general_note"),
+    signerName: text("signer_name").notNull(),
+    signerRole: text("signer_role").notNull(),
+    signerEmail: text("signer_email"),
+    /** Título, introdução e texto final como o cliente viu. */
+    snapshot: jsonb("snapshot").$type<{ title: string; intro: string | null; details: string | null; closingText: string | null }>().notNull(),
+    userAgent: text("user_agent"),
+    submittedAt: ts("submitted_at").notNull().defaultNow(),
+    /** Preenchido quando a MCX reabre o escopo para uma nova resposta. */
+    supersededAt: ts("superseded_at"),
+  },
+  (t) => [
+    index("scope_responses_form_idx").on(t.formId, t.submittedAt),
+    // Uma resposta válida por escopo: dois envios ao mesmo tempo não duplicam.
+    uniqueIndex("scope_responses_current_uq").on(t.formId).where(sql`superseded_at is null`),
+  ],
+);
+

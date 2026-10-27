@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
+  ClipboardCheck,
   Handshake,
   ArrowLeftRight,
   Boxes,
@@ -85,6 +86,7 @@ const SETTINGS: NavItem[] = [
 const MCX_NAV: NavItem[] = [
   { href: "/painel/mcx", label: "Visão geral (todas)", icon: Globe2 },
   { href: "/painel/mcx/agencias", label: "Agências", icon: Building },
+  { href: "/painel/mcx/escopos", label: "Escopos de clientes", icon: ClipboardCheck },
   { href: "/painel/mcx/armazenamento", label: "Armazenamento", icon: HardDrive },
   { href: "/painel/mcx/equipe", label: "Equipe MCX", icon: UserCog },
 ];
