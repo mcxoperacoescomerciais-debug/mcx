@@ -9,6 +9,9 @@ import { attendanceDisplayStatus, isVisitDirty, pendingCount, refreshAll, refres
 import { go, useCatalog, useLocal } from "../_lib/hooks";
 import type { PromoterHistoryItem } from "@/lib/sync-types";
 import { BottomTabs, Notice, Screen, Sheet, toast, TopBar } from "./primitives";
+import { ImprovementForm } from "@/components/improvement-form";
+import { listMyImprovementsAction } from "@/app/_actions/improvements";
+import { IMPROVEMENT_STATUS_LABEL, IMPROVEMENT_STATUS_TONE, type ImprovementStatus } from "@/lib/improvements";
 
 export function HistoryScreen() {
   const local = useLocal();
@@ -180,6 +183,8 @@ export function ProfileScreen() {
           </Button>
         </section>
 
+        <ImprovementSection online={local.sync.online} />
+
         <Button variant="ghost" size="lg" className="w-full text-bad" onClick={() => (pending ? setLogoutOpen(true) : leave())}>
           <LogOut className="size-5" /> Sair
         </Button>
@@ -196,5 +201,55 @@ export function ProfileScreen() {
       </Sheet>
       <BottomTabs active="perfil" />
     </Screen>
+  );
+}
+
+type MyImprovement = { id: string; title: string; status: ImprovementStatus; reply: string | null; createdAt: string };
+
+/** Sugestão de melhoria do promotor (precisa de internet) e as respostas da MCX. */
+function ImprovementSection({ online }: { online: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [mine, setMine] = useState<MyImprovement[] | null>(null);
+  const load = () => {
+    listMyImprovementsAction()
+      .then(setMine)
+      .catch(() => setMine(null));
+  };
+  useEffect(() => {
+    if (open && online) load();
+  }, [open, online]);
+  return (
+    <section className="bg-surface border border-line rounded-2xl p-4">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between text-left" aria-expanded={open}>
+        <span>
+          <span className="block font-semibold text-[15px]">Sugerir melhoria</span>
+          <span className="block text-[13px] text-muted">Algo no app poderia ser melhor? Conte para a MCX.</span>
+        </span>
+        <ChevronRight className={`size-5 text-muted transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open ? (
+        <div className="mt-3 space-y-4">
+          {online ? null : <Notice tone="bad" icon={<WifiOff className="size-5" />}>Sem sinal agora. A sugestão precisa de internet para ser enviada.</Notice>}
+          <ImprovementForm origin="App do promotor" large onSent={load} />
+          {mine?.length ? (
+            <div>
+              <h3 className="font-semibold text-[14px] mb-1.5">Suas sugestões</h3>
+              <ul className="space-y-2">
+                {mine.map((m) => (
+                  <li key={m.id} className="rounded-xl border border-line p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-[14px]">{m.title}</p>
+                      <StatusBadge tone={IMPROVEMENT_STATUS_TONE[m.status]} size="sm">{IMPROVEMENT_STATUS_LABEL[m.status]}</StatusBadge>
+                    </div>
+                    <p className="text-[12px] text-muted mt-0.5">{fmtAgo(m.createdAt)}</p>
+                    {m.reply ? <p className="mt-2 text-[13.5px] bg-subtle rounded-lg px-3 py-2 whitespace-pre-line">MCX: {m.reply}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }

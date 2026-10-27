@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
   ClipboardCheck,
+  Lightbulb,
   Handshake,
   ArrowLeftRight,
   Boxes,
@@ -87,6 +88,7 @@ const MCX_NAV: NavItem[] = [
   { href: "/painel/mcx", label: "Visão geral (todas)", icon: Globe2 },
   { href: "/painel/mcx/agencias", label: "Agências", icon: Building },
   { href: "/painel/mcx/escopos", label: "Escopos de clientes", icon: ClipboardCheck },
+  { href: "/painel/mcx/melhorias", label: "Melhorias sugeridas", icon: Lightbulb },
   { href: "/painel/mcx/armazenamento", label: "Armazenamento", icon: HardDrive },
   { href: "/painel/mcx/equipe", label: "Equipe MCX", icon: UserCog },
 ];
@@ -256,6 +258,9 @@ export function PanelShell({
       <div className="flex-1 overflow-y-auto">
         <NavLinks role={user.role} fullScope={fullScope} mcx={mcx} perms={allowed} owner={owner} onNavigate={onNavigate} />
       </div>
+      <ul className="mb-2">
+        <NavItemLink item={{ href: "/painel/melhorias", label: "Sugerir melhoria", icon: Lightbulb }} active={pathname === "/painel/melhorias"} onNavigate={onNavigate} />
+      </ul>
       <UserBox name={user.name} role={user.role} scopeNote={scopeNote} logout={logout} />
       <McxFooter className="mt-3" />
     </>

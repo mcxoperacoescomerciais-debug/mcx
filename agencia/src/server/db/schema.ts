@@ -34,6 +34,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { Severity } from "../../lib/validity";
 import type { ScopeAnswer, ScopeSection } from "../../lib/scope-forms";
+import type { AnalysisStatus, ImprovementAnalysis, ImprovementStatus } from "../../lib/improvements";
 import type { BillingStatus, ContactStatus, DocStatus, PaymentStatus, ReceiptStatus, TastingFileKind, TastingStatus } from "../../lib/tasting";
 import type {
   AttendanceStatus,
@@ -1107,3 +1108,29 @@ export const scopeResponses = pgTable(
   ],
 );
 
+/** Melhorias sugeridas por qualquer usuário; a MCX avalia com a análise do Claude. */
+export const improvementRequests = pgTable(
+  "improvement_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    /** Nome e perfil como estavam no envio (o usuário pode mudar depois). */
+    userName: text("user_name").notNull(),
+    userRole: text("user_role").notNull(),
+    /** Tela de onde a pessoa enviou (ajuda a entender o contexto). */
+    origin: text("origin"),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    status: text("status").$type<ImprovementStatus>().notNull().default("new"),
+    /** Resposta da MCX, visível para quem pediu. */
+    reply: text("reply"),
+    analysisStatus: text("analysis_status").$type<AnalysisStatus>().notNull().default("pending"),
+    analysis: jsonb("analysis").$type<ImprovementAnalysis>(),
+    analysisError: text("analysis_error"),
+    analyzedAt: ts("analyzed_at"),
+    notifiedAt: ts("notified_at"),
+    ...timestamps,
+  },
+  (t) => [index("improvement_requests_created_idx").on(t.createdAt), index("improvement_requests_user_idx").on(t.userId, t.createdAt)],
+);
