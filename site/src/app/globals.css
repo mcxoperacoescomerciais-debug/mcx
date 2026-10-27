@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/*
+ * Tokens de design da MCX. As cores saem da logo oficial: o azul-marinho do
+ * fundo (#000D36) e o prateado das letras. Mude aqui para alterar o site todo.
+ */
+@theme {
+  --color-navy-950: #00092a;
+  --color-navy-900: #000d36;
+  --color-navy-800: #0b1b4d;
+  --color-navy-700: #18295f;
+  --color-navy-600: #2d3f78;
+
+  --color-prata-100: #eef0ef;
+  --color-prata-200: #e0e4e2;
+  --color-prata-300: #c3cad3;
+  --color-prata-400: #9aa4b8;
+
+  /* Azul de apoio para rótulos, ícones e foco (contraste AA sobre branco). */
+  --color-aco: #34508f;
+
+  --color-papel: #f6f5f1;
+  --color-tinta: #0e1530;
+  --color-tinta-suave: #48506a;
+  --color-linha: #e3e2dc;
+  --color-linha-forte: #c9ccd4;
+  --color-erro: #b42318;
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-cormorant), Georgia, "Times New Roman", serif;
+
+  --animate-subir: subir 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  @keyframes subir {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 72px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-navy-950);
+  color: var(--color-tinta);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-navy-900);
+  color: var(--color-prata-100);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
