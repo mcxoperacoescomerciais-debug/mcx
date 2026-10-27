@@ -16,8 +16,8 @@ export function Rodape({ base = "" }: { base?: string }) {
         <div>
           <Image src={site.logo.claraSobreEscuro} alt={site.logo.alt} width={480} height={402} className="h-28 w-auto" />
           <p className="mt-6 max-w-sm leading-relaxed">
-            Soluções para operações comerciais, promotoria e execução no ponto de venda, além de suporte administrativo e
-            financeiro.
+            Suporte à operação e à promotoria, rotinas administrativas e financeiras e sistemas personalizados para empresas
+            de qualquer área.
           </p>
         </div>
 

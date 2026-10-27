@@ -1,6 +1,6 @@
 # Site institucional — MCX Operações Comerciais
 
-Site de uma página que apresenta as duas frentes da MCX: **operações comerciais e promotoria** e **serviços administrativos e financeiros**. O contato principal é o WhatsApp oficial.
+Site de uma página que apresenta as três frentes da MCX: **suporte à operação e promotoria**, **administrativo e financeiro** e **tecnologia (sistemas personalizados)**. O contato principal é o WhatsApp oficial.
 
 - **Stack:** Next.js 16 (exportação estática) + React 19 + Tailwind CSS 4 + ícones lucide-react.
 - **Sem backend e sem banco de dados.** `npm run build` gera a pasta `out/` com HTML, CSS e imagens, que pode ser publicada em qualquer hospedagem de site estático.

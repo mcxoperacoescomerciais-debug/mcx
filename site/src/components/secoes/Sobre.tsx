@@ -16,7 +16,7 @@ export function Sobre() {
         </div>
 
         <div className="flex flex-col justify-end gap-4">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-tinta-suave">Duas frentes de atuação</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-tinta-suave">Três frentes de atuação</p>
           {sobre.frentes.map((f, i) => (
             <div key={f.titulo} className="flex gap-5 rounded-3xl border border-linha bg-white p-6 sm:p-7">
               <span className="font-display text-4xl leading-none text-prata-400" aria-hidden="true">

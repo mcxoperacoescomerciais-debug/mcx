@@ -2,10 +2,9 @@ import { Info } from "lucide-react";
 import { BotaoWhatsApp } from "@/components/BotaoWhatsApp";
 import { Icone } from "@/components/Icone";
 import { TituloSecao } from "@/components/TituloSecao";
-import { avisoEscopo, grupoAdministrativo, grupoOperacoes, type Solucao } from "@/content/conteudo";
+import { PainelIlustrativo } from "@/components/PainelIlustrativo";
+import { avisoEscopo, gruposSolucoes, type GrupoSolucoes, type Solucao } from "@/content/conteudo";
 import { mensagemSolucao } from "@/lib/whatsapp";
-
-type Grupo = { rotulo: string; titulo: string; descricao: string; solucoes: Solucao[] };
 
 function CartaoSolucao({ solucao, escuro }: { solucao: Solucao; escuro: boolean }) {
   return (
@@ -42,7 +41,7 @@ function CartaoSolucao({ solucao, escuro }: { solucao: Solucao; escuro: boolean 
   );
 }
 
-function BlocoGrupo({ grupo, escuro }: { grupo: Grupo; escuro: boolean }) {
+function BlocoGrupo({ grupo, escuro }: { grupo: GrupoSolucoes; escuro: boolean }) {
   const idTitulo = `grupo-${grupo.rotulo.replace(/\s+/g, "-").toLowerCase()}`;
   return (
     <div
@@ -61,11 +60,27 @@ function BlocoGrupo({ grupo, escuro }: { grupo: Grupo; escuro: boolean }) {
         </div>
         <p className={`max-w-sm ${escuro ? "text-prata-300" : "text-tinta-suave"}`}>{grupo.descricao}</p>
       </div>
-      <ul className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {grupo.solucoes.map((s) => (
-          <CartaoSolucao key={s.titulo} solucao={s} escuro={escuro} />
-        ))}
-      </ul>
+      {grupo.painel ? (
+        <div className="mt-8 grid grid-cols-1 items-center gap-10 lg:grid-cols-[.85fr_1.15fr] lg:gap-8">
+          <PainelIlustrativo
+            rotulo={grupo.painel.rotulo}
+            titulo={grupo.painel.titulo}
+            itens={grupo.painel.itens}
+            descricao={`Exemplo ilustrativo do acompanhamento: ${grupo.painel.itens.map((i) => i.titulo).join(", ")}. Não representa dados de clientes.`}
+          />
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {grupo.solucoes.map((s) => (
+              <CartaoSolucao key={s.titulo} solucao={s} escuro={escuro} />
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <ul className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {grupo.solucoes.map((s) => (
+            <CartaoSolucao key={s.titulo} solucao={s} escuro={escuro} />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -77,12 +92,13 @@ export function Solucoes() {
         <TituloSecao
           id="solucoes-titulo"
           rotulo="Nossas soluções"
-          titulo="Duas frentes para apoiar a sua operação."
-          descricao="Do ponto de venda à rotina administrativa, a MCX estrutura o suporte de acordo com o que a sua empresa precisa."
+          titulo="Três frentes para apoiar a sua empresa."
+          descricao="Da gestão das equipes de campo à rotina financeira e aos sistemas, a MCX estrutura o suporte de acordo com o que a sua empresa precisa."
         />
         <div className="mt-14 space-y-6">
-          <BlocoGrupo grupo={grupoOperacoes} escuro />
-          <BlocoGrupo grupo={grupoAdministrativo} escuro={false} />
+          {gruposSolucoes.map((g, i) => (
+            <BlocoGrupo key={g.rotulo} grupo={g} escuro={i % 2 === 0} />
+          ))}
         </div>
         <p className="mt-8 flex max-w-3xl gap-3 text-[15px] leading-relaxed text-tinta-suave">
           <Info className="mt-0.5 size-5 shrink-0 text-aco" aria-hidden="true" />

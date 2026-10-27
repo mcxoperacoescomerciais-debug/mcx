@@ -75,10 +75,10 @@ const logoOg = await sharp(ORIGEM).extract(AREA_COMPLETA).resize({ height: 330 }
 const textoOg = Buffer.from(`
 <svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
   <line x1="600" y1="190" x2="600" y2="440" stroke="#8C96A8" stroke-width="1"/>
-  <text x="650" y="285" font-family="Georgia, serif" font-size="44" fill="#E4E7E5">Soluções para a sua</text>
-  <text x="650" y="340" font-family="Georgia, serif" font-size="44" fill="#E4E7E5">operação comercial</text>
-  <text x="650" y="400" font-family="Arial, sans-serif" font-size="22" fill="#A9B2C3">Promotoria e ponto de venda</text>
-  <text x="650" y="432" font-family="Arial, sans-serif" font-size="22" fill="#A9B2C3">Administrativo e financeiro</text>
+  <text x="650" y="285" font-family="Georgia, serif" font-size="44" fill="#E4E7E5">Um braço a mais</text>
+  <text x="650" y="340" font-family="Georgia, serif" font-size="44" fill="#E4E7E5">para a sua empresa</text>
+  <text x="650" y="400" font-family="Arial, sans-serif" font-size="22" fill="#A9B2C3">Operação · Administrativo e financeiro</text>
+  <text x="650" y="432" font-family="Arial, sans-serif" font-size="22" fill="#A9B2C3">Sistemas personalizados</text>
 </svg>`);
 await sharp({ create: { width: 1200, height: 630, channels: 3, background: NAVY } })
   .composite([

@@ -52,7 +52,7 @@ export const site = {
   seo: {
     titulo: "MCX Operações Comerciais | Soluções para sua operação",
     descricao:
-      "Conheça as soluções da MCX Operações Comerciais em promotoria, execução no ponto de venda e suporte administrativo e financeiro.",
+      "Conheça as soluções da MCX Operações Comerciais em suporte à operação e à promotoria, rotinas administrativas e financeiras e sistemas personalizados.",
     imagemCompartilhamento: "/og-image.png",
   },
 
