@@ -5,7 +5,7 @@
  */
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { SessionUser } from "./auth";
 import { sendCallMeBot } from "./whatsapp-alert";
@@ -69,6 +69,14 @@ export async function listImprovements(user: SessionUser, status: ImprovementSta
     .where(status ? eq(s.improvementRequests.status, status) : undefined)
     .orderBy(desc(s.improvementRequests.createdAt))
     .limit(200);
+}
+
+/** Sugestões recebidas que a MCX ainda não avaliou (contador do menu). */
+export async function countImprovementsToReview(user: SessionUser): Promise<number> {
+  if (!user.platform) return 0;
+  const db = await getDb();
+  const [row] = await db.select({ n: count() }).from(s.improvementRequests).where(eq(s.improvementRequests.status, "new"));
+  return row?.n ?? 0;
 }
 
 export async function getImprovement(user: SessionUser, id: string) {

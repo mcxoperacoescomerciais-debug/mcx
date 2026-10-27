@@ -53,6 +53,8 @@ interface NavItem {
   fullScope?: boolean;
   /** Outras rotas que pertencem a este item (detalhes, abas). */
   also?: string[];
+  /** Quantidade em destaque ao lado do nome (ex.: itens a revisar). */
+  badge?: number;
 }
 
 /** Um assunto por página: o gestor escolhe o que quer analisar. */
@@ -88,7 +90,7 @@ const MCX_NAV: NavItem[] = [
   { href: "/painel/mcx", label: "Visão geral (todas)", icon: Globe2 },
   { href: "/painel/mcx/agencias", label: "Agências", icon: Building },
   { href: "/painel/mcx/escopos", label: "Escopos de clientes", icon: ClipboardCheck },
-  { href: "/painel/mcx/melhorias", label: "Melhorias sugeridas", icon: Lightbulb },
+  { href: "/painel/mcx/melhorias", label: "Sugestões de melhorias", icon: Lightbulb },
   { href: "/painel/mcx/armazenamento", label: "Armazenamento", icon: HardDrive },
   { href: "/painel/mcx/equipe", label: "Equipe MCX", icon: UserCog },
 ];
@@ -108,18 +110,23 @@ function NavItemLink({ item, active, onNavigate, compact }: { item: NavItem; act
         aria-current={active ? "page" : undefined}
         className={clsx(
           "flex items-center gap-2.5 px-3 rounded-lg font-medium transition-colors",
-          compact ? "h-8 text-[13px]" : "h-9 text-[13.5px]",
+          compact ? "min-h-8 py-1 text-[13px]" : "min-h-9 py-1.5 text-[13.5px]",
           active ? "bg-white/12 text-white" : "text-brand-100/80 hover:bg-white/6 hover:text-white",
         )}
       >
         <Icon className="size-4 shrink-0" />
-        {item.label}
+        <span className="min-w-0 flex-1 leading-tight">{item.label}</span>
+        {item.badge ? (
+          <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-amber-400 text-brand-900 text-[11px] font-bold grid place-items-center" aria-label={`${item.badge} a revisar`}>
+            {item.badge > 99 ? "99+" : item.badge}
+          </span>
+        ) : null}
       </Link>
     </li>
   );
 }
 
-function NavLinks({ role, fullScope, mcx, perms, owner, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; perms: string[] | null; owner: boolean; onNavigate?: () => void }) {
+function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; perms: string[] | null; owner: boolean; mcxBadges: Record<string, number>; onNavigate?: () => void }) {
   const pathname = usePathname();
   const allowed = (i: NavItem) => {
     if (perms) {
@@ -135,7 +142,7 @@ function NavLinks({ role, fullScope, mcx, perms, owner, onNavigate }: { role: Ro
         <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-200/60">MCX</p>
         <ul className="space-y-0.5">
           {MCX_NAV.filter((i) => owner || i.href !== "/painel/mcx/equipe").map((item) => (
-            <NavItemLink key={item.href} item={item} active={isActive(pathname, item)} onNavigate={onNavigate} />
+            <NavItemLink key={item.href} item={{ ...item, badge: mcxBadges[item.href] }} active={isActive(pathname, item)} onNavigate={onNavigate} />
           ))}
         </ul>
       </nav>
@@ -190,6 +197,8 @@ function UserBox({ name, role, scopeNote, logout }: { name: string; role: Role; 
 
 interface PlatformProps {
   agencies: { id: string; name: string; status: "active" | "suspended" }[];
+  /** Sugestões de melhoria recebidas e ainda não avaliadas (contador no menu MCX). */
+  improvementsToReview: number;
   enter: (fd: FormData) => Promise<void>;
   leave: () => Promise<void>;
 }
@@ -256,7 +265,15 @@ export function PanelShell({
     <>
       {platform ? <AgencySwitcher platform={platform} current={mcx ? null : agency?.id ?? null} onNavigate={onNavigate} /> : null}
       <div className="flex-1 overflow-y-auto">
-        <NavLinks role={user.role} fullScope={fullScope} mcx={mcx} perms={allowed} owner={owner} onNavigate={onNavigate} />
+        <NavLinks
+          role={user.role}
+          fullScope={fullScope}
+          mcx={mcx}
+          perms={allowed}
+          owner={owner}
+          mcxBadges={{ "/painel/mcx/melhorias": platform?.improvementsToReview ?? 0 }}
+          onNavigate={onNavigate}
+        />
       </div>
       <ul className="mb-2">
         <NavItemLink item={{ href: "/painel/melhorias", label: "Sugerir melhoria", icon: Lightbulb }} active={pathname === "/painel/melhorias"} onNavigate={onNavigate} />

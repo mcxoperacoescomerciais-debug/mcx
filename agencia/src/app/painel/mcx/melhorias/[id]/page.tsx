@@ -21,7 +21,7 @@ export default async function McxImprovementPage({ params }: PageProps<"/painel/
   return (
     <>
       <PageHeader
-        eyebrow="MCX · Melhorias sugeridas"
+        eyebrow="MCX · Sugestões de melhorias"
         title={r.title}
         subtitle={`${r.userName} (${r.userRole}) · ${agencyName} · ${fmtDateTime(r.createdAt)}${r.origin ? ` · enviada pelo ${r.origin}` : ""}`}
         actions={<LinkButton href="/painel/mcx/melhorias" variant="secondary">Voltar</LinkButton>}

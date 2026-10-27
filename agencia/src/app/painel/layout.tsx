@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { effectivePermissions, PANELS, panelForPath } from "@/lib/permissions";
 import { activeAgencyId, getScope, logout, requireRole, STAFF } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
+import { countImprovementsToReview } from "@/server/improvements";
 import { asc, eq, inArray } from "drizzle-orm";
 import { PanelShell } from "./_components/shell";
 import { enterAgencyAction, leaveAgencyAction } from "./mcx/actions";
@@ -30,6 +31,7 @@ export default async function PanelLayout({ children }: LayoutProps<"/painel">) 
   const agencies = user.platform
     ? await db.select({ id: s.agencies.id, name: s.agencies.name, status: s.agencies.status }).from(s.agencies).where(eq(s.agencies.kind, "client")).orderBy(asc(s.agencies.name))
     : [];
+  const improvementsToReview = await countImprovementsToReview(user);
 
   let scopeNote: string | null = null;
   if (scope?.brandIds) {
@@ -42,7 +44,7 @@ export default async function PanelLayout({ children }: LayoutProps<"/painel">) 
     <PanelShell
       user={{ name: user.name, role: user.role }}
       agency={scope ? { id: scope.agencyId, name: scope.agencyName, logoUrl: scope.agencyLogoUrl } : null}
-      platform={user.platform ? { agencies, enter: enterAgencyAction, leave: leaveAgencyAction } : null}
+      platform={user.platform ? { agencies, improvementsToReview, enter: enterAgencyAction, leave: leaveAgencyAction } : null}
       fullScope={scope ? scope.brandIds === null : true}
       allowed={allowed ? [...allowed] : null}
       owner={user.platformRole === "owner"}

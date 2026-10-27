@@ -8,7 +8,7 @@ import { ESFORCO_LABEL, FAZ_SENTIDO_LABEL, IMPACTO_LABEL, IMPROVEMENT_STATUS_LAB
 import { EmptyState, PageHeader, StatusBadge, buttonClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../_components/widgets";
 
-export const metadata: Metadata = { title: "Melhorias sugeridas" };
+export const metadata: Metadata = { title: "Sugestões de melhorias" };
 
 const FILTERS: (ImprovementStatus | null)[] = [null, "new", "reviewing", "approved", "declined", "done"];
 
@@ -23,7 +23,7 @@ export default async function McxImprovementsPage({ searchParams }: PageProps<"/
     <>
       <PageHeader
         eyebrow="MCX · plataforma"
-        title="Melhorias sugeridas"
+        title="Sugestões de melhorias"
         subtitle="Sugestões enviadas por promotores, agências e equipe MCX. Cada uma chega com a análise do Claude; a decisão é da MCX."
       />
       <div className="mb-4 flex flex-wrap gap-2">
