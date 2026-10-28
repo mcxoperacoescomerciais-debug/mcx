@@ -109,3 +109,15 @@ export async function storageReportNowAction(_: FormState, _fd: FormData): Promi
   const r = await runStorageCheck(new Date(), { force: true });
   return r.sent.length ? { ok: true, message: "Aviso enviado. Confira o WhatsApp." } : { ok: false, error: "Nada enviado: ligue o aviso, salve e confira o número e a chave." };
 }
+
+/** Exclui a agência e tudo o que é dela (nome digitado para confirmar). */
+export async function deleteAgencyAction(_: FormState, fd: FormData): Promise<FormState> {
+  const { deleteAgency } = await import("@/server/agency-delete");
+  const id = str(fd, "id");
+  const r = await deleteAgency(await requirePlatform(), id, str(fd, "confirm"));
+  if (!r.ok) return r;
+  const jar = await cookies();
+  if (jar.get(ACTIVE_AGENCY_COOKIE)?.value === id) jar.delete(ACTIVE_AGENCY_COOKIE);
+  revalidatePath("/painel", "layout");
+  redirect("/painel/mcx/agencias");
+}

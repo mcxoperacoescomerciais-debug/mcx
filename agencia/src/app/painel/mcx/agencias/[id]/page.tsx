@@ -11,7 +11,7 @@ import { fmtAgo } from "@/lib/dates";
 import { Badge, PageHeader, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
-import { agencyLogoAction, agencyModulesAction, enterAgencyAction, updateAgencyAction } from "../../actions";
+import { agencyLogoAction, agencyModulesAction, deleteAgencyAction, enterAgencyAction, updateAgencyAction } from "../../actions";
 import { mergeSettings } from "@/lib/settings";
 
 export const metadata: Metadata = { title: "Agência" };
@@ -132,6 +132,15 @@ export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agen
               ) : null}
             </tbody>
           </Table>
+        </SectionCard>
+
+        <SectionCard title="Excluir agência" subtitle="Apaga de vez a agência e tudo o que é dela: usuários, lojas, produtos, visitas, fotos, degustações e financeiro. Não dá para desfazer." bodyClass="px-5 pb-5" className="border-bad/30">
+          <p className="text-[13px] text-ink-2 mb-3">
+            Para só bloquear o acesso sem perder nada, use <strong>Suspensa</strong> acima. Para excluir, digite o nome da agência (<strong>{agency.name}</strong>):
+          </p>
+          <ActionForm action={deleteAgencyAction} hidden={{ id: agency.id }} submitLabel="Excluir agência definitivamente" variant="danger">
+            <input name="confirm" required autoComplete="off" placeholder={agency.name} className={inputClass} aria-label="Nome da agência para confirmar" />
+          </ActionForm>
         </SectionCard>
       </div>
     </>

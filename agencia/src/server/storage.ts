@@ -11,12 +11,14 @@
  * (deleted_at) e o original continua guardado como evidência.
  */
 import "server-only";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 interface StorageDriver {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
+  /** Apaga os arquivos (os que não existem são ignorados). Devolve quantos foram pedidos. */
+  remove(keys: string[]): Promise<number>;
 }
 
 function supabaseDriver(baseUrl: string, serviceKey: string, bucket: string): StorageDriver {
@@ -36,6 +38,17 @@ function supabaseDriver(baseUrl: string, serviceKey: string, bucket: string): St
       if (res.status === 404 || res.status === 400) return null;
       if (!res.ok) throw new Error(`Falha ao ler arquivo (${res.status})`);
       return new Uint8Array(await res.arrayBuffer());
+    },
+    async remove(keys) {
+      for (let i = 0; i < keys.length; i += 500) {
+        const res = await fetch(`${baseUrl}/storage/v1/object/${bucket}`, {
+          method: "DELETE",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ prefixes: keys.slice(i, i + 500) }),
+        });
+        if (!res.ok) throw new Error(`Falha ao apagar arquivos (${res.status}): ${await res.text()}`);
+      }
+      return keys.length;
     },
   };
 }
@@ -58,6 +71,10 @@ function localDriver(root: string): StorageDriver {
       } catch {
         return null;
       }
+    },
+    async remove(keys) {
+      for (const key of keys) await rm(safe(key), { force: true });
+      return keys.length;
     },
   };
 }
