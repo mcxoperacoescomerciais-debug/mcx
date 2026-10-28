@@ -140,9 +140,10 @@ export async function dashboardData(scope: Scope, f: F) {
   // Lojas programadas, atendidas e não atendidas no período.
   const board = await getRangeBoard(scope, { from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, city: f.city });
   const scheduled = board.stops.filter((st) => st.scheduleId);
-  const missed = scheduled.filter((st) => st.bucket === "missed");
+  // Toda loja programada é atendida, em andamento ou não atendida (a que ainda não começou conta como não atendida).
   const done = scheduled.filter((st) => st.bucket === "completed" || st.bucket === "exception");
-  const inProgress = board.stops.filter((st) => st.bucket === "in_progress");
+  const inProgress = scheduled.filter((st) => st.bucket === "in_progress");
+  const missed = scheduled.filter((st) => !done.includes(st) && !inProgress.includes(st));
 
   const checks = byDay.reduce((t, d) => t + d.checks, 0);
   const ruptures = byDay.reduce((t, d) => t + d.ruptures, 0);
