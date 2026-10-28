@@ -189,7 +189,7 @@ export function McxFooter({ variant = "light", className }: { variant?: "light" 
     <div className={clsx("flex items-center justify-center gap-1.5 text-[10.5px] tracking-wide", variant === "light" ? "text-brand-200/60" : "text-muted", className)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/mcx_logo.png" alt="" className="size-4 rounded-[3px]" />
-      <span>por MCX Operações Comerciais</span>
+      <span>por MCX Soluções Operacionais</span>
     </div>
   );
 }

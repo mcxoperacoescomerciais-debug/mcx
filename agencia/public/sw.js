@@ -11,7 +11,7 @@
  * - Demais APIs: sempre pela rede. Quem trata a falta de sinal é o próprio app
  *   (fila de sincronização no IndexedDB).
  */
-const VERSION = "campo-v8";
+const VERSION = "campo-v9";
 const SHELL_CACHE = `shell-${VERSION}`;
 const STATIC_CACHE = `static-${VERSION}`;
 const MEDIA_CACHE = "media-v1";

@@ -270,7 +270,7 @@ export async function buildLocalPdf(i: LocalPdfInput): Promise<File> {
     doc.setPage(n);
     doc.setFontSize(7);
     doc.setTextColor(...MUTED);
-    doc.text(`Gerado no celular em ${fmtDateTime(new Date().toISOString())} · por MCX Operações Comerciais`, M, 291);
+    doc.text(`Gerado no celular em ${fmtDateTime(new Date().toISOString())} · por MCX Soluções Operacionais`, M, 291);
     doc.text(`Página ${n} de ${pages}`, W - M, 291, { align: "right" });
   }
 

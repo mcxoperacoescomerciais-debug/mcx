@@ -105,7 +105,7 @@ export async function updateImprovement(user: SessionUser, id: string, i: { stat
 
 /* ------------------------- análise e aviso (MCX) ------------------------- */
 
-const SYSTEM_PROMPT = `Você ajuda a equipe da MCX Operações Comerciais a avaliar pedidos de melhoria do MCX Trade, o sistema que a MCX oferece a agências de promotoria.
+const SYSTEM_PROMPT = `Você ajuda a equipe da MCX Soluções Operacionais a avaliar pedidos de melhoria do MCX Trade, o sistema que a MCX oferece a agências de promotoria.
 
 Sobre o MCX Trade:
 - App do promotor no celular (funciona sem sinal e sincroniza depois): roteiro do dia, check-in na loja, atendimento por marca com fotos de antes e depois, estoque, ruptura, validade, avaria, ocorrências e histórico.

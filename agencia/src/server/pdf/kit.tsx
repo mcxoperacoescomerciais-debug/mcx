@@ -89,7 +89,7 @@ export function Footer({ left }: { left: string }) {
   return (
     <View style={base.footer} fixed>
       <Text>{left}</Text>
-      <Text>por MCX Operações Comerciais</Text>
+      <Text>por MCX Soluções Operacionais</Text>
       <Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
     </View>
   );

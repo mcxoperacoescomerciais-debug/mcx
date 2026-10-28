@@ -11,13 +11,14 @@ export default function LoginPage() {
       {/* Fundo: luz suave no alto e o monograma MCX bem apagado, sem disputar com o formulário. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_-10%,#1f6b79_0%,#0c323a_45%,#08242a_100%)]" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img aria-hidden src="/mcx-logo-prata.png" alt="" className="pointer-events-none select-none absolute -right-24 -bottom-16 w-[520px] max-w-none opacity-[0.035]" />
+      <img aria-hidden src="/mcx-monograma-prata.png" alt="" className="pointer-events-none select-none absolute -right-24 -bottom-10 w-[520px] max-w-none opacity-[0.035]" />
 
       <div className="relative flex-1 flex flex-col items-center justify-center px-5 pt-[max(env(safe-area-inset-top),40px)] pb-10">
         <div className="w-full max-w-[400px]">
           <header className="flex flex-col items-center text-center mb-8 animate-rise-slow">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/mcx-logo-prata.png" alt="MCX Operações Comerciais" className="w-[104px] h-auto drop-shadow-[0_6px_18px_rgba(0,0,0,0.35)]" />
+            <img src="/mcx-monograma-prata.png" alt="MCX Soluções Operacionais" className="w-[104px] h-auto drop-shadow-[0_6px_18px_rgba(0,0,0,0.35)]" />
+            <span className="mt-3 text-[9.5px] font-medium uppercase tracking-[0.32em] text-silver-2">Soluções Operacionais</span>
             <h1 className="mt-6 text-[28px] font-semibold tracking-tight leading-none text-white">
               MCX <span className="font-light text-silver">Trade</span>
             </h1>
