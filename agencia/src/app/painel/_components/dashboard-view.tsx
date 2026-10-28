@@ -54,8 +54,22 @@ export function DashboardView({ d, variant, from, to }: { d: DashboardData; vari
       {/* Indicadores principais */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiCard label="Índice de ruptura" value={pct(t.ruptureIndex)} tone={(t.ruptureIndex ?? 0) >= 15 ? "danger" : (t.ruptureIndex ?? 0) >= 8 ? "warning" : "success"} sub={`${t.ruptures} de ${t.checks} SKU(s) verificados`} href={link("/painel/rupturas")} icon={<PackageX className="size-4" />} />
-        <KpiCard label="Ruptura na área de vendas" value={t.salesFloor} tone={t.salesFloor ? "danger" : "success"} sub="Gôndola sem o produto" href={link("/painel/rupturas")} icon={<Store className="size-4" />} />
-        <KpiCard label="Ruptura no estoque" value={t.stockroom} tone={t.stockroom ? "warning" : "success"} sub="Depósito sem o produto" href={link("/painel/rupturas")} icon={<Warehouse className="size-4" />} />
+        <KpiCard
+          label="Lojas em ruptura total"
+          value={t.storesTotalRupture}
+          tone={t.storesTotalRupture ? "danger" : "success"}
+          sub={`sem o produto na gôndola nem no depósito · ${t.storesWithRupture} loja(s) com alguma ruptura`}
+          href={link("/painel/rupturas")}
+          icon={<Store className="size-4" />}
+        />
+        <KpiCard
+          label="Produtos em ruptura"
+          value={t.productsInRupture}
+          tone={t.productsInRupture ? "warning" : "success"}
+          sub={`SKU(s) diferentes · ${t.productsTotalRupture} em ruptura total`}
+          href={link("/painel/rupturas")}
+          icon={<Warehouse className="size-4" />}
+        />
         <KpiCard label="Datas críticas" value={t.critical} tone={t.critical ? "danger" : "success"} sub={`${t.criticalUnits} un · ${t.expired} vencido(s)`} href={link("/painel/validades", { status: "urgent" })} icon={<CalendarClock className="size-4" />} />
         <KpiCard label="Avarias" value={t.damages} tone={t.damages ? "warning" : "success"} sub={`${t.damageUnits} unidade(s)`} href={link("/painel/avarias")} icon={<AlertTriangle className="size-4" />} />
         <KpiCard label="Lojas não atendidas" value={t.storesMissed} tone={t.storesMissed ? "danger" : "success"} sub={`${t.storesDone} de ${t.storesPlanned} atendida(s)${t.storesInProgress ? ` · ${t.storesInProgress} em andamento` : ""}`} href={link("/painel/visitas", { status: "missed" })} />

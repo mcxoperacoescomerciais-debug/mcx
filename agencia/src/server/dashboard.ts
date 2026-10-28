@@ -94,6 +94,20 @@ export async function dashboardData(scope: Scope, f: F) {
   const salesFloor = situations.filter((x) => SALES_FLOOR.includes(x.situation)).reduce((t, x) => t + x.n, 0);
   const stockroom = situations.filter((x) => STOCKROOM.includes(x.situation)).reduce((t, x) => t + x.n, 0);
 
+  // Quantas lojas tiveram ruptura total (nem na gôndola nem no depósito) e quantos produtos diferentes ficaram em ruptura.
+  const [distinct] = (await db
+    .select({
+      storesTotal: sql<number>`count(distinct ${s.visits.storeId}) filter (where ${s.ruptures.situation} = 'total')::int`,
+      storesAny: sql<number>`count(distinct ${s.visits.storeId})::int`,
+      products: sql<number>`count(distinct ${s.ruptures.productId})::int`,
+      productsTotal: sql<number>`count(distinct ${s.ruptures.productId}) filter (where ${s.ruptures.situation} = 'total')::int`,
+    })
+    .from(s.ruptures)
+    .innerJoin(s.attendances, eq(s.attendances.id, s.ruptures.attendanceId))
+    .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+    .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+    .where(and(eq(s.ruptures.agencyId, scope.agencyId), isNull(s.ruptures.deletedAt), ...conds(scope, f)))) as { storesTotal: number; storesAny: number; products: number; productsTotal: number }[];
+
   // Datas críticas (vencido ou crítico) e avarias.
   const validities = (await db
     .select({ severity: s.validities.severity, location: s.validities.location, n: sql<number>`count(*)::int`, units: sql<number>`coalesce(sum(${s.validities.quantity}), 0)::int` })
@@ -141,6 +155,10 @@ export async function dashboardData(scope: Scope, f: F) {
       ruptureIndex: pct(ruptures, checks),
       salesFloor,
       stockroom,
+      storesTotalRupture: distinct?.storesTotal ?? 0,
+      storesWithRupture: distinct?.storesAny ?? 0,
+      productsInRupture: distinct?.products ?? 0,
+      productsTotalRupture: distinct?.productsTotal ?? 0,
       critical: criticalRows.reduce((t, v) => t + v.n, 0),
       criticalUnits: criticalRows.reduce((t, v) => t + v.units, 0),
       expired: validities.filter((v) => v.severity === "expired").reduce((t, v) => t + v.n, 0),
