@@ -11,7 +11,7 @@ import { fmtAgo } from "@/lib/dates";
 
 export function Screen({ children, footer, className }: { children: ReactNode; footer?: ReactNode; className?: string }) {
   return (
-    <div className="min-h-dvh flex flex-col bg-canvas">
+    <div className="min-h-dvh flex flex-col bg-canvas overflow-x-clip">
       <div className={clsx("flex-1 w-full max-w-[560px] mx-auto", footer ? "pb-32" : "pb-24", className)}>{children}</div>
       {footer ? (
         <div className="fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-line pb-safe">

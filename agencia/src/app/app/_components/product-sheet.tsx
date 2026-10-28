@@ -43,6 +43,18 @@ interface CardProps {
   onMore: () => void;
 }
 
+/**
+ * Marca o produto em ruptura (gôndola vazia): ruptura + estoque zero na área de
+ * vendas, e as validades da área de vendas deixam de valer. O mesmo que tocar em
+ * RUPTURA no cartão — usado também para os produtos que ficaram sem marcação.
+ */
+export async function markProductRupture(visitId: string, attendance: LocalAttendance, productId: string) {
+  const stock = attendance.stock[productId];
+  if (!Object.values(attendance.ruptures).some((r) => r.productId === productId)) await toggleRupture(visitId, attendance.id, productId);
+  await saveStock(visitId, attendance.id, { productId, state: "zero", quantity: 0, unit: stock?.unit === "cx" ? "cx" : "un", note: stock?.note ?? null, recordedAt: new Date().toISOString() });
+  for (const v of Object.values(attendance.validities ?? {})) if (v.productId === productId && v.location === "sales_floor") await deleteValidity(visitId, attendance.id, v.id);
+}
+
 /** Cartão do produto na lista de estoque: ruptura/não ruptura e os campos logo abaixo. */
 export function ProductCard({ visitId, visitDate, attendance, product: p, prev, editable, onMore }: CardProps) {
   const stock = attendance.stock[p.id];
@@ -55,10 +67,7 @@ export function ProductCard({ visitId, visitDate, attendance, product: p, prev, 
   const mode = editing ?? savedMode;
 
   async function markRupture() {
-    if (!hasRupture) await toggleRupture(visitId, attendance.id, p.id);
-    await saveStock(visitId, attendance.id, { productId: p.id, state: "zero", quantity: 0, unit: stock?.unit === "cx" ? "cx" : "un", note: stock?.note ?? null, recordedAt: new Date().toISOString() });
-    // Gôndola vazia: validades da área de vendas não valem mais.
-    for (const v of validities) if (v.location === "sales_floor") await deleteValidity(visitId, attendance.id, v.id);
+    await markProductRupture(visitId, attendance, p.id);
     haptic(25);
     toast(`Ruptura: ${p.name}`, "warn");
     setEditing(null);

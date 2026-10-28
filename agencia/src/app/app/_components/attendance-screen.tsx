@@ -26,6 +26,7 @@ import { missingFor } from "../_lib/derive";
 import { Chip, Notice, Screen, Sheet, TextArea, toast, TopBar } from "./primitives";
 import { PhotoCapture, PhotoThumb } from "./photo-capture";
 import { StockStep } from "./stock-step";
+import { markProductRupture } from "./product-sheet";
 import { DamageStep } from "./damage-step";
 import { daysBetween } from "@/lib/dates";
 import { classify, DEFAULT_BANDS, SEVERITY_LABEL } from "@/lib/validity";
@@ -57,6 +58,9 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
     window.scrollTo(0, 0);
   }, [step]);
   const tracked = useMemo(() => (visit && attendance ? cat.trackedProducts(visit.storeId, attendance.brandId) : []), [cat, visit, attendance]);
+  // Produtos sem marcação ao sair do estoque: pergunta se vão como ruptura.
+  const [unmarked, setUnmarked] = useState<{ id: string; name: string }[] | null>(null);
+  const [marking, setMarking] = useState(false);
   // Abriu sem etapa na URL: fixa a etapa inicial, para a tela não pular sozinha ao
   // atingir o mínimo de fotos (o promotor pode tirar quantas quiser antes de avançar).
   const startStep = attendance && brand && !step ? (attendance.status === "in_progress" || attendance.status === "correction_requested" ? firstOpenStep(attendance, brand, 0) : "revisao") : null;
@@ -98,7 +102,18 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             <Button size="xl" variant="secondary" className="w-16 !px-0" aria-label="Etapa anterior" disabled={idx === 0} onClick={() => goStep(STEPS[idx - 1].id)}>
               <ArrowLeft className="size-5" />
             </Button>
-            <Button size="xl" className="flex-1" onClick={() => goStep(STEPS[idx + 1].id)}>
+            <Button
+              size="xl"
+              className="flex-1"
+              onClick={() => {
+                if (current === "estoque" && editable) {
+                  const hasRupture = new Set(Object.values(attendance.ruptures).map((r) => r.productId));
+                  const missing = tracked.filter((p) => !attendance.stock[p.id] && !hasRupture.has(p.id));
+                  if (missing.length) return setUnmarked(missing.map((p) => ({ id: p.id, name: p.name })));
+                }
+                goStep(STEPS[idx + 1].id);
+              }}
+            >
               Próximo: {STEPS[idx + 1].label} <ArrowRight className="size-5" />
             </Button>
           </div>
@@ -106,6 +121,60 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
       }
     >
       <TopBar title={brand.name} subtitle={store?.name} back={`visita/${visitId}`} />
+
+      <Sheet
+        open={Boolean(unmarked)}
+        onClose={() => setUnmarked(null)}
+        title={`${unmarked?.length ?? 0} produto(s) sem marcação`}
+        footer={
+          <div className="flex gap-2">
+            <Button
+              size="xl"
+              variant="secondary"
+              className="flex-1"
+              disabled={marking}
+              onClick={() => {
+                setUnmarked(null);
+                goStep(STEPS[idx + 1].id);
+              }}
+            >
+              Não
+            </Button>
+            <Button
+              size="xl"
+              variant="danger"
+              className="flex-1"
+              disabled={marking}
+              onClick={async () => {
+                setMarking(true);
+                try {
+                  for (const p of unmarked ?? []) await markProductRupture(visitId, attendance, p.id);
+                  haptic(25);
+                  toast(`${unmarked?.length ?? 0} produto(s) marcados como ruptura`, "warn");
+                } finally {
+                  setMarking(false);
+                  setUnmarked(null);
+                }
+                goStep(STEPS[idx + 1].id);
+              }}
+            >
+              {marking ? "Marcando…" : "Sim, ruptura"}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-[15px] text-ink-2">
+          Os produtos abaixo não foram marcados. <strong>Selecionar como ruptura?</strong>
+        </p>
+        <ul className="mt-3 space-y-1.5 text-[14px]">
+          {(unmarked ?? []).map((p) => (
+            <li key={p.id} className="rounded-xl bg-bad-bg/50 px-3 py-2 font-medium">
+              {p.name}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-[13px] text-muted">“Não” segue para a próxima etapa sem marcar; eles continuam pendentes.</p>
+      </Sheet>
 
       {/* Indicador de progresso por etapa */}
       <nav className="bg-surface border-b border-line sticky top-14 z-20" aria-label="Etapas do atendimento">

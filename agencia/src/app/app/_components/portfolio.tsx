@@ -62,12 +62,20 @@ export function PortfolioHeader({ p, onStart }: { p: PortfolioProgress; onStart:
 
       <div className="mt-4">
         {open ? (
-          <Button size="xl" className="w-full !bg-white !text-brand-900" onClick={() => go(`visita/${open.id}`)}>
-            <PlayCircle className="size-6" /> Continuar visita · {cat.storeById.get(open.storeId)?.name}
+          <Button size="xl" className="w-full !bg-white !text-brand-900 !h-auto min-h-14 py-3 !whitespace-normal" onClick={() => go(`visita/${open.id}`)}>
+            <PlayCircle className="size-6 shrink-0" />
+                <span className="min-w-0 text-left leading-tight">
+                  <span className="block">Continuar visita</span>
+                  <span className="block text-[14px] font-medium opacity-80 break-words">{cat.storeById.get(open.storeId)?.name}</span>
+                </span>
           </Button>
         ) : next ? (
-          <Button size="xl" className="w-full !bg-white !text-brand-900" onClick={() => onStart(next)}>
-            <PlayCircle className="size-6" /> Ir para: {cat.storeById.get(next.storeId)?.name}
+          <Button size="xl" className="w-full !bg-white !text-brand-900 !h-auto min-h-14 py-3 !whitespace-normal" onClick={() => onStart(next)}>
+            <PlayCircle className="size-6 shrink-0" />
+                <span className="min-w-0 text-left leading-tight">
+                  <span className="block">Ir para a próxima loja</span>
+                  <span className="block text-[14px] font-medium opacity-80 break-words">{cat.storeById.get(next.storeId)?.name}</span>
+                </span>
           </Button>
         ) : null}
       </div>
