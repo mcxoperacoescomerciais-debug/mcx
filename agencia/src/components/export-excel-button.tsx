@@ -43,7 +43,7 @@ function getBlock(e: Element) {
 function sectionName(el: Element, fallback: string): string {
   const sec = el.closest("section, [data-export-title]");
   const t = sec?.getAttribute("data-export-title") ?? sec?.querySelector("h2, h3")?.textContent;
-  return clean(t).replace(/s*·s*d+$/, "") || fallback;
+  return clean(t).replace(/\s*·\s*\d+$/, "") || fallback;
 }
 
 function collect(doc: Document, title: string): Sheet[] {
