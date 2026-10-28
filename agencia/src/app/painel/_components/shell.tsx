@@ -3,8 +3,8 @@
 import { panelForPath } from "@/lib/permissions";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import {
   BarChart3,
   ClipboardCheck,
@@ -41,6 +41,7 @@ import {
   Wallet,
   X,
   type LucideIcon,
+  RefreshCw,
 } from "lucide-react";
 import clsx from "clsx";
 import { BrandMark, McxFooter } from "@/components/ui";
@@ -100,6 +101,44 @@ const MCX_NAV: NavItem[] = [
 function isActive(pathname: string, item: NavItem) {
   if (item.href === "/painel" || item.href === "/painel/mcx") return pathname === item.href;
   return [item.href, ...(item.also ?? [])].some((h) => pathname === h || pathname.startsWith(`${h}/`));
+}
+
+/**
+ * Atualiza os dados da tela sem sair da conta (no app instalado não há o botão
+ * de recarregar do navegador). Também atualiza sozinho ao voltar para o app
+ * depois de 1 minuto fora.
+ */
+function SyncButton() {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [at, setAt] = useState<Date | null>(null);
+  const sync = useCallback(() => start(() => {
+    router.refresh();
+    setAt(new Date());
+  }), [router]);
+  useEffect(() => {
+    let hiddenAt = 0;
+    const onVisible = () => {
+      if (document.visibilityState === "hidden") hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt > 60_000) sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [sync]);
+  return (
+    <button
+      type="button"
+      onClick={sync}
+      disabled={pending}
+      className="w-full flex items-center gap-2.5 px-3 min-h-9 py-1.5 rounded-lg text-[13.5px] font-medium text-brand-100/80 hover:bg-white/6 hover:text-white disabled:opacity-80 transition-colors"
+    >
+      <RefreshCw className={clsx("size-4 shrink-0", pending && "animate-spin motion-reduce:animate-none")} />
+      <span className="min-w-0 flex-1 text-left leading-tight">
+        {pending ? "Atualizando…" : "Atualizar dados"}
+        {at && !pending ? <span className="block text-[11px] font-normal text-brand-200/60">às {at.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span> : null}
+      </span>
+    </button>
+  );
 }
 
 function NavItemLink({ item, active, onNavigate, compact }: { item: NavItem; active: boolean; onNavigate?: () => void; compact?: boolean }) {
@@ -283,6 +322,9 @@ export function PanelShell({
         />
       </div>
       <ul className="mb-2">
+        <li>
+          <SyncButton />
+        </li>
         <NavItemLink item={{ href: "/painel/melhorias", label: "Sugerir melhoria", icon: Lightbulb }} active={pathname === "/painel/melhorias"} onNavigate={onNavigate} />
       </ul>
       <UserBox name={user.name} role={user.role} scopeNote={scopeNote} logout={logout} />
