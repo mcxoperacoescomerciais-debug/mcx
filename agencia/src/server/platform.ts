@@ -9,6 +9,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import { agencyLogoUrl, hashPassword, scopeForUser, type Scope, type SessionUser } from "./auth";
 import { audit } from "./audit";
+import { mergeSettings } from "@/lib/settings";
 import { getDayBoard, type DayBoard } from "./operations";
 import { listIssues } from "./issues";
 
@@ -116,6 +117,8 @@ export interface NewAgencyInput {
   adminName: string;
   adminUsername: string;
   adminPassword: string;
+  modules?: { tastings: boolean; finance: boolean };
+  overviewStyle?: "standard" | "executive";
 }
 
 /** Cria a agência e o primeiro administrador dela (troca de senha no 1º acesso). */
@@ -135,7 +138,8 @@ export async function createAgency(user: SessionUser, i: NewAgencyInput): Promis
   if (slugTaken) slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
   const passwordHash = await hashPassword(i.adminPassword);
   const id = await db.transaction(async (tx) => {
-    const [agency] = await tx.insert(s.agencies).values({ name, slug, kind: "client" }).returning();
+    const settings = mergeSettings({ modules: i.modules ?? { tastings: true, finance: true }, overviewStyle: i.overviewStyle ?? "standard" });
+    const [agency] = await tx.insert(s.agencies).values({ name, slug, kind: "client", settings }).returning();
     const [admin] = await tx
       .insert(s.users)
       .values({ agencyId: agency.id, role: "admin", name: i.adminName.trim(), username, passwordHash, mustChangePassword: true, createdBy: user.id })
@@ -165,6 +169,19 @@ export async function updateAgency(user: SessionUser, id: string, i: { name: str
     });
   }
   return { ok: true, message: i.status === "suspended" ? "Agência salva — acesso suspenso." : "Agência salva." };
+}
+
+/** Módulos da agência e estilo da visão geral (só a equipe MCX). */
+export async function setAgencyModules(user: SessionUser, id: string, i: { tastings: boolean; finance: boolean; overviewStyle: "standard" | "executive" }): Promise<PlatformResult> {
+  if (!user.platform) return fail("Somente a equipe MCX.");
+  const before = await getClientAgency(id);
+  if (!before) return fail("Agência não encontrada.");
+  const prev = mergeSettings(before.settings);
+  const next = mergeSettings({ ...prev, modules: { tastings: i.tastings, finance: i.finance }, overviewStyle: i.overviewStyle });
+  const db = await getDb();
+  await db.update(s.agencies).set({ settings: next, updatedAt: new Date() }).where(eq(s.agencies.id, id));
+  await audit({ agencyId: id, userId: user.id }, "agency", id, "modules", { before: { modules: prev.modules, overviewStyle: prev.overviewStyle }, after: { modules: next.modules, overviewStyle: next.overviewStyle } });
+  return { ok: true, message: "Módulos salvos." };
 }
 
 export const LOGO_MAX_BYTES = 400 * 1024;

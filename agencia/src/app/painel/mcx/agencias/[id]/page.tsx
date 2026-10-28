@@ -11,7 +11,8 @@ import { fmtAgo } from "@/lib/dates";
 import { Badge, PageHeader, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
-import { agencyLogoAction, enterAgencyAction, updateAgencyAction } from "../../actions";
+import { agencyLogoAction, agencyModulesAction, enterAgencyAction, updateAgencyAction } from "../../actions";
+import { mergeSettings } from "@/lib/settings";
 
 export const metadata: Metadata = { title: "Agência" };
 
@@ -28,6 +29,7 @@ export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agen
     .where(and(eq(s.users.agencyId, id), ne(s.users.role, "promoter"), eq(s.users.platform, false)))
     .orderBy(asc(s.users.role), asc(s.users.name));
   const logo = agencyLogoUrl(agency);
+  const settings = mergeSettings(agency.settings);
 
   return (
     <>
@@ -56,6 +58,24 @@ export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agen
               <select name="status" defaultValue={agency.status} className={selectClass}>
                 <option value="active">Ativa</option>
                 <option value="suspended">Suspensa (bloqueia o acesso de todos; os dados ficam guardados)</option>
+              </select>
+            </label>
+          </ActionForm>
+        </SectionCard>
+
+        <SectionCard title="Módulos e visão geral" subtitle="O que esta agência enxerga no painel. Desligado: o menu some e a página fica bloqueada." bodyClass="px-5 pb-5">
+          <ActionForm action={agencyModulesAction} hidden={{ id: agency.id }} submitLabel="Salvar módulos" resetOnSuccess={false}>
+            <label className="flex items-center gap-2 text-[13.5px]">
+              <input type="checkbox" name="tastings" defaultChecked={settings.modules.tastings} /> Degustações
+            </label>
+            <label className="flex items-center gap-2 text-[13.5px]">
+              <input type="checkbox" name="finance" defaultChecked={settings.modules.finance} /> Financeiro
+            </label>
+            <label className="block">
+              <span className="block text-[12.5px] font-semibold text-ink-2 mb-1">Visão geral</span>
+              <select name="overviewStyle" defaultValue={settings.overviewStyle} className={selectClass}>
+                <option value="standard">Padrão (operação)</option>
+                <option value="executive">Executiva (marca): ruptura, datas críticas, avarias e lojas não atendidas com gráficos</option>
               </select>
             </label>
           </ActionForm>

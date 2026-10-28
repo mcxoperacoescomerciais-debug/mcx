@@ -138,6 +138,9 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         checkinRadiusM: Number(str(fd, "checkinRadiusM")),
         defaultWorkMode: str(fd, "defaultWorkMode"),
         galleryPolicy: str(fd, "galleryPolicy") as never,
+        // Definidos pela equipe MCX na tela da agência: a tela de Configurações não muda.
+        modules: scope.settings.modules,
+        overviewStyle: scope.settings.overviewStyle,
         lateToleranceMin: Number(str(fd, "lateToleranceMin")),
         dayEndsAt: str(fd, "dayEndsAt"),
         stockDivergencePct: Number(str(fd, "stockDivergencePct")),
@@ -258,4 +261,16 @@ export async function saveAssignmentAction(promoterId: string, storeId: string, 
   const r = await saveStoreAssignment(await getScope(), promoterId, storeId, rows);
   if (r.ok) revalidatePath(`/painel/cadastros/usuarios/${promoterId}`);
   return r;
+}
+
+export async function seedOperationDemoAction(_: FormState, _fd: FormData): Promise<FormState> {
+  void _fd;
+  const { seedOperationDemo } = await import("@/server/demo-operation");
+  return done(await seedOperationDemo(await getScope()));
+}
+
+export async function deleteOperationDemoAction(_: FormState, _fd: FormData): Promise<FormState> {
+  void _fd;
+  const { deleteOperationDemo } = await import("@/server/demo-operation");
+  return done(await deleteOperationDemo(await getScope()));
 }

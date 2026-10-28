@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
+  BarChart3,
   ClipboardCheck,
   Lightbulb,
   Handshake,
@@ -60,6 +61,7 @@ interface NavItem {
 /** Um assunto por página: o gestor escolhe o que quer analisar. */
 const MAIN: NavItem[] = [
   { href: "/painel", label: "Visão geral", icon: LayoutDashboard },
+  { href: "/painel/indicadores", label: "Indicadores", icon: BarChart3 },
   { href: "/painel/mapa", label: "Mapa operacional", icon: MapIcon },
   { href: "/painel/visitas", label: "Visitas", icon: Store, also: ["/painel/lojas"] },
   { href: "/painel/metas", label: "Carteira e metas", icon: Target },
@@ -126,9 +128,11 @@ function NavItemLink({ item, active, onNavigate, compact }: { item: NavItem; act
   );
 }
 
-function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; perms: string[] | null; owner: boolean; mcxBadges: Record<string, number>; onNavigate?: () => void }) {
+function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, hidden, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; perms: string[] | null; owner: boolean; mcxBadges: Record<string, number>; hidden: string[]; onNavigate?: () => void }) {
   const pathname = usePathname();
   const allowed = (i: NavItem) => {
+    const mod = panelForPath(i.href);
+    if (mod && hidden.includes(mod.key)) return false;
     if (perms) {
       // Perfis: só os painéis liberados para a pessoa.
       const panel = panelForPath(i.href);
@@ -242,11 +246,13 @@ export function PanelShell({
   platform,
   fullScope,
   allowed,
+  hidden = [],
   owner,
   scopeNote,
   logout,
   children,
 }: {
+  hidden?: string[];
   user: { name: string; role: Role };
   agency: { id: string; name: string; logoUrl: string | null } | null;
   platform: PlatformProps | null;
@@ -270,6 +276,7 @@ export function PanelShell({
           fullScope={fullScope}
           mcx={mcx}
           perms={allowed}
+          hidden={hidden}
           owner={owner}
           mcxBadges={{ "/painel/mcx/melhorias": platform?.improvementsToReview ?? 0 }}
           onNavigate={onNavigate}

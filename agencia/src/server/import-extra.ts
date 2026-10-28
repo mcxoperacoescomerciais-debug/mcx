@@ -82,10 +82,15 @@ export async function importMix(scope: Scope, rows: Row[], report: ImportReport)
       });
       report.updated++;
     } else {
-      const [chain] = await db.select({ id: s.chains.id }).from(s.chains).where(and(eq(s.chains.agencyId, scope.agencyId), sql`lower(${s.chains.name}) = ${g.ref.toLowerCase()}`));
+      let [chain] = await db.select({ id: s.chains.id }).from(s.chains).where(and(eq(s.chains.agencyId, scope.agencyId), sql`lower(${s.chains.name}) = ${g.ref.toLowerCase()}`));
+      // Rede ainda sem cadastro: o mix da rede chega antes das lojas (ex.: lista de SKUs da marca por rede).
       if (!chain) {
-        report.errors.push({ line: g.line, message: `Rede “${g.ref}” não cadastrada.` });
-        continue;
+        if (report.dryRun) {
+          (report.notes ??= []).push({ line: g.line, message: `Rede “${g.ref}” não existe: será criada.` });
+          report.created++;
+          continue;
+        }
+        [chain] = await db.insert(s.chains).values({ agencyId: scope.agencyId, name: g.ref.trim() }).returning({ id: s.chains.id });
       }
       const [existing] = await db.select().from(s.productMixes).where(and(eq(s.productMixes.chainId, chain.id), eq(s.productMixes.brandId, brand.id), sql`lower(${s.productMixes.name}) = ${g.mix.toLowerCase()}`));
       if (report.dryRun) {

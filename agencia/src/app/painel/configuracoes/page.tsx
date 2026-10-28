@@ -5,7 +5,8 @@ import { ISSUE_KIND_LABEL, ISSUE_KINDS, WORK_MODE_LABEL } from "@/lib/domain";
 import { Badge, PageHeader, inputClass } from "@/components/ui";
 import { SectionCard } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
-import { resendAlertAction, saveSettingsAction, testWhatsAppAction } from "../cadastros/actions";
+import { deleteOperationDemoAction, resendAlertAction, saveSettingsAction, seedOperationDemoAction, testWhatsAppAction } from "../cadastros/actions";
+import { operationDemoStatus } from "@/server/demo-operation";
 import { SEVERITY_COLOR } from "@/lib/validity";
 import { alertLog } from "@/server/whatsapp-alert";
 import { fmtDate } from "@/lib/dates";
@@ -28,6 +29,7 @@ export default async function SettingsPage() {
       .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active")))
       .orderBy(asc(s.users.name)),
   ]);
+  const demo = await operationDemoStatus(scope);
   const near = Math.max(st.validityBands.critical, st.alerts.nearDays);
   return (
     <>
@@ -186,6 +188,24 @@ export default async function SettingsPage() {
           <p className="text-[13px] text-ink-2">Envia uma mensagem de teste para o(s) número(s) salvo(s) no alerta de validade desta agência.</p>
         </ActionForm>
       </div>
+      <SectionCard
+        className="mt-6"
+        title="Dados de demonstração da operação"
+        subtitle="Para apresentar os painéis à marca: cria um promotor fictício com 8 lojas em Divinópolis e duas semanas de visitas (estoque, ruptura, validades, avarias e lojas não atendidas) usando as marcas e os produtos já cadastrados. Apague quando terminar."
+        bodyClass="px-5 pb-5"
+      >
+        {demo.stores || demo.promoter ? (
+          <ActionForm action={deleteOperationDemoAction} hidden={{}} submitLabel="Apagar dados de demonstração" variant="danger" resetOnSuccess={false}>
+            <p className="text-[13px] text-ink-2">
+              Existem {demo.stores} loja(s) de demonstração{demo.promoter ? ` e o promotor ${demo.promoter.username}` : ""}. Para entrar no app com ele, defina uma senha em Cadastros › Usuários.
+            </p>
+          </ActionForm>
+        ) : (
+          <ActionForm action={seedOperationDemoAction} hidden={{}} submitLabel="Gerar dados de demonstração" variant="secondary" resetOnSuccess={false}>
+            <p className="text-[13px] text-ink-2">Lojas com código DEMO- e promotor “Promotor Demonstração”. Nada de outras lojas ou promotores é alterado.</p>
+          </ActionForm>
+        )}
+      </SectionCard>
       <SectionCard
         className="mt-6"
         title="Alertas de validade dos últimos 30 dias"

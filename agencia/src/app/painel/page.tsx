@@ -16,9 +16,12 @@ import {
   Users,
 } from "lucide-react";
 import { getScope } from "@/server/auth";
-import { getRangeBoard, operationAlerts } from "@/server/operations";
+import { filterOptions, getRangeBoard, operationAlerts } from "@/server/operations";
 import { listIssues } from "@/server/issues";
-import { parseDayRange, withParams } from "@/lib/filters";
+import { parseDayRange, parseFilters, withParams } from "@/lib/filters";
+import { dashboardData } from "@/server/dashboard";
+import { DashboardView } from "./_components/dashboard-view";
+import { LiveRefresh } from "./_components/dashboard-charts";
 import { addDays, fmtAgo, fmtDate, fmtLongDate, fmtTime, todayIso } from "@/lib/dates";
 import { criticalValidities } from "@/server/items";
 import { pct } from "@/lib/rules";
@@ -43,7 +46,10 @@ const REPORTS = [
 
 export default async function OverviewPage({ searchParams }: PageProps<"/painel">) {
   const scope = await getScope();
-  const f = parseDayRange(await searchParams);
+  const sp = await searchParams;
+  // Agência de uma marca (ex.: AVIVAR): visão geral executiva, com gráficos.
+  if (scope.settings.overviewStyle === "executive") return <ExecutiveOverview scope={scope} sp={sp} />;
+  const f = parseDayRange(sp);
   const day = { ...f, brand: null, chain: null, store: null, promoter: null, city: null };
   // Validade crítica: num dia só, olha os últimos 30 dias (o que ainda está na gôndola); num período, o período.
   const vFrom = f.from === f.to ? addDays(f.to, -29) : f.from;
@@ -177,6 +183,27 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
           </ul>
         </SectionCard>
       </div>
+    </>
+  );
+}
+
+async function ExecutiveOverview({ scope, sp }: { scope: Awaited<ReturnType<typeof getScope>>; sp: Record<string, string | string[] | undefined> }) {
+  const f = parseFilters(sp, 7);
+  const [d, options] = await Promise.all([dashboardData(scope, f), filterOptions(scope)]);
+  return (
+    <>
+      <PageHeader
+        eyebrow={scope.agencyName}
+        title="Visão geral"
+        subtitle={
+          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+            {f.from === f.to ? fmtLongDate(f.from) : `${fmtDate(f.from)} a ${fmtDate(f.to)}`} · ruptura, datas críticas, avarias e lojas não atendidas
+            <LiveRefresh generatedAt={d.generatedAt} />
+          </span>
+        }
+      />
+      <FilterBar range={{ from: f.from, to: f.to }} fields={["period", "chain", "store", "promoter", "city"]} options={options} />
+      <DashboardView d={d} variant="executive" from={f.from} to={f.to} />
     </>
   );
 }
