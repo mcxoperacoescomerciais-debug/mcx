@@ -11,6 +11,7 @@ import { brandFilter, promoterFilter } from "./scope";
 import { rowsOf } from "./promoter";
 import { PAGE_SIZE, type PanelFilters } from "@/lib/filters";
 import type { RuptureSituation, StockState, Unit } from "@/lib/domain";
+import { filterIn } from "@/server/filter-sql";
 
 type F = PanelFilters;
 
@@ -25,11 +26,11 @@ function commonConds(scope: Scope, f: F): (SQL | undefined)[] {
   return [
     brandFilter(scope, s.attendances.brandId),
     promoterFilter(scope, s.visits.promoterId),
-    f.brand ? eq(s.attendances.brandId, f.brand) : undefined,
-    f.store ? eq(s.visits.storeId, f.store) : undefined,
-    f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-    f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-    f.city ? eq(s.stores.city, f.city) : undefined,
+    f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined,
+    f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+    f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+    f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+    f.city ? filterIn(s.stores.city, f.city) : undefined,
   ];
 }
 
@@ -251,6 +252,7 @@ export async function ruptureList(scope: Scope, f: F, opts: { page?: number; pag
       productName: s.products.name,
       sku: s.products.sku,
       brandName: s.brands.name,
+      storeId: s.stores.id,
       storeName: s.stores.name,
       city: s.stores.city,
       promoterName: s.users.name,

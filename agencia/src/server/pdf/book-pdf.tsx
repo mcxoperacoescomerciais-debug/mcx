@@ -16,6 +16,7 @@ import { C, Footer, type PdfAgency } from "./kit";
 import type { PanelFilters } from "@/lib/filters";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { withPlacement } from "@/lib/domain";
+import { filterIn } from "@/server/filter-sql";
 
 /** Limites para o PDF caber na memória do servidor. */
 export const BOOK_MAX_ATTENDANCES = 60;
@@ -65,11 +66,11 @@ export async function bookData(scope: Scope, f: PanelFilters): Promise<BookData>
     inArray(s.attendances.status, ["completed", "correction_requested"]),
     brandFilter(scope, s.attendances.brandId),
     promoterFilter(scope, s.visits.promoterId),
-    f.brand ? eq(s.attendances.brandId, f.brand) : undefined,
-    f.store ? eq(s.visits.storeId, f.store) : undefined,
-    f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-    f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-    f.city ? eq(s.stores.city, f.city) : undefined,
+    f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined,
+    f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+    f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+    f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+    f.city ? filterIn(s.stores.city, f.city) : undefined,
     sql`exists (select 1 from ${s.photos} p where p.attendance_id = ${s.attendances.id} and p.kind in ('before','after') and p.deleted_at is null and p.uploaded_at is not null)`,
   );
   const rows = await db
@@ -132,7 +133,7 @@ export async function bookData(scope: Scope, f: PanelFilters): Promise<BookData>
       photos,
     });
   }
-  const brandName = f.brand ? (rows[0]?.brandName ?? (await db.select({ name: s.brands.name }).from(s.brands).where(eq(s.brands.id, f.brand)))[0]?.name ?? null) : null;
+  const brandName = f.brand ? (rows[0]?.brandName ?? (await db.select({ name: s.brands.name }).from(s.brands).where(filterIn(s.brands.id, f.brand)))[0]?.name ?? null) : null;
   return {
     brandName,
     from: f.from,

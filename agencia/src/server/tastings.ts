@@ -31,6 +31,7 @@ import {
   type TastingResult,
   type TastingStatus,
 } from "@/lib/tasting";
+import { filterIn } from "@/server/filter-sql";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -429,7 +430,7 @@ export async function listTastings(scope: Scope, f: TastingFilters): Promise<Tas
         gte(s.tastings.date, f.from),
         lte(s.tastings.date, f.to),
         brandFilter(scope, s.tastings.brandId),
-        f.brand ? eq(s.tastings.brandId, f.brand) : undefined,
+        f.brand ? filterIn(s.tastings.brandId, f.brand) : undefined,
         f.city ? ilike(s.tastings.city, like(f.city)) : undefined,
         f.store ? or(ilike(s.tastings.storeName, like(f.store)), ilike(s.tastings.chainName, like(f.store))) : undefined,
         f.taster ? eq(s.tastings.tasterId, f.taster) : undefined,

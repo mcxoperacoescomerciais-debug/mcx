@@ -13,6 +13,7 @@ import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
 import { getRangeBoard } from "./operations";
 import type { PanelFilters } from "@/lib/filters";
+import { filterIn } from "@/server/filter-sql";
 
 type F = Pick<PanelFilters, "from" | "to" | "brand" | "chain" | "store" | "promoter" | "city">;
 
@@ -37,11 +38,11 @@ function conds(scope: Scope, f: F, date: SQL | typeof s.visits.visitDate = s.vis
     lte(date as typeof s.visits.visitDate, f.to),
     brandFilter(scope, s.attendances.brandId),
     promoterFilter(scope, s.visits.promoterId),
-    f.brand ? eq(s.attendances.brandId, f.brand) : undefined,
-    f.store ? eq(s.visits.storeId, f.store) : undefined,
-    f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-    f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-    f.city ? eq(s.stores.city, f.city) : undefined,
+    f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined,
+    f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+    f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+    f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+    f.city ? filterIn(s.stores.city, f.city) : undefined,
   ];
 }
 

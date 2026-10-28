@@ -4,21 +4,22 @@ import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { ruptureList, ruptureSummary } from "@/server/analytics";
-import { parseFilters, withParams } from "@/lib/filters";
+import { EXPORT_PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
 import { RUPTURE_SITUATION_LABEL } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
-import { KpiCard, Pagination, RankBar, SectionCard, Table, Td, Th } from "../_components/widgets";
+import { KpiCard, RankBar, SectionCard, Table, Td, Th } from "../_components/widgets";
 import { DailyBars } from "../_components/daily-bars";
+import { StoreGroups } from "../_components/store-groups";
 
 export const metadata: Metadata = { title: "Rupturas" };
 
 export default async function RupturesPage({ searchParams }: PageProps<"/painel/rupturas">) {
   const scope = await getScope();
   const f = parseFilters(await searchParams, 30);
-  const [sum, list, options] = await Promise.all([ruptureSummary(scope, f), ruptureList(scope, f), filterOptions(scope)]);
+  const [sum, list, options] = await Promise.all([ruptureSummary(scope, f), ruptureList(scope, { ...f, page: 1, pageSize: EXPORT_PAGE_SIZE }), filterOptions(scope)]);
   const t = sum.totals;
   const keep = { from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, city: f.city, q: f.q || null };
 
@@ -85,43 +86,40 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
         </SectionCard>
       </div>
 
-      <SectionCard className="mt-6" title="Rupturas registradas" subtitle={`${list.total} registro(s) no período`}>
+      <SectionCard className="mt-6" title="Rupturas por loja" subtitle={`${list.total} registro(s) no período · clique na loja para ver os produtos`} bodyClass="pb-1">
         {list.rows.length ? (
-          <>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Data</Th>
-                  <Th>Produto</Th>
-                  <Th>Loja</Th>
-                  <Th>Marca</Th>
-                  <Th>Promotor</Th>
-                  <Th>Situação</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-subtle">
-                    <Td className="tnum whitespace-nowrap">{fmtDateTime(r.recordedAt).slice(0, 16)}</Td>
-                    <Td>
-                      <Link href={`/painel/atendimentos/${r.attendanceId}`} target="_blank" className="font-semibold hover:underline">
-                        {r.productName}
-                      </Link>
-                      <span className="block text-[11.5px] text-muted">SKU {r.sku}</span>
-                    </Td>
-                    <Td>
-                      {r.storeName}
-                      <span className="block text-[11.5px] text-muted">{r.city}</span>
-                    </Td>
-                    <Td>{r.brandName}</Td>
-                    <Td>{r.promoterName}</Td>
-                    <Td className="text-[12.5px]">{RUPTURE_SITUATION_LABEL[r.situation]}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-            <Pagination page={f.page} total={list.total} pageSize={f.pageSize} hrefFor={(p) => withParams(keep, { page: p })} />
-          </>
+          <StoreGroups
+            rows={list.rows}
+            storeOf={(r) => ({ id: r.storeId, name: r.storeName, city: r.city })}
+            head={
+              <tr>
+                <Th>Data</Th>
+                <Th>Produto</Th>
+                <Th>Marca</Th>
+                <Th>Promotor</Th>
+                <Th>Situação</Th>
+              </tr>
+            }
+            renderRow={(r) => (
+              <tr key={r.id} className="hover:bg-surface">
+                <Td className="tnum whitespace-nowrap">{fmtDateTime(r.recordedAt).slice(0, 16)}</Td>
+                <Td>
+                  <Link href={`/painel/atendimentos/${r.attendanceId}`} target="_blank" className="font-semibold hover:underline">
+                    {r.productName}
+                  </Link>
+                  <span className="block text-[11.5px] text-muted">SKU {r.sku}</span>
+                </Td>
+                <Td>{r.brandName}</Td>
+                <Td>{r.promoterName}</Td>
+                <Td className="text-[12.5px]">{RUPTURE_SITUATION_LABEL[r.situation]}</Td>
+              </tr>
+            )}
+            exportTitle="Rupturas registradas"
+            exportHead={["Data", "Produto", "SKU", "Marca", "Promotor", "Situação"]}
+            exportRow={(r) => [fmtDateTime(r.recordedAt).slice(0, 16), r.productName, r.sku, r.brandName, r.promoterName, RUPTURE_SITUATION_LABEL[r.situation]]}
+            page={f.page}
+            hrefFor={(p) => withParams(keep, { page: p })}
+          />
         ) : (
           <EmptyState title="Nenhuma ruptura neste filtro" />
         )}

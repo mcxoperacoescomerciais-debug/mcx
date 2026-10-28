@@ -8,6 +8,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
 import type { PanelFilters } from "@/lib/filters";
+import { filterIn } from "@/server/filter-sql";
 
 export async function listPromoters(scope: Scope) {
   const db = await getDb();
@@ -29,10 +30,10 @@ export async function listVisits(scope: Scope, f: F, limit = 300) {
     lte(s.visits.visitDate, f.to),
     ne(s.visits.status, "cancelled"),
     promoterFilter(scope, s.visits.promoterId),
-    f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-    f.store ? eq(s.visits.storeId, f.store) : undefined,
-    f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-    f.city ? eq(s.stores.city, f.city) : undefined,
+    f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+    f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+    f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+    f.city ? filterIn(s.stores.city, f.city) : undefined,
   ];
   const visits = await db
     .select({
@@ -73,7 +74,7 @@ export async function listVisits(scope: Scope, f: F, limit = 300) {
     })
     .from(s.attendances)
     .innerJoin(s.brands, eq(s.brands.id, s.attendances.brandId))
-    .where(and(inArray(s.attendances.visitId, visits.map((v) => v.id)), brandFilter(scope, s.attendances.brandId), f.brand ? eq(s.attendances.brandId, f.brand) : undefined))
+    .where(and(inArray(s.attendances.visitId, visits.map((v) => v.id)), brandFilter(scope, s.attendances.brandId), f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined))
     .orderBy(asc(s.attendances.startedAt));
   return visits
     .map((v) => ({ ...v, attendances: atts.filter((a) => a.visitId === v.id) }))

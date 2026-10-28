@@ -106,11 +106,12 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
         </SectionCard>
       ) : null}
 
-      <SectionCard title="Atendimentos" subtitle="Abra o atendimento para ver fotos, estoque e rupturas" className="mt-6" bodyClass="pb-1">
+      <SectionCard title={`Atendimentos (${r.attendances.length})`} subtitle="Abra o atendimento para ver fotos, estoque e rupturas" className="mt-6" bodyClass="pb-1">
         {r.attendances.length ? (
           <Table>
             <thead>
               <tr>
+                <Th align="right">Nº</Th>
                 <Th>Data</Th>
                 {brand ? null : <Th>Marca</Th>}
                 <Th>Loja</Th>
@@ -123,8 +124,9 @@ export default async function BrandExecutionPage({ searchParams }: PageProps<"/p
               </tr>
             </thead>
             <tbody>
-              {r.attendances.slice(0, LIMIT).map((a) => (
+              {r.attendances.slice(0, LIMIT).map((a, i) => (
                 <tr key={a.id} className="hover:bg-subtle">
+                  <Td align="right" className="tnum text-muted w-10">{i + 1}</Td>
                   <Td className="tnum whitespace-nowrap">{fmtDate(a.date)}</Td>
                   {brand ? null : <Td className="font-semibold">{a.brandName}</Td>}
                   <Td>

@@ -26,10 +26,13 @@ const MODE = { route: "Roteiro", portfolio: "Carteira" } as const;
 export default async function TargetsPage({ searchParams }: PageProps<"/painel/metas">) {
   const scope = await getScope();
   if (scope.role === "promoter") notFound();
-  const f = parseFilters(await searchParams);
-  const [w, options, promoters] = await Promise.all([portfolioWeek(scope, f), filterOptions(scope), portfolioPromoters(scope)]);
+  const sp = await searchParams;
+  const f = parseFilters(sp);
+  // Período escolhido na barra de filtros (de/até); sem ele, a semana.
+  const custom = Boolean(sp.from || sp.to);
+  const [w, options, promoters] = await Promise.all([portfolioWeek(scope, f, custom ? { from: f.from, to: f.to } : undefined), filterOptions(scope), portfolioPromoters(scope)]);
   const canEdit = scope.brandIds === null;
-  const keep = { promoter: f.promoter, brand: f.brand, store: f.store, city: f.city };
+  const keep = { promoter: f.promoter, brand: f.brand, store: f.store, city: f.city, q: f.q || null };
   const weekLink = (d: string) => withParams({ ...keep, date: weekStart(d) === weekStart(todayIso()) ? null : d });
   const t = w.totals;
   const behind = w.rows.filter((r) => r.status === "behind").length;
@@ -45,13 +48,13 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
     <>
       <PageHeader
         title="Carteira e metas"
-        subtitle={`Semana de ${fmtDate(w.from)} a ${fmtDate(w.to)} · resultado de todos os promotores — atribuições (com ou sem dia fixo) e lojas programadas`}
+        subtitle={`${custom ? "Período" : "Semana"} de ${fmtDate(w.from)} a ${fmtDate(w.to)} · resultado de todos os promotores — atribuições (com ou sem dia fixo) e lojas programadas${custom ? " · meta proporcional aos dias do período" : ""}`}
         actions={
           <div className="inline-flex items-center rounded-lg border border-line-strong bg-surface">
             <Link href={weekLink(addDays(w.from, -7))} aria-label="Semana anterior" className="h-9 w-9 grid place-items-center text-ink-2 hover:bg-subtle rounded-l-lg">
               <ChevronLeft className="size-4" />
             </Link>
-            <Link href={weekLink(todayIso())} className="h-9 px-3 grid place-items-center text-[13px] font-semibold text-ink-2 hover:bg-subtle border-x border-line">
+            <Link href={weekLink(todayIso())} className={`h-9 px-3 grid place-items-center text-[13px] font-semibold hover:bg-subtle border-x border-line ${custom ? "text-brand-700" : "text-ink-2"}`}>
               Esta semana
             </Link>
             <Link href={weekLink(addDays(w.from, 7))} aria-label="Próxima semana" className="h-9 w-9 grid place-items-center text-ink-2 hover:bg-subtle rounded-r-lg">
@@ -60,7 +63,7 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
           </div>
         }
       />
-      <FilterBar fields={["promoter", "brand", "store", "city", "q"]} options={options} qPlaceholder="Promotor, loja, marca ou cidade" />
+      <FilterBar fields={["period", "promoter", "brand", "store", "city", "q"]} range={{ from: w.from, to: w.to }} options={options} qPlaceholder="Promotor, loja, marca ou cidade" />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
@@ -72,7 +75,7 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
             </>
           }
           tone="success"
-          sub={`${pct(t.counted, t.target) ?? "—"}% das visitas da semana`}
+          sub={`${pct(t.counted, t.target) ?? "—"}% das visitas ${custom ? "do período" : "da semana"}`}
           icon={<Target className="size-4" />}
         />
         <KpiCard
@@ -82,7 +85,7 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
           sub={`Esperado até ${fmtDate(w.ref).slice(0, 5)}: ${t.expected} · feito: ${t.counted}`}
           icon={<TrendingUp className="size-4" />}
         />
-        <KpiCard label="Lojas × marcas atrasadas" value={behind} tone={behind ? "danger" : "success"} sub={`de ${w.rows.length} combinação(ões) na semana`} icon={<TriangleAlert className="size-4" />} />
+        <KpiCard label="Lojas × marcas atrasadas" value={behind} tone={behind ? "danger" : "success"} sub={`de ${w.rows.length} combinação(ões) ${custom ? "no período" : "na semana"}`} icon={<TriangleAlert className="size-4" />} />
         <KpiCard label="Promotores cadastrados" value={w.registered} sub={`${byMode.route} por roteiro · ${byMode.portfolio} por carteira`} icon={<Users className="size-4" />} />
       </div>
 
@@ -127,15 +130,15 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
                       <Td>
                         {r.brandName}
                         <span className="block text-[11.5px] text-muted">
-                          {r.source === "schedule" ? `${r.perWeek}x programada(s) na semana` : frequencyLabel(r.perWeek, r.period)} · {weekdaysLabel(r.weekdays)}
+                          {r.source === "schedule" ? `${r.perWeek}x programada(s) ${custom ? "no período" : "na semana"}` : frequencyLabel(r.perWeek, r.period)} · {weekdaysLabel(r.weekdays)}
                           {r.source === "schedule" ? " · programação" : ""}
                         </span>
                       </Td>
                       <Td align="right" className="whitespace-nowrap">
                         <span className="tnum font-semibold">
-                          {r.done}/{r.perWeek}
+                          {r.done}/{r.goal ?? r.perWeek}
                         </span>
-                        <Progress value={Math.min(r.done, r.perWeek)} total={r.perWeek} className="w-20 ml-auto mt-1" tone={r.status === "done" ? "success" : r.status === "behind" ? "danger" : "info"} />
+                        <Progress value={Math.min(r.done, r.goal ?? r.perWeek)} total={r.goal ?? r.perWeek} className="w-20 ml-auto mt-1" tone={r.status === "done" ? "success" : r.status === "behind" ? "danger" : "info"} />
                       </Td>
                       <Td>
                         <StatusBadge tone={TARGET_STATUS_TONE[r.status]} size="sm">

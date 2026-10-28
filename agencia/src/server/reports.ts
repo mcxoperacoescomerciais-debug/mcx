@@ -25,6 +25,7 @@ import {
 } from "@/lib/domain";
 import { fmtDateTime, fmtTime } from "@/lib/dates";
 import type { SheetSpec } from "./xlsx";
+import { filterIn } from "@/server/filter-sql";
 
 /** Relatório do dia; com `range`, o período from → to (exportação de visitas). */
 export async function dailyReport(scope: Scope, f: PanelFilters, range = false) {
@@ -81,11 +82,11 @@ async function occurrencesOf(scope: Scope, f: Pick<PanelFilters, "from" | "to" |
         lte(s.visits.visitDate, f.to),
         brandFilter(scope, s.attendances.brandId),
         promoterFilter(scope, s.visits.promoterId),
-        f.brand ? eq(s.attendances.brandId, f.brand) : undefined,
-        f.store ? eq(s.visits.storeId, f.store) : undefined,
-        f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-        f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-        f.city ? eq(s.stores.city, f.city) : undefined,
+        f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined,
+        f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+        f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+        f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+        f.city ? filterIn(s.stores.city, f.city) : undefined,
       ),
     );
 }
@@ -347,7 +348,7 @@ export async function attendancesSheet(scope: Scope, f: PanelFilters): Promise<S
 export async function brandReport(scope: Scope, f: PanelFilters) {
   const db = await getDb();
   if (!f.brand) throw new Error("Escolha a marca.");
-  const [brand] = await db.select().from(s.brands).where(and(eq(s.brands.id, f.brand), eq(s.brands.agencyId, scope.agencyId)));
+  const [brand] = await db.select().from(s.brands).where(and(filterIn(s.brands.id, f.brand), eq(s.brands.agencyId, scope.agencyId)));
   const visits = await listVisits(scope, f, 5000);
   const atts = visits.flatMap((v) => v.attendances.map((a) => ({ ...a, storeId: v.storeId, storeName: v.storeName, city: v.city, date: v.date })));
   const byStore = new Map<string, { store: string; city: string; visits: number; completed: number; exceptions: number; ruptures: number; last: string }>();
@@ -382,7 +383,7 @@ export async function brandReport(scope: Scope, f: PanelFilters) {
     .from(s.ruptures)
     .innerJoin(s.attendances, eq(s.attendances.id, s.ruptures.attendanceId))
     .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
-    .where(and(eq(s.attendances.brandId, f.brand), isNull(s.ruptures.deletedAt), gte(s.visits.visitDate, f.from), lte(s.visits.visitDate, f.to), promoterFilter(scope, s.visits.promoterId)))
+    .where(and(filterIn(s.attendances.brandId, f.brand), isNull(s.ruptures.deletedAt), gte(s.visits.visitDate, f.from), lte(s.visits.visitDate, f.to), promoterFilter(scope, s.visits.promoterId)))
     .groupBy(s.ruptures.productId);
   for (const rc of rupCount) {
     const row = byProduct.get(rc.productId);

@@ -11,7 +11,8 @@ import { brandFilter, promoterFilter } from "./scope";
 import type { ActionResult } from "./manager";
 import type { PanelFilters } from "@/lib/filters";
 import { addDays, todayIso, weekdayOf } from "@/lib/dates";
-import { effectiveWorkMode, expectedByToday, periodWindow, targetStatus, PERIOD_LABEL, TARGET_PERIODS, weekEnd, weekStart, weekTotals, type TargetPeriod, type TargetStatus } from "@/lib/portfolio";
+import { effectiveWorkMode, expectedByToday, expectedInRange, periodWindow, targetStatus, PERIOD_LABEL, TARGET_PERIODS, weekEnd, weekStart, weekTotals, type TargetPeriod, type TargetStatus } from "@/lib/portfolio";
+import { filterIn } from "@/server/filter-sql";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
@@ -42,16 +43,23 @@ export interface PortfolioRow {
   source: "assignment" | "schedule";
   /** Só na programação: quantas estavam programadas até hoje. */
   expectedFixed?: number;
+  /** Período escolhido (não a semana): meta proporcional aos dias do período. */
+  goal?: number;
 }
 
 /**
  * Atribuições com o realizado no período de cada uma (semana, quinzena ou mês
  * que contém `f.date`); "hoje" para o ritmo = hoje limitado ao período.
  */
-export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" | "promoter" | "brand" | "store" | "city">) {
+/**
+ * Resultado das metas na semana de `f.date` ou, com `range`, num período
+ * qualquer: aí a meta de cada loja × marca é proporcional aos dias escolhidos
+ * (2x por semana em 14 dias = 4) e o realizado é o que foi feito no período.
+ */
+export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" | "promoter" | "brand" | "store" | "city">, range?: { from: string; to: string }) {
   const db = await getDb();
-  const from = weekStart(f.date);
-  const to = weekEnd(f.date);
+  const from = range?.from ?? weekStart(f.date);
+  const to = range?.to ?? weekEnd(f.date);
   const today = todayIso();
   const ref = today < from ? from : today > to ? to : today;
   const targets = await db
@@ -78,17 +86,17 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
         eq(s.users.status, "active"),
         brandFilter(scope, s.visitTargets.brandId),
         promoterFilter(scope, s.visitTargets.promoterId),
-        f.promoter ? eq(s.visitTargets.promoterId, f.promoter) : undefined,
-        f.brand ? eq(s.visitTargets.brandId, f.brand) : undefined,
-        f.store ? eq(s.visitTargets.storeId, f.store) : undefined,
-        f.city ? eq(s.stores.city, f.city) : undefined,
+        f.promoter ? filterIn(s.visitTargets.promoterId, f.promoter) : undefined,
+        f.brand ? filterIn(s.visitTargets.brandId, f.brand) : undefined,
+        f.store ? filterIn(s.visitTargets.storeId, f.store) : undefined,
+        f.city ? filterIn(s.stores.city, f.city) : undefined,
       ),
     )
     .orderBy(asc(s.users.name), asc(s.stores.name), asc(s.brands.name));
 
   const windows = (["week", "fortnight", "month"] as const).map((p) => periodWindow(f.date, p));
-  const minFrom = windows.reduce((m, w) => (w.from < m ? w.from : m), windows[0].from);
-  const maxTo = windows.reduce((m, w) => (w.to > m ? w.to : m), windows[0].to);
+  const minFrom = windows.reduce((m, w) => (w.from < m ? w.from : m), from);
+  const maxTo = windows.reduce((m, w) => (w.to > m ? w.to : m), to);
   // Lojas programadas na semana (roteiro ou programadas à mão) que não vêm de atribuição também contam.
   const scheduled = await db
     .select({
@@ -114,10 +122,10 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
         lte(s.schedules.date, to),
         brandFilter(scope, s.scheduleBrands.brandId),
         promoterFilter(scope, s.schedules.promoterId),
-        f.promoter ? eq(s.schedules.promoterId, f.promoter) : undefined,
-        f.brand ? eq(s.scheduleBrands.brandId, f.brand) : undefined,
-        f.store ? eq(s.schedules.storeId, f.store) : undefined,
-        f.city ? eq(s.stores.city, f.city) : undefined,
+        f.promoter ? filterIn(s.schedules.promoterId, f.promoter) : undefined,
+        f.brand ? filterIn(s.scheduleBrands.brandId, f.brand) : undefined,
+        f.store ? filterIn(s.schedules.storeId, f.store) : undefined,
+        f.city ? filterIn(s.stores.city, f.city) : undefined,
       ),
     );
   const covered = new Set(targets.map((t) => `${t.promoterId}:${t.storeId}:${t.brandId}`));
@@ -148,6 +156,13 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
   const key = (x: { promoterId: string; storeId: string; brandId: string }) => `${x.promoterId}:${x.storeId}:${x.brandId}`;
   const lastBy = new Map(last.map((d) => [key(d), d.d]));
   const rows: PortfolioRow[] = targets.map((t) => {
+    if (range) {
+      const n = visits.filter((v) => key(v) === key(t) && v.date >= from && v.date <= to).length;
+      const goal = Math.max(1, Math.round(expectedInRange(t.perWeek, t.period, from, to)));
+      const expected = Math.min(goal, Math.floor(expectedInRange(t.perWeek, t.period, from, ref)));
+      const status = n >= goal ? "done" : n >= expected ? "on_track" : "behind";
+      return { ...t, source: "assignment" as const, done: n, goal, expected, expectedFixed: expected, status, lastVisit: lastBy.get(key(t)) ?? null, windowFrom: from, windowTo: to };
+    }
     const w = periodWindow(f.date, t.period);
     const tRef = today < w.from ? w.from : today > w.to ? w.to : today;
     const n = visits.filter((v) => key(v) === key(t) && v.date >= w.from && v.date <= w.to).length;
@@ -193,7 +208,7 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
   const everyone = await db
     .select({ id: s.users.id, name: s.users.name })
     .from(s.users)
-    .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id), f.promoter ? eq(s.users.id, f.promoter) : undefined))
+    .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id), f.promoter ? filterIn(s.users.id, f.promoter) : undefined))
     .orderBy(asc(s.users.name));
   const idle = everyone.filter((u) => !byPromoter.has(u.id));
   return { from, to, ref, rows, promoters, idle, registered: everyone.length, totals: weekTotals(rows, ref) };

@@ -14,7 +14,8 @@ import { brandFilter, promoterFilter } from "./scope";
 import { addDays, minutesOfDay, todayIso } from "@/lib/dates";
 import { stopBucket } from "@/lib/rules";
 import type { AttendanceStatus, StopBucket, VisitStatus } from "@/lib/domain";
-import type { PanelFilters } from "@/lib/filters";
+import { fHas, type PanelFilters } from "@/lib/filters";
+import { filterIn } from "@/server/filter-sql";
 
 export interface BoardAttendance {
   id: string;
@@ -92,10 +93,10 @@ export async function getDayBoard(scope: Scope, f: Pick<PanelFilters, "date" | "
     eq(s.schedules.date, date),
     eq(s.schedules.status, "active"),
     promoterFilter(scope, s.schedules.promoterId),
-    f.promoter ? eq(s.schedules.promoterId, f.promoter) : undefined,
-    f.store ? eq(s.schedules.storeId, f.store) : undefined,
-    f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-    f.city ? eq(s.stores.city, f.city) : undefined,
+    f.promoter ? filterIn(s.schedules.promoterId, f.promoter) : undefined,
+    f.store ? filterIn(s.schedules.storeId, f.store) : undefined,
+    f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+    f.city ? filterIn(s.stores.city, f.city) : undefined,
   ];
   const schedRows = await db
     .select({
@@ -131,10 +132,10 @@ export async function getDayBoard(scope: Scope, f: Pick<PanelFilters, "date" | "
     eq(s.visits.visitDate, date),
     ne(s.visits.status, "cancelled"),
     promoterFilter(scope, s.visits.promoterId),
-    f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-    f.store ? eq(s.visits.storeId, f.store) : undefined,
-    f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-    f.city ? eq(s.stores.city, f.city) : undefined,
+    f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+    f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+    f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+    f.city ? filterIn(s.stores.city, f.city) : undefined,
   ];
   const visitRows = await db
     .select({
@@ -182,7 +183,7 @@ export async function getDayBoard(scope: Scope, f: Pick<PanelFilters, "date" | "
         })
         .from(s.attendances)
         .innerJoin(s.brands, eq(s.brands.id, s.attendances.brandId))
-        .where(and(inArray(s.attendances.visitId, visitIds), brandFilter(scope, s.attendances.brandId), f.brand ? eq(s.attendances.brandId, f.brand) : undefined))
+        .where(and(inArray(s.attendances.visitId, visitIds), brandFilter(scope, s.attendances.brandId), f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined))
     : [];
 
   const settings = scope.settings;
@@ -236,7 +237,7 @@ export async function getDayBoard(scope: Scope, f: Pick<PanelFilters, "date" | "
 
   for (const r of schedRows) {
     const plannedBrands = sbRows.filter((b) => b.scheduleId === r.id).map((b) => ({ id: b.brandId, name: b.name }));
-    if (f.brand && !plannedBrands.some((b) => b.id === f.brand)) continue;
+    if (f.brand && !plannedBrands.some((b) => fHas(f.brand, b.id))) continue;
     if (!plannedBrands.length && scope.brandIds !== null) continue; // nenhuma marca visível ao gestor restrito
     const visit = visitRows.find((v) => v.scheduleId === r.id);
     if (visit) usedVisits.add(visit.id);
@@ -289,11 +290,11 @@ export async function getDayBoard(scope: Scope, f: Pick<PanelFilters, "date" | "
         eq(s.visits.visitDate, date),
         brandFilter(scope, s.attendances.brandId),
         promoterFilter(scope, s.visits.promoterId),
-        f.brand ? eq(s.attendances.brandId, f.brand) : undefined,
-        f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-        f.store ? eq(s.visits.storeId, f.store) : undefined,
-        f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-        f.city ? eq(s.stores.city, f.city) : undefined,
+        f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined,
+        f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+        f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+        f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+        f.city ? filterIn(s.stores.city, f.city) : undefined,
       ),
     );
 

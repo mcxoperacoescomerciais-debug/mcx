@@ -11,6 +11,7 @@ import { listIssues } from "./issues";
 import { brandFilter, promoterFilter } from "./scope";
 import type { PanelFilters } from "@/lib/filters";
 import { expectedInRange } from "@/lib/portfolio";
+import { filterIn } from "@/server/filter-sql";
 
 export async function brandExecution(scope: Scope, f: PanelFilters) {
   const db = await getDb();
@@ -21,15 +22,15 @@ export async function brandExecution(scope: Scope, f: PanelFilters) {
     .innerJoin(s.stores, eq(s.stores.id, s.schedules.storeId))
     .where(
       and(
-        f.brand ? eq(s.scheduleBrands.brandId, f.brand) : brandFilter(scope, s.scheduleBrands.brandId),
+        f.brand ? filterIn(s.scheduleBrands.brandId, f.brand) : brandFilter(scope, s.scheduleBrands.brandId),
         eq(s.schedules.agencyId, scope.agencyId),
         eq(s.schedules.status, "active"),
         gte(s.schedules.date, f.from),
         lte(s.schedules.date, f.to),
         promoterFilter(scope, s.schedules.promoterId),
-        f.promoter ? eq(s.schedules.promoterId, f.promoter) : undefined,
-        f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-        f.city ? eq(s.stores.city, f.city) : undefined,
+        f.promoter ? filterIn(s.schedules.promoterId, f.promoter) : undefined,
+        f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+        f.city ? filterIn(s.stores.city, f.city) : undefined,
       ),
     );
   // Previsto = o que foi ATRIBUÍDO (vezes por semana/quinzena/mês × dias do período); sem atribuições, a programação.
@@ -42,11 +43,11 @@ export async function brandExecution(scope: Scope, f: PanelFilters) {
       and(
         eq(s.visitTargets.agencyId, scope.agencyId),
         eq(s.users.status, "active"),
-        f.brand ? eq(s.visitTargets.brandId, f.brand) : brandFilter(scope, s.visitTargets.brandId),
+        f.brand ? filterIn(s.visitTargets.brandId, f.brand) : brandFilter(scope, s.visitTargets.brandId),
         promoterFilter(scope, s.visitTargets.promoterId),
-        f.promoter ? eq(s.visitTargets.promoterId, f.promoter) : undefined,
-        f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-        f.city ? eq(s.stores.city, f.city) : undefined,
+        f.promoter ? filterIn(s.visitTargets.promoterId, f.promoter) : undefined,
+        f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+        f.city ? filterIn(s.stores.city, f.city) : undefined,
       ),
     );
   const fromTargets = Math.round(targets.reduce((n, t) => n + expectedInRange(t.perWeek, t.period, f.from, f.to), 0));

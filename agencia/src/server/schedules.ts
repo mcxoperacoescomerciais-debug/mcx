@@ -12,6 +12,7 @@ import { promoterFilter } from "./scope";
 import { AUTO_CANCEL_REASON } from "./portfolio";
 import { addDays, isIsoDate, weekdayOf } from "@/lib/dates";
 import type { ActionResult } from "./manager";
+import { filterIn } from "./filter-sql";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -70,7 +71,7 @@ export async function listDaySchedules(scope: Scope, date: string, promoterId: s
         eq(s.schedules.agencyId, scope.agencyId),
         eq(s.schedules.date, date),
         promoterFilter(scope, s.schedules.promoterId),
-        promoterId ? eq(s.schedules.promoterId, promoterId) : undefined,
+        promoterId ? filterIn(s.schedules.promoterId, promoterId) : undefined,
         // Retirada automática (dia saiu da atribuição) não é cancelamento do gestor: não aparece.
         sql`not (${s.schedules.status} = 'cancelled' and ${s.schedules.origin} = 'assignment' and ${s.schedules.cancelReason} = ${AUTO_CANCEL_REASON})`,
       ),

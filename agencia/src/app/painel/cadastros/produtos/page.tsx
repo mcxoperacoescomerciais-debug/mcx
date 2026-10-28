@@ -10,6 +10,7 @@ import { FilterBar } from "../../_components/filter-bar";
 import { Pagination, SectionCard, Table, Td, Th } from "../../_components/widgets";
 import { ActionForm, Disclosure } from "../../_components/action-form";
 import { saveProductAction } from "../actions";
+import { filterIn } from "@/server/filter-sql";
 
 export const metadata: Metadata = { title: "Produtos" };
 type Product = typeof s.products.$inferSelect;
@@ -28,7 +29,7 @@ export default async function ProductsAdminPage({ searchParams }: PageProps<"/pa
     .where(
       and(
         eq(s.products.agencyId, scope.agencyId),
-        f.brand ? eq(s.products.brandId, f.brand) : undefined,
+        f.brand ? filterIn(s.products.brandId, f.brand) : undefined,
         f.status ? eq(s.products.status, f.status as "active" | "inactive") : undefined,
         q ? sql`(lower(${s.products.name}) like ${q} or lower(${s.products.sku}) like ${q} or coalesce(${s.products.ean}, '') like ${q} or lower(coalesce(${s.products.category}, '')) like ${q})` : undefined,
       ),
@@ -86,7 +87,7 @@ export default async function ProductsAdminPage({ searchParams }: PageProps<"/pa
           <Pagination page={f.page} total={total} pageSize={f.pageSize} hrefFor={(pg) => withParams({ brand: f.brand, status: f.status, q: f.q || null }, { page: pg })} />
         </div>
         <SectionCard title="Novo produto" bodyClass="px-5 pb-5">
-          <ProductForm product={null} brands={brands} defaultBrand={f.brand} />
+          <ProductForm product={null} brands={brands} defaultBrand={f.brand && !f.brand.includes(",") ? f.brand : null} />
         </SectionCard>
       </div>
     </>

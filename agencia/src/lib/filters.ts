@@ -11,6 +11,11 @@ export interface PanelFilters {
   /** Período (painéis analíticos). */
   from: string;
   to: string;
+  /**
+   * Marca, rede, loja, promotor e cidade aceitam vários itens marcados, separados
+   * por vírgula na URL (ex.: rede=a,b). Nas consultas, use `filterIn` (servidor)
+   * ou `fHas` (memória) — nunca compare com `===`.
+   */
   brand: string | null;
   chain: string | null;
   store: string | null;
@@ -27,7 +32,23 @@ export interface PanelFilters {
 type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const id = (v: string) => (UUID.test(v) ? v : null);
+const id = (v: string) => list(v, (x) => UUID.test(x));
+/** Lista separada por vírgula (sem repetidos, até 200 itens) ou null. */
+function list(v: string, ok: (x: string) => boolean): string | null {
+  const items = [...new Set(v.split(",").map((x) => x.trim()).filter((x) => x && ok(x)))].slice(0, 200);
+  return items.length ? items.join(",") : null;
+}
+
+/** Itens marcados de um filtro (vazio = todos). */
+export function filterValues(v: string | null | undefined): string[] {
+  return v ? v.split(",").filter(Boolean) : [];
+}
+
+/** O valor está entre os marcados no filtro (filtro vazio = qualquer um serve). */
+export function fHas(filter: string | null | undefined, value: string | null | undefined): boolean {
+  if (!filter) return true;
+  return value != null && filterValues(filter).includes(value);
+}
 
 /** Busca de texto das abas do painel: a mesma regra de matchesQuery (sem acento, cada palavra digitada), em vários campos. */
 export function matchText(q: string, ...parts: (string | null | undefined)[]): boolean {
@@ -50,7 +71,7 @@ export function parseFilters(params: Params, defaultDays = 7): PanelFilters {
     chain: id(one(params.chain)),
     store: id(one(params.store)),
     promoter: id(one(params.promoter)),
-    city: one(params.city).trim().slice(0, 80) || null,
+    city: list(one(params.city), (x) => x.length <= 80),
     status: /^[a-z_]{2,40}$/.test(one(params.status)) ? one(params.status) : null,
     kind: /^[a-z_]{2,40}$/.test(one(params.kind)) ? one(params.kind) : null,
     q: one(params.q).trim().slice(0, 80),

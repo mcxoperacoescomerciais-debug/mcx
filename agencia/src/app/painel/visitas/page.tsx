@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight, FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions, getRangeBoard } from "@/server/operations";
-import { parseDayRange, withParams } from "@/lib/filters";
+import { fHas, parseDayRange, withParams } from "@/lib/filters";
 import { STOP_BUCKET_LABEL, STOP_BUCKET_TONE, STOP_BUCKETS } from "@/lib/domain";
 import { fmtDate, fmtLongDate, fmtTime } from "@/lib/dates";
 import { matchesQuery } from "@/lib/rules";
@@ -25,7 +25,7 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
   const oneDay = f.from === f.to;
   const stops = board.stops
     .filter((st) => !f.status || (f.status === "open" ? ["pending", "late", "missed"].includes(st.bucket) : f.status === "completed" ? st.bucket === "completed" || st.bucket === "exception" : st.bucket === f.status))
-    .filter((st) => !f.store || st.storeId === f.store)
+    .filter((st) => fHas(f.store, st.storeId))
     .filter((st) => matchesQuery(`${st.storeName} ${st.chainName ?? ""} ${st.city} ${st.promoterName}`, f.q));
 
   return (

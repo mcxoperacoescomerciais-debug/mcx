@@ -10,6 +10,7 @@ import { fmtDate } from "@/lib/dates";
 import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
+import { StoreGroups } from "../_components/store-groups";
 import { Pagination, SectionCard, Table, Td, Th } from "../_components/widgets";
 
 export const metadata: Metadata = { title: "Estoque" };
@@ -48,7 +49,7 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
       />
 
       <SectionCard
-        title={`Produtos acabando · ${low.length}`}
+        title={`Produtos acabando · ${low.length} em ${new Set(low.map((r) => r.store_id)).size} loja(s)`}
         subtitle={`Última contagem de cada produto em cada loja no período, com até ${maxUnits} unidades (ou até 1 caixa). Do mais crítico para o menos.`}
         action={
           <div className="flex items-center gap-1.5 text-[12.5px]">
@@ -63,43 +64,48 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
         }
       >
         {low.length ? (
-          <Table>
-            <thead>
+          <StoreGroups
+            rows={low}
+            storeOf={(r) => ({ id: r.store_id, name: r.store_name, city: r.city })}
+            extra={(items) => {
+              const out = items.filter((r) => r.quantity === 0).length;
+              return out ? <span className="text-bad font-semibold">{out} acabaram</span> : null;
+            }}
+            head={
               <tr>
-                <Th>Loja</Th>
                 <Th>Produto</Th>
                 <Th align="right">Restam</Th>
                 <Th>Contado em</Th>
               </tr>
-            </thead>
-            <tbody>
-              {low.map((r) => (
-                <tr key={`${r.store_id}:${r.product_id}`} className="hover:bg-subtle">
-                  <Td>
-                    <span className="font-semibold">{r.store_name}</span>
-                    <span className="block text-[11.5px] text-muted">{r.city}</span>
-                  </Td>
-                  <Td>
-                    {r.product_name}
-                    <span className="block text-[11.5px] text-muted">
-                      {r.brand_name} · SKU {r.sku}
-                    </span>
-                  </Td>
-                  <Td align="right" className="whitespace-nowrap">
-                    <span className={`text-[17px] font-bold tnum ${r.quantity === 0 ? "text-bad" : r.quantity <= 2 ? "text-bad" : "text-warn"}`}>
-                      {r.quantity === 0 ? "Acabou" : `${r.quantity} ${r.unit === "cx" ? (r.quantity === 1 ? "caixa" : "caixas") : r.quantity === 1 ? "unidade" : "unidades"}`}
-                    </span>
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    <Link href={`/painel/atendimentos/${r.attendance_id}`} target="_blank" className="tnum hover:underline">
-                      {fmtDate(r.visit_date)}
-                    </Link>
-                    <span className="block text-[11.5px] text-muted">{r.promoter_name}</span>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+            }
+            renderRow={(r) => (
+              <tr key={`${r.store_id}:${r.product_id}`} className="hover:bg-surface">
+                <Td>
+                  {r.product_name}
+                  <span className="block text-[11.5px] text-muted">
+                    {r.brand_name} · SKU {r.sku}
+                  </span>
+                </Td>
+                <Td align="right" className="whitespace-nowrap">
+                  <span className={`text-[17px] font-bold tnum ${r.quantity === 0 ? "text-bad" : r.quantity <= 2 ? "text-bad" : "text-warn"}`}>
+                    {r.quantity === 0 ? "Acabou" : `${r.quantity} ${r.unit === "cx" ? (r.quantity === 1 ? "caixa" : "caixas") : r.quantity === 1 ? "unidade" : "unidades"}`}
+                  </span>
+                </Td>
+                <Td className="whitespace-nowrap">
+                  <Link href={`/painel/atendimentos/${r.attendance_id}`} target="_blank" className="tnum hover:underline">
+                    {fmtDate(r.visit_date)}
+                  </Link>
+                  <span className="block text-[11.5px] text-muted">{r.promoter_name}</span>
+                </Td>
+              </tr>
+            )}
+            exportTitle="Produtos acabando"
+            exportHead={["Produto", "SKU", "Marca", "Restam", "Unidade", "Contado em", "Promotor"]}
+            exportRow={(r) => [r.product_name, r.sku, r.brand_name, r.quantity, r.unit, fmtDate(r.visit_date), r.promoter_name]}
+            page={1}
+            pageSize={100_000}
+            hrefFor={() => "#"}
+          />
         ) : (
           <EmptyState title="Nenhum produto acabando neste filtro" />
         )}

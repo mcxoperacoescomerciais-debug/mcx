@@ -10,10 +10,11 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { getDayBoard, getRangeBoard, summarizePromoters, type PromoterOpStatus } from "./operations";
 import { brandFilter, promoterFilter } from "./scope";
-import type { PanelFilters } from "@/lib/filters";
+import { fHas, type PanelFilters } from "@/lib/filters";
 import type { StopBucket } from "@/lib/domain";
 import { checkinPresence, distanceM, type PresenceState } from "@/lib/rules";
 import { todayIso } from "@/lib/dates";
+import { filterIn } from "@/server/filter-sql";
 
 export type MapStatus = StopBucket | "unscheduled";
 
@@ -86,7 +87,7 @@ export async function mapData(scope: Scope, f: Pick<PanelFilters, "from" | "to" 
             await db
               .select({ storeId: s.storeBrands.storeId })
               .from(s.storeBrands)
-              .where(and(f.brand ? eq(s.storeBrands.brandId, f.brand) : undefined, brandFilter(scope, s.storeBrands.brandId)))
+              .where(and(f.brand ? filterIn(s.storeBrands.brandId, f.brand) : undefined, brandFilter(scope, s.storeBrands.brandId)))
           ).map((r) => r.storeId),
         )
       : null;
@@ -123,9 +124,9 @@ export async function mapData(scope: Scope, f: Pick<PanelFilters, "from" | "to" 
       if (f.promoter || (f.status && f.status !== "unscheduled")) continue;
       if (brandStores && !brandStores.has(r.id)) continue;
     } else if (f.status === "unscheduled") continue;
-    if (f.chain && r.chainId !== f.chain) continue;
-    if (f.city && r.city !== f.city) continue;
-    if (f.store && r.id !== f.store) continue;
+    if (!fHas(f.chain, r.chainId)) continue;
+    if (!fHas(f.city, r.city)) continue;
+    if (!fHas(f.store, r.id)) continue;
     const valid = r.lat != null && r.lng != null && Math.abs(r.lat) <= 90 && Math.abs(r.lng) <= 180 && !(r.lat === 0 && r.lng === 0);
     for (const st of stops) {
       if (st.registered && valid) st.registered.distanceM = Math.round(distanceM({ lat: r.lat!, lng: r.lng! }, st.registered));
@@ -321,7 +322,7 @@ export async function geoPermissionList(scope: Scope, promoterId?: string | null
   const rows = await db
     .select({ id: s.users.id, name: s.users.name, permission: s.users.geoPermission, checkedAt: s.users.geoCheckedAt, lastSeenAt: s.users.lastSeenAt })
     .from(s.users)
-    .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id), promoterId ? eq(s.users.id, promoterId) : undefined));
+    .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"), promoterFilter(scope, s.users.id), promoterId ? filterIn(s.users.id, promoterId) : undefined));
   return rows
     .filter((r) => r.permission !== "granted")
     .map((r) => ({ ...r, permission: (r.permission === "denied" || r.permission === "prompt" || r.permission === "unsupported" ? r.permission : "unknown") as GeoPermissionState }))

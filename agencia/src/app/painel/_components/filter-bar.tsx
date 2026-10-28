@@ -24,6 +24,9 @@ export interface FilterOptionsProps {
   kinds?: Option[];
 }
 
+/** Filtros com caixinhas de marcação (vários itens de uma vez). */
+const MULTI: FilterField[] = ["brand", "chain", "store", "promoter", "city"];
+
 const rangeDateClass = "h-9 w-[128px] rounded-lg bg-transparent px-2 text-[13px] text-ink focus:outline-none";
 
 export function FilterBar({
@@ -73,7 +76,16 @@ export function FilterBar({
   const from = range?.from ?? params.get("from") ?? addDays(today, -6);
   const to = range?.to ?? params.get("to") ?? today;
   const sel = (field: FilterField, label: string, items: Option[] | undefined) =>
-    fields.includes(field) && items ? <SearchSelect key={field} label={label} value={params.get(field) ?? undefined} items={items} onChange={(id) => update({ [field]: id ?? null })} /> : null;
+    fields.includes(field) && items ? (
+      <SearchSelect
+        key={field}
+        label={label}
+        value={params.get(field) ?? undefined}
+        items={items}
+        multiple={MULTI.includes(field)}
+        onChange={(id) => update({ [field]: id ?? null })}
+      />
+    ) : null;
   const active = ["brand", "chain", "store", "promoter", "city", "status", "kind", "q"].some((k) => params.get(k));
 
   return (

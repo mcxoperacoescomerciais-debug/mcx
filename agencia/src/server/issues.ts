@@ -17,6 +17,7 @@ import { EXCEPTION_ITEM_LABEL, OCCURRENCE_CATEGORY_LABEL, type ExceptionItem, ty
 import { addDays, fmtDateTime, hhmmToMinutes, minutesOfDay, todayIso } from "@/lib/dates";
 import type { PanelFilters } from "@/lib/filters";
 import { checkinPresence, fmtDistance } from "@/lib/rules";
+import { filterIn, sqlList } from "@/server/filter-sql";
 
 export interface Issue {
   key: string;
@@ -66,11 +67,11 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
     ne(s.visits.status, "cancelled"),
     brandFilter(scope, s.attendances.brandId),
     promoterFilter(scope, s.visits.promoterId),
-    f.brand ? eq(s.attendances.brandId, f.brand) : undefined,
-    f.store ? eq(s.visits.storeId, f.store) : undefined,
-    f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-    f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-    f.city ? eq(s.stores.city, f.city) : undefined,
+    f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined,
+    f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+    f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+    f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+    f.city ? filterIn(s.stores.city, f.city) : undefined,
   ];
   const atts = await db
     .select({
@@ -156,10 +157,10 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
         eq(s.visits.agencyId, scope.agencyId),
         lte(s.visits.visitDate, f.to),
         promoterFilter(scope, s.visits.promoterId),
-        f.store ? eq(s.visits.storeId, f.store) : undefined,
-        f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-        f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-        f.city ? eq(s.stores.city, f.city) : undefined,
+        f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+        f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+        f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+        f.city ? filterIn(s.stores.city, f.city) : undefined,
         sql`((${s.visits.status} = 'closed_incomplete' and ${s.visits.visitDate} >= ${f.from}) or (${s.visits.status} = 'in_progress' and ${s.visits.visitDate} >= ${openFrom} and (${s.visits.visitDate} < ${today} or ${afterDayEnd})))`,
       ),
     );
@@ -198,10 +199,10 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
           lte(s.visits.visitDate, f.to),
           ne(s.visits.status, "cancelled"),
           promoterFilter(scope, s.visits.promoterId),
-          f.store ? eq(s.visits.storeId, f.store) : undefined,
-          f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-          f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-          f.city ? eq(s.stores.city, f.city) : undefined,
+          f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+          f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+          f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+          f.city ? filterIn(s.stores.city, f.city) : undefined,
         ),
       );
     const radius = scope.settings.checkinRadiusM;
@@ -249,11 +250,11 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
           gte(s.schedules.date, f.from),
           lte(s.schedules.date, until),
           promoterFilter(scope, s.schedules.promoterId),
-          f.promoter ? eq(s.schedules.promoterId, f.promoter) : undefined,
-          f.store ? eq(s.schedules.storeId, f.store) : undefined,
-          f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-          f.city ? eq(s.stores.city, f.city) : undefined,
-          f.brand ? sql`exists (select 1 from ${s.scheduleBrands} sb where sb.schedule_id = ${s.schedules.id} and sb.brand_id = ${f.brand})` : undefined,
+          f.promoter ? filterIn(s.schedules.promoterId, f.promoter) : undefined,
+          f.store ? filterIn(s.schedules.storeId, f.store) : undefined,
+          f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+          f.city ? filterIn(s.stores.city, f.city) : undefined,
+          f.brand ? sql`exists (select 1 from ${s.scheduleBrands} sb where sb.schedule_id = ${s.schedules.id} and sb.brand_id in ${sqlList(f.brand)})` : undefined,
           // Gestor restrito a marcas: só programações com alguma marca dele.
           scope.brandIds
             ? scope.brandIds.length

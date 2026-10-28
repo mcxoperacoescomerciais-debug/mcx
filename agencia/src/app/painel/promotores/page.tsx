@@ -6,7 +6,7 @@ import { filterOptions, getRangeBoard, PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TO
 import { listPromoters } from "@/server/history";
 import { workTimes } from "@/server/work-time";
 import { fmtMinutes } from "@/lib/work-time";
-import { parseDayRange, withParams } from "@/lib/filters";
+import { fHas, parseDayRange, withParams } from "@/lib/filters";
 import { EMPLOYMENT_LABEL } from "@/lib/domain";
 import { fmtAgo, fmtDate, fmtLongDate } from "@/lib/dates";
 import { matchesQuery } from "@/lib/rules";
@@ -43,7 +43,7 @@ export default async function PromotersPage({ searchParams }: PageProps<"/painel
       };
     })
     .filter((p) => matchesQuery(`${p.name} ${p.region ?? ""} ${p.internalCode ?? ""}`, f.q))
-    .filter((p) => !f.promoter || p.id === f.promoter)
+    .filter((p) => fHas(f.promoter, p.id))
     .filter((p) => !f.status || p.opStatus === f.status);
   // Gestor restrito a marcas: só promotores que atuaram com essas marcas na data.
   if (scope.brandIds !== null || f.brand || f.chain || f.city || f.store) rows = rows.filter((p) => summaries.has(p.id));

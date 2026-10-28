@@ -10,6 +10,7 @@ import { KpiCard, Pagination, SectionCard, Table, Td, Th } from "../../_componen
 import { ActionForm, Disclosure } from "../../_components/action-form";
 import { saveChainAction } from "../actions";
 import { StoreForm } from "./store-form";
+import { filterIn, sqlList } from "@/server/filter-sql";
 
 export const metadata: Metadata = { title: "Redes e lojas" };
 
@@ -53,10 +54,10 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/pain
     .where(
       and(
         eq(s.stores.agencyId, scope.agencyId),
-        f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-        f.city ? eq(s.stores.city, f.city) : undefined,
+        f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+        f.city ? filterIn(s.stores.city, f.city) : undefined,
         f.status ? eq(s.stores.status, f.status as "active" | "inactive") : undefined,
-        f.brand ? sql`exists (select 1 from ${s.storeBrands} sb where sb.store_id = ${s.stores.id} and sb.brand_id = ${f.brand})` : undefined,
+        f.brand ? sql`exists (select 1 from ${s.storeBrands} sb where sb.store_id = ${s.stores.id} and sb.brand_id in ${sqlList(f.brand)})` : undefined,
         posicao ? positionWhere(posicao) : undefined,
         q ? sql`(lower(${s.stores.name}) like ${q} or lower(coalesce(${s.stores.code}, '')) like ${q} or lower(${s.stores.city}) like ${q} or coalesce(${s.stores.cnpj}, '') like ${q})` : undefined,
       ),

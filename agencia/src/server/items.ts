@@ -13,6 +13,7 @@ import { DAMAGE_KIND_LABEL, VALIDITY_LOCATION_LABEL, type DamageKind, type Valid
 import { daysBetween, fmtDateTime, todayIso } from "@/lib/dates";
 import { SEVERITIES, SEVERITY_LABEL, type Severity } from "@/lib/validity";
 import type { SheetSpec } from "./xlsx";
+import { filterIn } from "@/server/filter-sql";
 
 type F = PanelFilters;
 
@@ -22,11 +23,11 @@ function conds(scope: Scope, f: F): (SQL | undefined)[] {
     lte(s.visits.visitDate, f.to),
     brandFilter(scope, s.attendances.brandId),
     promoterFilter(scope, s.visits.promoterId),
-    f.brand ? eq(s.attendances.brandId, f.brand) : undefined,
-    f.store ? eq(s.visits.storeId, f.store) : undefined,
-    f.promoter ? eq(s.visits.promoterId, f.promoter) : undefined,
-    f.chain ? eq(s.stores.chainId, f.chain) : undefined,
-    f.city ? eq(s.stores.city, f.city) : undefined,
+    f.brand ? filterIn(s.attendances.brandId, f.brand) : undefined,
+    f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+    f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+    f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+    f.city ? filterIn(s.stores.city, f.city) : undefined,
     f.q ? sql`(lower(${s.products.name}) like ${`%${f.q.toLowerCase()}%`} or lower(${s.products.sku}) like ${`%${f.q.toLowerCase()}%`})` : undefined,
   ];
 }
