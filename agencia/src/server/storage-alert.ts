@@ -67,7 +67,7 @@ export function storageMessage(u: StorageUsage, prev: { photosBytes: number; at:
   const pPct = pctOf(u.photosBytes, u.photosLimit);
   const dPct = pctOf(u.dbBytes, u.dbLimit);
   const lines = [
-    alertLevel === 100 ? "🚨 *MCX Campo · limite de armazenamento atingido*" : alertLevel === 80 ? "⚠️ *MCX Campo · armazenamento acima de 80%*" : "📦 *MCX Campo · armazenamento de hoje*",
+    alertLevel === 100 ? "🚨 *MCX Trade · limite de armazenamento atingido*" : alertLevel === 80 ? "⚠️ *MCX Trade · armazenamento acima de 80%*" : "📦 *MCX Trade · armazenamento de hoje*",
     "",
     `*Fotos:* ${fmt(u.photosBytes)} de ${fmt(u.photosLimit)} (${pPct}%)${u.photosEstimated ? " · estimado" : ""}`,
     `*Banco de dados:* ${fmt(u.dbBytes)} de ${fmt(u.dbLimit)} (${dPct}%)`,

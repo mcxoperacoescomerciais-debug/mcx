@@ -141,21 +141,43 @@ export function EmptyState({ icon, title, children, className }: { icon?: ReactN
   );
 }
 
-/** Identidade de quem usa o sistema: a agência (logo + nome). A MCX aparece só no rodapé. */
+/** Nome do app. */
+export const APP_NAME = "MCX Trade";
+
+/** Assinatura "MCX TRADE" em letras espaçadas (prata no fundo escuro). */
+export function TradeWordmark({ variant = "light", className }: { variant?: "light" | "dark"; className?: string }) {
+  return (
+    <span className={clsx("inline-flex items-baseline gap-[0.35em] text-[10px] font-semibold uppercase tracking-[0.22em] leading-none", className)}>
+      <span className={variant === "light" ? "text-silver" : "text-ink-2"}>MCX</span>
+      <span className={variant === "light" ? "text-silver-2" : "text-muted"}>Trade</span>
+    </span>
+  );
+}
+
+/**
+ * Identidade no cabeçalho: "MCX TRADE" em cima e, embaixo, quem usa — o nome da
+ * agência (com a logo dela, se houver) ou a visão da equipe MCX.
+ */
 export function BrandMark({ variant = "light", name, logoUrl, subtitle }: { variant?: "light" | "dark"; name: string; logoUrl?: string | null; subtitle?: string }) {
   return (
-    <div className="flex items-center gap-2.5 min-w-0">
+    <div className="flex items-center gap-3 min-w-0">
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logoUrl} alt="" className="size-10 rounded-full object-cover bg-white shrink-0" />
+        <img src={logoUrl} alt="" className="size-10 rounded-[11px] object-cover bg-white shrink-0 ring-1 ring-white/15" />
       ) : (
-        <span className={clsx("size-9 rounded-[10px] grid place-items-center font-bold text-[15px] tracking-tight shrink-0", variant === "light" ? "bg-white text-brand-900" : "bg-brand-800 text-white")}>
+        <span
+          className={clsx(
+            "size-10 rounded-[11px] grid place-items-center font-semibold text-[16px] tracking-tight shrink-0",
+            variant === "light" ? "bg-gradient-to-br from-white to-silver text-brand-900 ring-1 ring-white/20" : "bg-brand-800 text-white",
+          )}
+        >
           {name.slice(0, 1).toUpperCase()}
         </span>
       )}
-      <div className="leading-tight min-w-0">
-        <div className={clsx("font-semibold text-[14px] truncate", variant === "light" ? "text-white" : "text-ink")}>{name}</div>
-        <div className={clsx("text-[11px] truncate", variant === "light" ? "text-brand-200" : "text-muted")}>{subtitle ?? "Execução em loja"}</div>
+      <div className="min-w-0">
+        <TradeWordmark variant={variant} />
+        <div className={clsx("font-semibold text-[15px] leading-tight truncate mt-1", variant === "light" ? "text-white" : "text-ink")}>{name}</div>
+        {subtitle ? <div className={clsx("text-[11px] leading-tight truncate mt-0.5", variant === "light" ? "text-brand-200/80" : "text-muted")}>{subtitle}</div> : null}
       </div>
     </div>
   );

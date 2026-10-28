@@ -24,7 +24,7 @@ export interface FilterOptionsProps {
   kinds?: Option[];
 }
 
-const dateClass = "h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[13px] text-ink focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100";
+const rangeDateClass = "h-9 w-[128px] rounded-lg bg-transparent px-2 text-[13px] text-ink focus:outline-none";
 
 export function FilterBar({
   fields,
@@ -112,9 +112,12 @@ export function FilterBar({
               </button>
             ))}
           </div>
-          <input type="date" aria-label="Data inicial" value={from} onChange={(e) => update({ from: e.target.value || null })} className={dateClass} />
-          <span className="text-muted text-[12px]">até</span>
-          <input type="date" aria-label="Data final" value={to} onChange={(e) => update({ to: e.target.value || null })} className={dateClass} />
+          {/* Início e fim num bloco só: no celular quebram juntos, sem o "até" sozinho na linha. */}
+          <div className="inline-flex items-center rounded-lg border border-line-strong bg-surface focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100">
+            <input type="date" aria-label="Data inicial" value={from} onChange={(e) => update({ from: e.target.value || null })} className={rangeDateClass} />
+            <span className="text-muted text-[12px] px-0.5">até</span>
+            <input type="date" aria-label="Data final" value={to} onChange={(e) => update({ to: e.target.value || null })} className={rangeDateClass} />
+          </div>
         </div>
       ) : null}
       {sel("brand", "Todas as marcas", options.brands)}

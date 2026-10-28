@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { AlertOctagon, ArrowRight, CalendarClock, ChevronRight, Clock, MapPin, PencilLine, PlayCircle, RotateCcw, Store } from "lucide-react";
 import clsx from "clsx";
-import { Button, McxFooter, Progress, StatusBadge } from "@/components/ui";
+import { Button, McxFooter, Progress, StatusBadge, TradeWordmark } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtLongDate, fmtTime } from "@/lib/dates";
 import { pendingCount } from "../_lib/local-store";
@@ -87,7 +87,10 @@ export function HomeScreen() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={local.bootstrap!.agency.logoUrl} alt={local.bootstrap!.agency.name} className="size-9 rounded-full object-cover bg-white shrink-0" />
               ) : null}
-              <p className="text-[13px] text-brand-200 first-letter:uppercase truncate">{fmtLongDate(today)}</p>
+              <div className="min-w-0">
+                <TradeWordmark />
+                <p className="text-[14px] font-semibold text-white truncate mt-1 leading-tight">{local.bootstrap!.agency.name}</p>
+              </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <SyncPill />
@@ -99,13 +102,13 @@ export function HomeScreen() {
           </h1>
           {portfolioHome ? (
             <>
-              <p className="text-[14px] text-brand-200 mt-0.5">{local.bootstrap!.agency.name} · sua carteira da semana</p>
+              <p className="text-[14px] text-brand-200 mt-0.5 first-letter:uppercase">{fmtLongDate(today)} · sua carteira da semana</p>
               <PortfolioHeader p={portfolioHome} onStart={startStore} />
             </>
           ) : (
           <>
           <p className="text-[14px] text-brand-200 mt-0.5">
-            {local.bootstrap!.agency.name} · {stops.length ? `${stops.length} ${stops.length === 1 ? "loja programada" : "lojas programadas"} hoje` : "sem programação hoje"}
+            <span className="first-letter:uppercase inline-block">{fmtLongDate(today)}</span> · {stops.length ? `${stops.length} ${stops.length === 1 ? "loja programada" : "lojas programadas"}` : "sem programação"}
           </p>
 
           <div className="grid grid-cols-3 gap-2 mt-5">

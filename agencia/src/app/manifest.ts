@@ -2,8 +2,9 @@ import type { MetadataRoute } from "next";
 import { eq } from "drizzle-orm";
 import { getDb, schema as s } from "@/server/db";
 import { getSessionUser } from "@/server/auth";
+import { APP_NAME } from "@/components/ui";
 
-/** Nome do app instalado = agência do usuário (promotor instala já logado). */
+/** App instalado: "MCX Trade", com a agência do usuário no nome completo (promotor instala já logado). */
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   let name: string | null = null;
   const user = await getSessionUser().catch(() => null);
@@ -13,9 +14,9 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     if (a) name = a.name;
   }
   return {
-    name: name ? `${name} — Execução em loja` : "Execução em loja",
-    short_name: !name ? "Em loja" : name.length > 14 ? name.split(" ")[0] : name,
-    description: "Roteiro, fotos do antes e depois, estoque e ruptura.",
+    name: name ? `${APP_NAME} · ${name}` : APP_NAME,
+    short_name: APP_NAME,
+    description: "Trade marketing e execução em loja: roteiro, fotos do antes e depois, estoque, ruptura e validade.",
     start_url: "/app",
     scope: "/",
     display: "standalone",

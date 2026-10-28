@@ -266,7 +266,7 @@ export function PanelShell({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const mcx = Boolean(platform) && (pathname.startsWith("/painel/mcx") || !agency);
-  const brand = mcx || !agency ? <BrandMark name="MCX" logoUrl="/mcx_logo.png" subtitle="Visão das agências" /> : <BrandMark name={agency.name} logoUrl={agency.logoUrl} subtitle="Execução em loja" />;
+  const brand = mcx || !agency ? <BrandMark name="Equipe MCX" logoUrl="/mcx_logo.png" subtitle="Visão das agências" /> : <BrandMark name={agency.name} logoUrl={agency.logoUrl} />;
   const sidebar = (onNavigate?: () => void) => (
     <>
       {platform ? <AgencySwitcher platform={platform} current={mcx ? null : agency?.id ?? null} onNavigate={onNavigate} /> : null}
