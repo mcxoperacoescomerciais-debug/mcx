@@ -64,7 +64,16 @@ export interface StockRow {
  * mesma loja (LAG) — base para "divergência relevante entre registros".
  * Só atendimentos concluídos (ou em correção) contam como levantamento válido.
  */
-export async function stockRecords(scope: Scope, f: F, opts: { page?: number; pageSize?: number } = {}) {
+/** Ordem da lista de contagens. */
+export type StockOrder = "recentes" | "antigos" | "maior" | "menor";
+const STOCK_ORDER: Record<StockOrder, string> = {
+  recentes: "flagged.visit_date desc, st.name, p.sort_order, p.name",
+  antigos: "flagged.visit_date asc, st.name, p.sort_order, p.name",
+  maior: "flagged.quantity desc nulls last, flagged.visit_date desc, st.name, p.name",
+  menor: "flagged.quantity asc nulls last, flagged.visit_date desc, st.name, p.name",
+};
+
+export async function stockRecords(scope: Scope, f: F, opts: { page?: number; pageSize?: number; order?: StockOrder } = {}) {
   const db = await getDb();
   const pct = scope.settings.stockDivergencePct;
   const conds = and(eq(s.stockEntries.agencyId, scope.agencyId), sql`${s.attendances.status} in ('completed','correction_requested')`, lte(s.visits.visitDate, f.to), ...commonConds(scope, f));
@@ -104,7 +113,7 @@ export async function stockRecords(scope: Scope, f: F, opts: { page?: number; pa
     join stores st on st.id = flagged.store_id
     join users u on u.id = flagged.promoter_id
     where true ${stateCond} ${q ? sql`and (lower(p.name) like ${q} or lower(p.sku) like ${q} or lower(st.name) like ${q})` : sql``}
-    order by flagged.visit_date desc, st.name, p.sort_order, p.name
+    order by ${sql.raw(STOCK_ORDER[opts.order ?? "recentes"])}
     limit ${pageSize} offset ${offset}
   `);
   const rows = rowsOf<StockRow>(result).map((r) => ({ ...r, total: Number(r.total) }));
@@ -127,11 +136,12 @@ export interface LowStockRow {
 }
 
 /**
- * "Na loja X o produto Y está acabando": a ÚLTIMA contagem de cada produto em
- * cada loja no período, quando ela é baixa (até `maxUnits` unidades ou até 1
- * caixa) ou zero. Ordenado do mais crítico (menor quantidade) para o menos.
+ * A ÚLTIMA contagem de cada produto em cada loja no período, do mais crítico
+ * (menor quantidade) para o menos. Com `maxUnits`, só as baixas (até essas
+ * unidades ou até 1 caixa) e as zeradas; sem ele, todas (contagem geral).
+ * A situação do filtro (com quantidade / zerado) também vale.
  */
-export async function lowStock(scope: Scope, f: F, maxUnits: number) {
+export async function lowStock(scope: Scope, f: F, maxUnits: number | null = null) {
   const db = await getDb();
   const conds = and(eq(s.stockEntries.agencyId, scope.agencyId), sql`${s.attendances.status} in ('completed','correction_requested')`, gte(s.visits.visitDate, f.from), lte(s.visits.visitDate, f.to), ...commonConds(scope, f));
   const q = f.q ? `%${f.q.toLowerCase()}%` : null;
@@ -155,10 +165,11 @@ export async function lowStock(scope: Scope, f: F, maxUnits: number) {
     join brands b on b.id = latest.brand_id
     join stores st on st.id = latest.store_id
     join users u on u.id = latest.promoter_id
-    where (latest.state = 'zero' or latest.quantity = 0 or (latest.unit = 'cx' and latest.quantity <= 1) or (latest.unit <> 'cx' and latest.quantity <= ${maxUnits}))
+    where ${maxUnits === null ? sql`true` : sql`(latest.state = 'zero' or latest.quantity = 0 or (latest.unit = 'cx' and latest.quantity <= 1) or (latest.unit <> 'cx' and latest.quantity <= ${maxUnits}))`}
+      ${f.status === "zero" ? sql`and (latest.state = 'zero' or latest.quantity = 0)` : f.status === "quantity" ? sql`and latest.state = 'quantity' and latest.quantity > 0` : sql``}
       ${q ? sql`and (lower(p.name) like ${q} or lower(p.sku) like ${q} or lower(st.name) like ${q})` : sql``}
     order by (case when latest.unit = 'cx' then latest.quantity * 1000 else latest.quantity end), st.name, p.name
-    limit 500
+    limit 5000
   `);
   return rowsOf<LowStockRow>(result).map((r) => ({ ...r, quantity: Number(r.quantity) }));
 }

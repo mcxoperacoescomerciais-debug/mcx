@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { ruptureList, ruptureSummary } from "@/server/analytics";
 import { EXPORT_PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
 import { RUPTURE_SITUATION_LABEL } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
-import { EmptyState, LinkButton, PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
 import { KpiCard, RankBar, SectionCard, Table, Td, Th } from "../_components/widgets";
@@ -29,11 +28,6 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
       <PageHeader
         title="Ruptura"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos marcados pelos promotores como “Ruptura total”`}
-        actions={
-          <LinkButton variant="secondary" href={`/api/export/ruptures${withParams(keep)}`} prefetch={false}>
-            <FileDown className="size-4" /> Exportar (Excel)
-          </LinkButton>
-        }
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}
@@ -56,8 +50,7 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
         <Ranking title="Produtos mais registrados" rows={sum.products} hrefFor={() => null} />
         <Ranking title="Lojas com mais ocorrências" rows={sum.stores} hrefFor={(id) => `/painel/lojas/${id}`} />
       </div>
-      <div className="grid xl:grid-cols-2 gap-6 mt-6">
-        <Ranking title="Marcas com mais registros" subtitle="Contagem simples de ocorrências; não é um índice de desempenho" rows={sum.brands} hrefFor={() => null} />
+      <div className="mt-6">
         <SectionCard title="Recorrência" subtitle="Mesmo produto na mesma loja em 2 ou mais visitas do período">
           {sum.recurrent.length ? (
             <Table>

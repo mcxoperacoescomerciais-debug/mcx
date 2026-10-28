@@ -29,7 +29,45 @@ const C = {
 };
 
 const fmtPct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${String(v).replace(".", ",")}%`);
-const short = (t: string, n = 22) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+
+/** Quebra um nome em linhas de até `max` letras (por palavra), sem cortar nada. */
+function wrap(text: string, max: number): string[] {
+  const lines: string[] = [];
+  let cur = "";
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (!cur) cur = word;
+    else if ((cur + " " + word).length <= max) cur += " " + word;
+    else {
+      lines.push(cur);
+      cur = word;
+    }
+    while (cur.length > max) {
+      lines.push(cur.slice(0, max));
+      cur = cur.slice(max);
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [""];
+}
+
+const LINE_H = 13;
+/** Rótulo do eixo com o nome inteiro, em quantas linhas precisar. */
+function WrapTick({ x, y, value, max }: { x: number; y: number; value: string; max: number }) {
+  const lines = wrap(value, max);
+  const top = -((lines.length - 1) * LINE_H) / 2;
+  return (
+    <text x={x} y={y} textAnchor="end" fill={C.text} fontSize={11}>
+      {lines.map((l, i) => (
+        <tspan key={i} x={x - 4} dy={i === 0 ? top + 4 : LINE_H}>
+          {l}
+        </tspan>
+      ))}
+    </text>
+  );
+}
+
+/** Altura de cada linha do gráfico para caber o nome mais longo. */
+const rowHeight = (names: string[], max: number) => Math.max(34, Math.max(...names.map((n) => wrap(n, max).length)) * LINE_H + 12);
 
 function useFilterLink() {
   const router = useRouter();
@@ -62,13 +100,13 @@ export function IndexBars({ data, filterKey, height }: { data: ChartSlice[]; fil
   const go = useFilterLink();
   const rows = data.filter((d) => d.checks > 0 || d.ruptures > 0).slice(0, 12);
   if (!rows.length) return <Empty />;
-  const h = height ?? Math.max(160, rows.length * 34 + 30);
+  const h = height ?? Math.max(160, rows.length * rowHeight(rows.map((r) => r.name), 24) + 30);
   return (
     <ResponsiveContainer width="100%" height={h}>
-      <BarChart data={rows.map((r) => ({ ...r, label: short(r.name), value: r.index ?? 0 }))} layout="vertical" margin={{ top: 4, right: 40, left: 4, bottom: 4 }}>
+      <BarChart data={rows.map((r) => ({ ...r, label: r.name, value: r.index ?? 0 }))} layout="vertical" margin={{ top: 4, right: 40, left: 4, bottom: 4 }}>
         <CartesianGrid horizontal={false} stroke={C.grid} />
         <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fill: C.text, fontSize: 11 }} />
-        <YAxis type="category" dataKey="label" width={150} tick={{ fill: C.text, fontSize: 11.5 }} />
+        <YAxis type="category" dataKey="label" width={190} interval={0} tick={(props) => <WrapTick x={Number(props.x)} y={Number(props.y)} value={String(props.payload?.value ?? "")} max={24} />} />
         <Tooltip
           cursor={{ fill: "rgba(31,107,121,.08)" }}
           content={({ payload }) => {
@@ -91,11 +129,11 @@ export function CountBars({ data, color = C.bad, unit = "ruptura(s)" }: { data: 
   const rows = data.filter((d) => d.value > 0).slice(0, 12);
   if (!rows.length) return <Empty />;
   return (
-    <ResponsiveContainer width="100%" height={Math.max(160, rows.length * 34 + 30)}>
-      <BarChart data={rows.map((r) => ({ ...r, label: short(r.name, 30) }))} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
+    <ResponsiveContainer width="100%" height={Math.max(160, rows.length * rowHeight(rows.map((r) => r.name), 32) + 30)}>
+      <BarChart data={rows.map((r) => ({ ...r, label: r.name }))} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
         <CartesianGrid horizontal={false} stroke={C.grid} />
         <XAxis type="number" allowDecimals={false} tick={{ fill: C.text, fontSize: 11 }} />
-        <YAxis type="category" dataKey="label" width={190} tick={{ fill: C.text, fontSize: 11 }} />
+        <YAxis type="category" dataKey="label" width={250} interval={0} tick={(props) => <WrapTick x={Number(props.x)} y={Number(props.y)} value={String(props.payload?.value ?? "")} max={32} />} />
         <Tooltip
           cursor={{ fill: "rgba(192,57,43,.06)" }}
           content={({ payload }) => {
@@ -163,7 +201,7 @@ export function Donut({ data, center }: { data: { name: string; value: number; c
         {rows.map((r, i) => (
           <li key={r.name} className="flex items-center gap-2">
             <span className="size-3 rounded-sm shrink-0" style={{ background: r.color ?? palette[i % palette.length] }} />
-            <span className="truncate flex-1">{r.name}</span>
+            <span className="flex-1 min-w-0 leading-snug">{r.name}</span>
             <strong className="tnum">{r.value}</strong>
             <span className="text-muted tnum w-12 text-right">{fmtPct(Math.round((r.value / total) * 1000) / 10)}</span>
           </li>

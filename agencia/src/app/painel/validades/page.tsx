@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { validityList, validitySummary } from "@/server/items";
@@ -8,7 +7,7 @@ import { EXPORT_PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
 import { VALIDITY_LOCATION_LABEL, VALIDITY_LOCATIONS } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { describeDays, formatIsoBr, SEVERITIES, SEVERITY_COLOR, SEVERITY_LABEL } from "@/lib/validity";
-import { EmptyState, LinkButton, PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { SeverityBadge } from "@/components/severity";
 import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
@@ -38,11 +37,6 @@ export default async function ValiditiesPage({ searchParams }: PageProps<"/paine
       <PageHeader
         title="Validades"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos com validade registrados pelos promotores (classificação na data da visita)`}
-        actions={
-          <LinkButton variant="secondary" href={`/api/export/validities${withParams(keep)}`} prefetch={false}>
-            <FileDown className="size-4" /> Exportar (Excel)
-          </LinkButton>
-        }
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}

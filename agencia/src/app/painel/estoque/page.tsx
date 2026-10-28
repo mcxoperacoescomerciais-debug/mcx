@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
-import { lowStock, stockRecords } from "@/server/analytics";
+import { lowStock, stockRecords, type StockOrder } from "@/server/analytics";
 import { parseFilters, withParams } from "@/lib/filters";
 import { STOCK_STATE_LABEL, STOCK_STATE_TONE, STOCK_STATES } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
-import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
 import { StoreGroups } from "../_components/store-groups";
@@ -15,17 +14,20 @@ import { Pagination, SectionCard, Table, Td, Th } from "../_components/widgets";
 
 export const metadata: Metadata = { title: "Estoque" };
 
-/** "Acabando" = até N unidades na última contagem. */
-const LOW_OPTIONS = [3, 5, 10, 20];
-const DEFAULT_LOW = 5;
+const ORDERS: { id: StockOrder; label: string }[] = [
+  { id: "recentes", label: "Mais recentes" },
+  { id: "antigos", label: "Mais antigas" },
+  { id: "maior", label: "Maior qtd." },
+  { id: "menor", label: "Menor qtd." },
+];
 
 export default async function StockPage({ searchParams }: PageProps<"/painel/estoque">) {
   const scope = await getScope();
   const f = parseFilters(await searchParams, 7);
   const raw = await searchParams;
-  const maxUnits = LOW_OPTIONS.includes(Number(raw.ate)) ? Number(raw.ate) : DEFAULT_LOW;
-  const [low, list, options] = await Promise.all([lowStock(scope, f, maxUnits), stockRecords(scope, f), filterOptions(scope)]);
-  const keep = { ate: maxUnits === DEFAULT_LOW ? null : String(maxUnits), from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, city: f.city, status: f.status, q: f.q || null };
+  const order = ORDERS.find((o) => o.id === raw.ordem)?.id ?? "recentes";
+  const [low, list, options] = await Promise.all([lowStock(scope, f), stockRecords(scope, f, { order }), filterOptions(scope)]);
+  const keep = { ordem: order === "recentes" ? null : order, from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, city: f.city, status: f.status, q: f.q || null };
   const qs = (patch: Record<string, string | null>) => withParams(keep, { ...patch, page: null });
 
   return (
@@ -33,12 +35,7 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
       <ProductTabs />
       <PageHeader
         title="Estoque"
-        subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · o que está acabando em cada loja, pela contagem dos promotores`}
-        actions={
-          <LinkButton variant="secondary" href={`/api/export/stock${withParams(keep)}`} prefetch={false}>
-            <FileDown className="size-4" /> Exportar (Excel)
-          </LinkButton>
-        }
+        subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · contagem de estoque de cada loja, feita pelos promotores`}
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}
@@ -49,19 +46,8 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
       />
 
       <SectionCard
-        title={`Produtos acabando · ${low.length} em ${new Set(low.map((r) => r.store_id)).size} loja(s)`}
-        subtitle={`Última contagem de cada produto em cada loja no período, com até ${maxUnits} unidades (ou até 1 caixa). Do mais crítico para o menos.`}
-        action={
-          <div className="flex items-center gap-1.5 text-[12.5px]">
-            <span className="text-muted">Até</span>
-            {LOW_OPTIONS.map((n) => (
-              <Link key={n} href={qs({ ate: n === DEFAULT_LOW ? null : String(n) })} className={`h-7 px-2.5 rounded-md font-semibold inline-flex items-center ${n === maxUnits ? "bg-brand-800 text-white" : "border border-line-strong text-ink-2 hover:bg-subtle"}`}>
-                {n}
-              </Link>
-            ))}
-            <span className="text-muted">un.</span>
-          </div>
-        }
+        title={`Contagem por loja · ${low.length} produto(s) em ${new Set(low.map((r) => r.store_id)).size} loja(s)`}
+        subtitle="Última contagem de cada produto em cada loja no período, seguindo os filtros. Do menor estoque para o maior."
       >
         {low.length ? (
           <StoreGroups
@@ -99,7 +85,7 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
                 </Td>
               </tr>
             )}
-            exportTitle="Produtos acabando"
+            exportTitle="Contagem por loja"
             exportHead={["Produto", "SKU", "Marca", "Restam", "Unidade", "Contado em", "Promotor"]}
             exportRow={(r) => [r.product_name, r.sku, r.brand_name, r.quantity, r.unit, fmtDate(r.visit_date), r.promoter_name]}
             page={1}
@@ -107,12 +93,24 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
             hrefFor={() => "#"}
           />
         ) : (
-          <EmptyState title="Nenhum produto acabando neste filtro" />
+          <EmptyState title="Nenhuma contagem neste filtro" />
         )}
       </SectionCard>
 
       <div className="mt-6">
-        <SectionCard title="Todas as contagens" subtitle={`${list.total} registro(s) · comparados ao levantamento anterior do mesmo produto na mesma loja`}>
+        <SectionCard
+          title="Todas as contagens"
+          subtitle={`${list.total} registro(s) · comparados ao levantamento anterior do mesmo produto na mesma loja`}
+          action={
+            <div className="inline-flex rounded-lg border border-line-strong bg-surface p-0.5 text-[12.5px]" role="group" aria-label="Ordem">
+              {ORDERS.map((o) => (
+                <Link key={o.id} href={qs({ ordem: o.id === "recentes" ? null : o.id })} scroll={false} className={`h-7 px-2.5 rounded-md font-semibold inline-flex items-center whitespace-nowrap ${o.id === order ? "bg-brand-800 text-white" : "text-ink-2 hover:bg-subtle"}`}>
+                  {o.label}
+                </Link>
+              ))}
+            </div>
+          }
+        >
           {list.rows.length ? (
             <>
               <Table>

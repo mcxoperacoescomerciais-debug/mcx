@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { damageList, damageSummary } from "@/server/items";
@@ -8,7 +7,7 @@ import { EXPORT_PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
 import { DAMAGE_KIND_LABEL, DAMAGE_KINDS } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { formatIsoBr } from "@/lib/validity";
-import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
 import { StoreGroups } from "../_components/store-groups";
@@ -28,11 +27,6 @@ export default async function DamagesPage({ searchParams }: PageProps<"/painel/a
       <PageHeader
         title="Avarias"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos danificados ou impróprios registrados com foto`}
-        actions={
-          <LinkButton variant="secondary" href={`/api/export/damages${withParams(keep)}`} prefetch={false}>
-            <FileDown className="size-4" /> Exportar (Excel)
-          </LinkButton>
-        }
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}
