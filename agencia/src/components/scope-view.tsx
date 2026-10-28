@@ -17,15 +17,8 @@ export function ScopeHeader({ siteUrl }: { siteUrl: string | null }) {
   return (
     <header className="bg-[#000D36] print:bg-white">
       <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:h-[72px] sm:px-6">
-        <span className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/mcx-monograma-prata.png" alt="MCX Soluções Operacionais" width={470} height={276} className="h-9 w-auto print:invert" />
-          <span className="text-[10px] font-medium uppercase leading-[1.5] tracking-[0.28em] text-[#c9cfd3] print:text-black">
-            Soluções
-            <br />
-            Operacionais
-          </span>
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/mcx-logo-prata.png" alt="MCX Soluções Operacionais" width={480} height={402} className="h-11 w-auto print:invert" />
         {siteUrl ? (
           <a
             href={siteUrl}

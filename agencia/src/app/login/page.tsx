@@ -17,8 +17,7 @@ export default function LoginPage() {
         <div className="w-full max-w-[400px]">
           <header className="flex flex-col items-center text-center mb-8 animate-rise-slow">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/mcx-monograma-prata.png" alt="MCX Soluções Operacionais" className="w-[104px] h-auto drop-shadow-[0_6px_18px_rgba(0,0,0,0.35)]" />
-            <span className="mt-3 text-[9.5px] font-medium uppercase tracking-[0.32em] text-silver-2">Soluções Operacionais</span>
+            <img src="/mcx-logo-prata.png" alt="MCX Soluções Operacionais" width={480} height={402} className="w-[112px] h-auto drop-shadow-[0_6px_18px_rgba(0,0,0,0.35)]" />
             <h1 className="mt-6 text-[28px] font-semibold tracking-tight leading-none text-white">
               MCX <span className="font-light text-silver">Trade</span>
             </h1>
