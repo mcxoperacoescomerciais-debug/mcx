@@ -63,3 +63,29 @@ describe("resposta do cliente", () => {
     );
   });
 });
+
+describe("Não de acordo e desmarcar", () => {
+  const sections = normalizeSections([{ title: "Pessoal", kind: "checklist", items: ["A", "B", "C"] }]);
+
+  test("Não de acordo vale sem motivo e guarda o motivo quando informado", () => {
+    const r = checkResponse(sections, {
+      ...base,
+      answers: { "s1-1": { choice: "declined" }, "s1-2": { choice: "declined", note: "Fica com o nosso RH" }, "s1-3": { choice: "ok" } },
+    });
+    assert.ok(r.ok);
+    assert.deepEqual(
+      r.ok && r.answers.map((a) => [a.choice, a.note]),
+      [
+        ["declined", ""],
+        ["declined", "Fica com o nosso RH"],
+        ["ok", ""],
+      ],
+    );
+  });
+
+  test("item desmarcado (opção vazia) volta a ser pendente", () => {
+    const r = checkResponse(sections, { ...base, answers: { "s1-1": { choice: "" }, "s1-2": { choice: "ok" }, "s1-3": { choice: "ok" } } });
+    assert.equal(r.ok, false);
+    assert.deepEqual(!r.ok && r.missing, ["s1-1"]);
+  });
+});

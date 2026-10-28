@@ -94,7 +94,7 @@ export default async function ScopeDetailPage({ params }: PageProps<"/painel/mcx
                 <ul className="mt-1.5 space-y-1 text-[12.5px] text-muted">
                   {previous.map((p) => (
                     <li key={p.id}>
-                      {fmtDateTime(p.submittedAt)} · {p.signerName} · {p.answers.filter((a) => a.choice === "reservation").length} ressalva(s)
+                      {fmtDateTime(p.submittedAt)} · {p.signerName} · {p.answers.filter((a) => a.choice === "reservation").length} ressalva(s) · {p.answers.filter((a) => a.choice === "declined").length} não de acordo
                     </li>
                   ))}
                 </ul>

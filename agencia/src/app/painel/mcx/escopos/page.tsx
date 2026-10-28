@@ -25,7 +25,7 @@ export default async function ScopesPage() {
       <PageHeader
         eyebrow="MCX · clientes"
         title="Escopos de clientes"
-        subtitle="Monte o checklist de cada cliente e envie o link. O cliente marca De acordo ou Ressalva em cada item e confirma, sem precisar de login."
+        subtitle="Monte o checklist de cada cliente e envie o link. O cliente marca De acordo, Ressalva ou Não de acordo em cada item e confirma, sem precisar de login."
       />
       <div className="grid gap-6 xl:grid-cols-3">
         <SectionCard className="xl:col-span-2" title={`${forms.length} escopo(s)`} bodyClass="pb-1">
@@ -59,8 +59,10 @@ export default async function ScopesPage() {
                           <StatusBadge tone="muted" size="sm">Link desativado</StatusBadge>
                         ) : f.response ? (
                           <>
-                            <StatusBadge tone={c?.reservations ? "warning" : "success"} size="sm">
-                              {c?.reservations ? `Respondido · ${c.reservations} ressalva(s)` : "Respondido · tudo de acordo"}
+                            <StatusBadge tone={c?.declined ? "danger" : c?.reservations ? "warning" : "success"} size="sm">
+                              {c?.reservations || c?.declined
+                                ? `Respondido · ${[c.reservations ? `${c.reservations} ressalva(s)` : "", c.declined ? `${c.declined} não de acordo` : ""].filter(Boolean).join(" · ")}`
+                                : "Respondido · tudo de acordo"}
                             </StatusBadge>
                             <span className="mt-0.5 block text-[12px] text-muted">
                               {f.response.signerName} · {fmtDateTime(f.response.submittedAt)}

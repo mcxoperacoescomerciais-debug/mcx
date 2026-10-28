@@ -1,6 +1,6 @@
 /**
  * Escopos de serviço enviados pela MCX a potenciais clientes: cada cliente
- * recebe um link exclusivo, marca "De acordo" ou "Ressalva" em cada item e
+ * recebe um link exclusivo, marca "De acordo", "Ressalva" ou "Não de acordo" em cada item e
  * confirma o escopo. Regras puras (sem banco), usadas no editor, na página
  * pública e no servidor.
  */
@@ -8,14 +8,17 @@
 export type ScopeSectionKind = "checklist" | "questions";
 
 export const SECTION_KIND_LABEL: Record<ScopeSectionKind, string> = {
-  checklist: "Checklist (De acordo / Ressalva)",
+  checklist: "Checklist (De acordo / Ressalva / Não de acordo)",
   questions: "Perguntas (resposta escrita)",
 };
 
 export type ScopeItem = { id: string; text: string };
 export type ScopeSection = { id: string; title: string; kind: ScopeSectionKind; items: ScopeItem[] };
 
-export type ScopeChoice = "ok" | "reservation";
+/** De acordo, Ressalva (ajuste obrigatório) ou Não de acordo (motivo opcional). */
+export type ScopeChoice = "ok" | "reservation" | "declined";
+
+export const SCOPE_CHOICE_LABEL: Record<ScopeChoice, string> = { ok: "De acordo", reservation: "Ressalva", declined: "Não de acordo" };
 
 /** Resposta de um item, com o texto do item congelado no momento do envio. */
 export type ScopeAnswer = {
@@ -85,9 +88,10 @@ export type ResponseCheck =
   | { ok: false; error: string; missing: string[] };
 
 /**
- * Confere a resposta do cliente: todo item de checklist precisa de "De acordo"
- * ou "Ressalva", e toda ressalva precisa de um comentário. Perguntas são
- * opcionais. Também exige nome, cargo e o aceite final.
+ * Confere a resposta do cliente: todo item de checklist precisa de "De acordo",
+ * "Ressalva" ou "Não de acordo"; a ressalva exige comentário e o "Não de
+ * acordo" aceita um motivo opcional. Perguntas são opcionais. Também exige
+ * nome, cargo e o aceite final.
  */
 export function checkResponse(sections: ScopeSection[], input: ResponseInput): ResponseCheck {
   const missing: string[] = [];
@@ -100,7 +104,7 @@ export function checkResponse(sections: ScopeSection[], input: ResponseInput): R
         answers.push({ itemId: item.id, section: sec.title, text: item.text, kind: sec.kind, choice: null, note });
         continue;
       }
-      const choice: ScopeChoice | null = a.choice === "ok" ? "ok" : a.choice === "reservation" ? "reservation" : null;
+      const choice = (["ok", "reservation", "declined"] as const).find((c) => c === a.choice) ?? null;
       if (!choice || (choice === "reservation" && !note)) missing.push(item.id);
       answers.push({ itemId: item.id, section: sec.title, text: item.text, kind: sec.kind, choice, note: choice === "ok" ? "" : note });
     }
@@ -109,7 +113,7 @@ export function checkResponse(sections: ScopeSection[], input: ResponseInput): R
     return {
       ok: false,
       missing,
-      error: `Faltam ${missing.length} item(ns): marque "De acordo" ou "Ressalva" e, na ressalva, explique o ajuste.`,
+      error: `Faltam ${missing.length} item(ns): marque "De acordo", "Ressalva" ou "Não de acordo" e, na ressalva, explique o ajuste.`,
     };
   }
   if (!clip(input.signerName, LIMITS.name)) return { ok: false, missing: [], error: "Informe o nome do responsável." };
@@ -124,6 +128,7 @@ export function countAnswers(answers: ScopeAnswer[]) {
   return {
     ok: answers.filter((a) => a.choice === "ok").length,
     reservations: answers.filter((a) => a.choice === "reservation").length,
+    declined: answers.filter((a) => a.choice === "declined").length,
     questions: answers.filter((a) => a.kind === "questions").length,
   };
 }

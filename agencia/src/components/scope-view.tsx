@@ -4,8 +4,14 @@
  */
 import { CheckCircle2, MessageSquareWarning } from "lucide-react";
 import { fmtDateTime } from "@/lib/dates";
-import { countAnswers, type ScopeAnswer } from "@/lib/scope-forms";
+import { countAnswers, SCOPE_CHOICE_LABEL, type ScopeAnswer, type ScopeChoice } from "@/lib/scope-forms";
 import { PrintButton } from "./print-button";
+
+const CHOICE_BADGE: Record<ScopeChoice, string> = {
+  ok: "bg-[#e3f4ea] text-[#1a7f4b]",
+  reservation: "bg-[#fdf0dc] text-[#9a5b00]",
+  declined: "bg-[#fdeeed] text-[#b42318]",
+};
 
 export function ScopeHeader({ siteUrl }: { siteUrl: string | null }) {
   return (
@@ -67,7 +73,7 @@ export function ScopeSummary({ response, showPrint = true }: { response: Respons
         <p className="mt-2 text-[14.5px] leading-relaxed text-[#c9cfdb] print:text-[#3d4a66]">
           Por {response.signerName} ({response.signerRole}){response.signerEmail ? ` · ${response.signerEmail}` : ""} em {fmtDateTime(response.submittedAt)}.
           <br />
-          {c.ok} item(ns) de acordo · {c.reservations} com ressalva{c.questions ? ` · ${c.questions} pergunta(s)` : ""}.
+          {c.ok} item(ns) de acordo · {c.reservations} com ressalva · {c.declined} não de acordo{c.questions ? ` · ${c.questions} pergunta(s)` : ""}.
         </p>
         {showPrint ? <PrintButton className="mt-4" /> : null}
       </div>
@@ -81,15 +87,17 @@ export function ScopeSummary({ response, showPrint = true }: { response: Respons
             {sec.items.map((a) => (
               <li key={a.itemId} className="py-2.5 text-[14.5px] leading-relaxed">
                 <div className="flex items-start gap-3">
-                  {a.kind === "questions" ? null : a.choice === "ok" ? (
-                    <span className="mt-0.5 shrink-0 rounded-full bg-[#e3f4ea] px-2 py-0.5 text-[11.5px] font-semibold text-[#1a7f4b]">De acordo</span>
-                  ) : (
-                    <span className="mt-0.5 shrink-0 rounded-full bg-[#fdf0dc] px-2 py-0.5 text-[11.5px] font-semibold text-[#9a5b00]">Ressalva</span>
+                  {a.kind === "questions" || !a.choice ? null : (
+                    <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${CHOICE_BADGE[a.choice]}`}>{SCOPE_CHOICE_LABEL[a.choice]}</span>
                   )}
                   <span className="text-[#16203a]">{a.text}</span>
                 </div>
                 {a.note ? (
-                  <p className={`mt-1.5 whitespace-pre-line rounded-xl px-3 py-2 text-[14px] ${a.kind === "questions" ? "bg-[#f1f3f8] text-[#16203a]" : "bg-[#fdf6ea] text-[#5c3d00]"}`}>
+                  <p
+                    className={`mt-1.5 whitespace-pre-line rounded-xl px-3 py-2 text-[14px] ${
+                      a.kind === "questions" ? "bg-[#f1f3f8] text-[#16203a]" : a.choice === "declined" ? "bg-[#fdeeed] text-[#7a1a12]" : "bg-[#fdf6ea] text-[#5c3d00]"
+                    }`}
+                  >
                     {a.kind === "questions" ? null : <MessageSquareWarning className="mr-1.5 inline size-4 align-[-3px]" aria-hidden="true" />}
                     {a.note}
                   </p>

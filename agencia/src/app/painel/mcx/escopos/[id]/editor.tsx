@@ -116,7 +116,7 @@ export function ScopeEditor({ initial }: { initial: Initial }) {
               className={area + " mt-2.5"}
             />
             <p className="mt-1 text-xs text-muted">
-              {s.kind === "questions" ? "O cliente responde cada pergunta por escrito (opcional para ele)." : "O cliente marca De acordo ou Ressalva em cada item (obrigatório)."}
+              {s.kind === "questions" ? "O cliente responde cada pergunta por escrito (opcional para ele)." : "O cliente marca De acordo, Ressalva ou Não de acordo em cada item (obrigatório)."}
             </p>
           </fieldset>
         ))}

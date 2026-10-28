@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, MessageSquareWarning } from "lucide-react";
+import { Check, Loader2, MessageSquareWarning, X } from "lucide-react";
 import clsx from "clsx";
 import { LIMITS, type ResponseInput, type ScopeChoice, type ScopeSection } from "@/lib/scope-forms";
 import { submitScopeAction } from "./actions";
@@ -43,13 +43,15 @@ export function ScopeAnswerForm({ token, sections, closingText }: { token: strin
   const checklistIds = useMemo(() => sections.filter((s) => s.kind === "checklist").flatMap((s) => s.items.map((i) => i.id)), [sections]);
   const answered = checklistIds.filter((id) => {
     const a = draft.answers[id];
-    return a?.choice === "ok" || (a?.choice === "reservation" && a.note?.trim());
+    return a?.choice === "ok" || a?.choice === "declined" || (a?.choice === "reservation" && a.note?.trim());
   }).length;
 
-  const setAnswer = (id: string, patch: { choice?: ScopeChoice; note?: string }) => {
+  const setAnswer = (id: string, patch: { choice?: ScopeChoice | ""; note?: string }) => {
     setDraft((d) => ({ ...d, answers: { ...d.answers, [id]: { ...d.answers[id], ...patch } } }));
     if (missing.has(id)) setMissing((m) => new Set([...m].filter((x) => x !== id)));
   };
+  /** Clicar na opção já marcada desmarca o item. */
+  const toggle = (id: string, choice: ScopeChoice) => setAnswer(id, { choice: draft.answers[id]?.choice === choice ? "" : choice });
   const markAllOk = (section: ScopeSection) => {
     setDraft((d) => {
       const answers = { ...d.answers };
@@ -82,8 +84,9 @@ export function ScopeAnswerForm({ token, sections, closingText }: { token: strin
   return (
     <form onSubmit={submit} className="mt-8 space-y-5" noValidate>
       <p className="text-[15px] leading-relaxed text-[#3d4a66]">
-        Em cada item, marque <strong className="text-[#1a7f4b]">De acordo</strong> ou <strong className="text-[#9a5b00]">Ressalva</strong>. Na ressalva, escreva o
-        ajuste que você precisa. As respostas ficam salvas neste navegador até o envio.
+        Em cada item, marque <strong className="text-[#1a7f4b]">De acordo</strong>, <strong className="text-[#9a5b00]">Ressalva</strong> ou{" "}
+        <strong className="text-[#b42318]">Não de acordo</strong>. Na ressalva, escreva o ajuste que você precisa. Para desmarcar, clique de novo na opção
+        escolhida. As respostas ficam salvas neste navegador até o envio.
       </p>
 
       {sections.map((sec, si) => (
@@ -126,28 +129,39 @@ export function ScopeAnswerForm({ token, sections, closingText }: { token: strin
                   id={`item-${item.id}`}
                   className={clsx(
                     "rounded-xl border p-3.5 transition-colors",
-                    isMissing ? "border-[#d64545] bg-[#fff5f5]" : a.choice === "reservation" ? "border-[#f0c987] bg-[#fffaf0]" : a.choice === "ok" ? "border-[#bfe3cc] bg-[#f5fbf7]" : "border-[#e3e6ee] bg-[#fbfbfc]",
+                    isMissing
+                      ? "border-[#d64545] bg-[#fff5f5]"
+                      : a.choice === "reservation"
+                        ? "border-[#f0c987] bg-[#fffaf0]"
+                        : a.choice === "declined"
+                          ? "border-[#f3b8b2] bg-[#fff6f5]"
+                          : a.choice === "ok"
+                            ? "border-[#bfe3cc] bg-[#f5fbf7]"
+                            : "border-[#e3e6ee] bg-[#fbfbfc]",
                   )}
                 >
                   <p className="text-[15px] leading-relaxed text-[#16203a]">{item.text}</p>
-                  <div className="mt-2.5 flex flex-wrap gap-2" role="radiogroup" aria-label={item.text}>
-                    <Choice active={a.choice === "ok"} tone="ok" onClick={() => setAnswer(item.id, { choice: "ok" })}>
+                  <div className="mt-2.5 flex flex-wrap gap-2" role="group" aria-label={item.text}>
+                    <Choice active={a.choice === "ok"} tone="ok" onClick={() => toggle(item.id, "ok")}>
                       <Check className="size-4" aria-hidden="true" /> De acordo
                     </Choice>
-                    <Choice active={a.choice === "reservation"} tone="reservation" onClick={() => setAnswer(item.id, { choice: "reservation" })}>
+                    <Choice active={a.choice === "reservation"} tone="reservation" onClick={() => toggle(item.id, "reservation")}>
                       <MessageSquareWarning className="size-4" aria-hidden="true" /> Ressalva
                     </Choice>
+                    <Choice active={a.choice === "declined"} tone="declined" onClick={() => toggle(item.id, "declined")}>
+                      <X className="size-4" aria-hidden="true" /> Não de acordo
+                    </Choice>
                   </div>
-                  {a.choice === "reservation" ? (
+                  {a.choice === "reservation" || a.choice === "declined" ? (
                     <textarea
                       rows={2}
                       maxLength={LIMITS.note}
-                      autoFocus={!a.note}
+                      autoFocus={!a.note && a.choice === "reservation"}
                       value={a.note ?? ""}
                       onChange={(e) => setAnswer(item.id, { note: e.target.value })}
                       className={clsx(field, "mt-2.5 resize-y", isMissing && !a.note?.trim() && "border-[#d64545]")}
-                      placeholder="Explique o ajuste necessário"
-                      aria-label={`Ressalva: ${item.text}`}
+                      placeholder={a.choice === "reservation" ? "Explique o ajuste necessário" : "Motivo (opcional)"}
+                      aria-label={`${a.choice === "reservation" ? "Ressalva" : "Motivo"}: ${item.text}`}
                     />
                   ) : null}
                   {isMissing ? (
@@ -236,20 +250,23 @@ export function ScopeAnswerForm({ token, sections, closingText }: { token: strin
   );
 }
 
-function Choice({ active, tone, onClick, children }: { active: boolean; tone: "ok" | "reservation"; onClick: () => void; children: React.ReactNode }) {
+const CHOICE_ACTIVE: Record<ScopeChoice, string> = {
+  ok: "border-[#1a7f4b] bg-[#1a7f4b] text-white",
+  reservation: "border-[#b86e00] bg-[#b86e00] text-white",
+  declined: "border-[#b42318] bg-[#b42318] text-white",
+};
+
+/** Botão de opção que liga e desliga: clicar de novo na opção marcada desmarca. */
+function Choice({ active, tone, onClick, children }: { active: boolean; tone: ScopeChoice; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
-      role="radio"
-      aria-checked={active}
+      aria-pressed={active}
+      title={active ? "Clique de novo para desmarcar" : undefined}
       onClick={onClick}
       className={clsx(
         "inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-[14px] font-semibold transition",
-        active
-          ? tone === "ok"
-            ? "border-[#1a7f4b] bg-[#1a7f4b] text-white"
-            : "border-[#b86e00] bg-[#b86e00] text-white"
-          : "border-[#cfd5e1] bg-white text-[#3d4a66] hover:border-[#000D36]",
+        active ? CHOICE_ACTIVE[tone] : "border-[#cfd5e1] bg-white text-[#3d4a66] hover:border-[#000D36]",
       )}
     >
       {children}
