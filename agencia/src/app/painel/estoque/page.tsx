@@ -2,33 +2,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
-import { lowStock, stockRecords, type StockOrder } from "@/server/analytics";
-import { parseFilters, withParams } from "@/lib/filters";
-import { STOCK_STATE_LABEL, STOCK_STATE_TONE, STOCK_STATES } from "@/lib/domain";
+import { lowStock } from "@/server/analytics";
+import { parseFilters } from "@/lib/filters";
+import { STOCK_STATE_LABEL } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
-import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
 import { FilterBar } from "../_components/filter-bar";
 import { StoreGroups } from "../_components/store-groups";
-import { Pagination, SectionCard, Table, Td, Th } from "../_components/widgets";
+import { SectionCard, Td, Th } from "../_components/widgets";
 
 export const metadata: Metadata = { title: "Estoque" };
 
-const ORDERS: { id: StockOrder; label: string }[] = [
-  { id: "recentes", label: "Mais recentes" },
-  { id: "antigos", label: "Mais antigas" },
-  { id: "maior", label: "Maior qtd." },
-  { id: "menor", label: "Menor qtd." },
-];
 
 export default async function StockPage({ searchParams }: PageProps<"/painel/estoque">) {
   const scope = await getScope();
   const f = parseFilters(await searchParams, 7);
-  const raw = await searchParams;
-  const order = ORDERS.find((o) => o.id === raw.ordem)?.id ?? "recentes";
-  const [low, list, options] = await Promise.all([lowStock(scope, f), stockRecords(scope, f, { order }), filterOptions(scope)]);
-  const keep = { ordem: order === "recentes" ? null : order, from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, city: f.city, status: f.status, q: f.q || null };
-  const qs = (patch: Record<string, string | null>) => withParams(keep, { ...patch, page: null });
+  const [low, options] = await Promise.all([lowStock(scope, f), filterOptions(scope)]);
 
   return (
     <>
@@ -40,7 +30,7 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
       <FilterBar
         range={{ from: f.from, to: f.to }}
         fields={["period", "brand", "chain", "store", "promoter", "status", "q"]}
-        options={{ ...options, statuses: [...STOCK_STATES.map((st) => ({ id: st, name: STOCK_STATE_LABEL[st] })), { id: "divergent", name: "Divergência relevante" }] }}
+        options={{ ...options, statuses: (["quantity", "zero"] as const).map((st) => ({ id: st, name: STOCK_STATE_LABEL[st] })) }}
         statusLabel="Todas as situações"
         qPlaceholder="Produto, SKU ou loja"
       />
@@ -97,74 +87,6 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
         )}
       </SectionCard>
 
-      <div className="mt-6">
-        <SectionCard
-          title="Todas as contagens"
-          subtitle={`${list.total} registro(s) · comparados ao levantamento anterior do mesmo produto na mesma loja`}
-          action={
-            <div className="inline-flex rounded-lg border border-line-strong bg-surface p-0.5 text-[12.5px]" role="group" aria-label="Ordem">
-              {ORDERS.map((o) => (
-                <Link key={o.id} href={qs({ ordem: o.id === "recentes" ? null : o.id })} scroll={false} className={`h-7 px-2.5 rounded-md font-semibold inline-flex items-center whitespace-nowrap ${o.id === order ? "bg-brand-800 text-white" : "text-ink-2 hover:bg-subtle"}`}>
-                  {o.label}
-                </Link>
-              ))}
-            </div>
-          }
-        >
-          {list.rows.length ? (
-            <>
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Data</Th>
-                    <Th>Produto</Th>
-                    <Th>Loja</Th>
-                    <Th>Situação</Th>
-                    <Th align="right">Qtd.</Th>
-                    <Th align="right">Anterior</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.rows.map((r) => (
-                    <tr key={r.id} className="hover:bg-subtle">
-                      <Td className="tnum whitespace-nowrap">
-                        <Link href={`/painel/atendimentos/${r.attendance_id}`} target="_blank" className="hover:underline">
-                          {fmtDate(r.visit_date)}
-                        </Link>
-                      </Td>
-                      <Td>
-                        {r.product_name}
-                        <span className="block text-[11.5px] text-muted">
-                          {r.brand_name} · SKU {r.sku}
-                        </span>
-                      </Td>
-                      <Td>
-                        {r.store_name}
-                        <span className="block text-[11.5px] text-muted">{r.promoter_name}</span>
-                      </Td>
-                      <Td>
-                        <StatusBadge tone={STOCK_STATE_TONE[r.state]} size="sm">
-                          {STOCK_STATE_LABEL[r.state]}
-                        </StatusBadge>
-                      </Td>
-                      <Td align="right" className="font-semibold">
-                        {r.quantity !== null ? `${r.quantity} ${r.unit}` : "—"}
-                      </Td>
-                      <Td align="right" className={r.divergent ? "text-warn font-semibold" : "text-muted"}>
-                        {r.prev_date ? `${r.prev_quantity ?? (r.prev_state ? STOCK_STATE_LABEL[r.prev_state] : "—")} (${fmtDate(r.prev_date).slice(0, 5)})` : "—"}
-                        {r.divergent ? <span className="block text-[11px]">divergência</span> : null}
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-              <Pagination page={f.page} total={list.total} pageSize={f.pageSize} hrefFor={(p) => withParams(keep, { page: p })} />
-            </>
-          ) : (
-            <EmptyState title="Nenhum registro neste filtro" />
-          )}
-        </SectionCard>
-      </div>
     </>
   );
 }
