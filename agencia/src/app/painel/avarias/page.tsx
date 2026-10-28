@@ -4,7 +4,7 @@ import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { damageList, damageSummary } from "@/server/items";
-import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
+import { parseFilters, withParams } from "@/lib/filters";
 import { DAMAGE_KIND_LABEL, DAMAGE_KINDS } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { formatIsoBr } from "@/lib/validity";
@@ -101,7 +101,7 @@ export default async function DamagesPage({ searchParams }: PageProps<"/painel/a
                 ))}
               </tbody>
             </Table>
-            <Pagination page={f.page} total={list.total} pageSize={PAGE_SIZE} hrefFor={(p) => withParams(keep, { page: p })} />
+            <Pagination page={f.page} total={list.total} pageSize={f.pageSize} hrefFor={(p) => withParams(keep, { page: p })} />
           </>
         ) : (
           <EmptyState title="Nenhuma avaria neste filtro" />

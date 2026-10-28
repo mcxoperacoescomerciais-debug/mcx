@@ -6,6 +6,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import type { ComponentProps, ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, CircleDashed, CircleDot, CloudUpload, MinusCircle, XCircle, type LucideIcon } from "lucide-react";
+import { ExportExcelButton } from "./export-excel-button";
 import type { Tone } from "@/lib/domain";
 
 export { clsx as cx };
@@ -113,7 +114,7 @@ export function Badge({ tone = "neutral", className, ...props }: ComponentProps<
   return <span className={clsx("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap", TONE_CLASS[tone], className)} {...props} />;
 }
 
-export function PageHeader({ title, subtitle, actions, eyebrow }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions, eyebrow, noExport }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode; noExport?: boolean }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
       <div className="min-w-0">
@@ -121,7 +122,11 @@ export function PageHeader({ title, subtitle, actions, eyebrow }: { title: React
         <h1 className="text-[22px] sm:text-2xl font-semibold tracking-tight text-ink">{title}</h1>
         {subtitle ? <p className="text-sm text-muted mt-1">{subtitle}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {/* Toda tela do painel exporta para Excel o que mostra (com os filtros, sem paginação). */}
+      <div className="flex flex-wrap items-center gap-2">
+        {actions}
+        {noExport ? null : <ExportExcelButton />}
+      </div>
     </div>
   );
 }

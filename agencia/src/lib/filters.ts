@@ -20,6 +20,8 @@ export interface PanelFilters {
   kind: string | null;
   q: string;
   page: number;
+  /** Linhas por página; na exportação para Excel (?export=1) vem tudo numa página só. */
+  pageSize: number;
 }
 
 type Params = Record<string, string | string[] | undefined>;
@@ -38,7 +40,8 @@ export function parseFilters(params: Params, defaultDays = 7): PanelFilters {
   let to = isIsoDate(one(params.to)) ? one(params.to) : today;
   let from = isIsoDate(one(params.from)) ? one(params.from) : addDays(to, -(defaultDays - 1));
   if (from > to) [from, to] = [to, from];
-  const page = Math.max(1, Math.min(10_000, Number(one(params.page)) || 1));
+  const exporting = one(params.export) === "1";
+  const page = exporting ? 1 : Math.max(1, Math.min(10_000, Number(one(params.page)) || 1));
   return {
     date,
     from,
@@ -52,6 +55,7 @@ export function parseFilters(params: Params, defaultDays = 7): PanelFilters {
     kind: /^[a-z_]{2,40}$/.test(one(params.kind)) ? one(params.kind) : null,
     q: one(params.q).trim().slice(0, 80),
     page,
+    pageSize: exporting ? EXPORT_PAGE_SIZE : PAGE_SIZE,
   };
 }
 
@@ -78,5 +82,7 @@ export function withParams(base: QueryValues, patch: QueryValues = {}): string {
 }
 
 export const PAGE_SIZE = 50;
+/** Exportação para Excel: tudo o que o filtro alcança, sem paginar. */
+export const EXPORT_PAGE_SIZE = 20_000;
 
 export const isUuid = (v: string) => UUID.test(v);

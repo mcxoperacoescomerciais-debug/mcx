@@ -27,7 +27,7 @@ export default async function CalculatorPage({ searchParams }: PageProps<"/paine
   return (
     <>
       <DegTabs />
-      <PageHeader
+      <PageHeader noExport
         title="Calculadora de degustação"
         subtitle="Monte o pedido da marca por cidade: a calculadora mostra o preço mínimo para não ter prejuízo, o preço com a sua margem e quanto cada cidade deixa."
       />

@@ -89,9 +89,22 @@ export default async function IssuesPage({ searchParams }: PageProps<"/painel/pe
                   {g.title} <span className="text-muted tnum font-medium">· {list.length}</span>
                 </h2>
                 <p className="text-[12.5px] text-muted mb-2.5">{g.text}</p>
-                <ul className="space-y-2.5">
+                <ul className="space-y-2.5" data-export-list data-export-columns="Prioridade|Tipo|Pendência|Detalhe|Loja|Marca|Promotor|Data|Hora|Situação|Acompanhamento">
                   {list.map((i) => (
-                  <li key={i.key} className="bg-surface border border-line rounded-[var(--radius-card)] p-4">
+                  <li key={i.key} data-export-row className="bg-surface border border-line rounded-[var(--radius-card)] p-4">
+                    <span hidden>
+                      <span data-export-cell>{`P${i.priority}`}</span>
+                      <span data-export-cell>{ISSUE_KIND_LABEL[i.kind]}</span>
+                      <span data-export-cell>{i.title}</span>
+                      <span data-export-cell>{i.detail}</span>
+                      <span data-export-cell>{i.storeName}</span>
+                      <span data-export-cell>{i.brandName ?? ""}</span>
+                      <span data-export-cell>{i.promoterName}</span>
+                      <span data-export-cell>{fmtDate(i.date)}</span>
+                      <span data-export-cell>{i.at ? fmtDateTime(i.at).slice(11) : ""}</span>
+                      <span data-export-cell>{ISSUE_REVIEW_LABEL[i.review?.status ?? "open"]}</span>
+                      <span data-export-cell>{i.review ? `${i.review.userName} em ${fmtDateTime(i.review.at)}: ${i.review.action}` : ""}</span>
+                    </span>
                     <div className="flex flex-wrap items-start gap-3">
                       <Badge tone={i.priority <= 2 ? "danger" : i.priority <= 4 ? "warning" : "neutral"} className="mt-0.5">
                         P{i.priority} · {ISSUE_KIND_LABEL[i.kind]}

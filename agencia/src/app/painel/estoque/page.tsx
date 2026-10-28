@@ -4,7 +4,7 @@ import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { lowStock, stockRecords } from "@/server/analytics";
-import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
+import { parseFilters, withParams } from "@/lib/filters";
 import { STOCK_STATE_LABEL, STOCK_STATE_TONE, STOCK_STATES } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
@@ -154,7 +154,7 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
                   ))}
                 </tbody>
               </Table>
-              <Pagination page={f.page} total={list.total} pageSize={PAGE_SIZE} hrefFor={(p) => withParams(keep, { page: p })} />
+              <Pagination page={f.page} total={list.total} pageSize={f.pageSize} hrefFor={(p) => withParams(keep, { page: p })} />
             </>
           ) : (
             <EmptyState title="Nenhum registro neste filtro" />

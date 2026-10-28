@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { getScope, requireRole } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
-import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
+import { parseFilters, withParams } from "@/lib/filters";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { PageHeader } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
@@ -50,8 +50,8 @@ export default async function AuditPage({ searchParams }: PageProps<"/painel/aud
       ),
     )
     .orderBy(desc(s.auditLogs.createdAt))
-    .limit(PAGE_SIZE)
-    .offset((f.page - 1) * PAGE_SIZE);
+    .limit(f.pageSize)
+    .offset((f.page - 1) * f.pageSize);
   const total = rows[0]?.total ?? 0;
   const show = (v: unknown) => (v ? JSON.stringify(v).slice(0, 220) : "");
 
@@ -90,7 +90,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/painel/aud
             ))}
           </tbody>
         </Table>
-        <Pagination page={f.page} total={total} pageSize={PAGE_SIZE} hrefFor={(p) => withParams({ from: f.from, to: f.to, kind: f.kind, q: f.q || null }, { page: p })} />
+        <Pagination page={f.page} total={total} pageSize={f.pageSize} hrefFor={(p) => withParams({ from: f.from, to: f.to, kind: f.kind, q: f.q || null }, { page: p })} />
       </div>
     </>
   );

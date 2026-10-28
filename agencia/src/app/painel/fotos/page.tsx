@@ -23,7 +23,7 @@ export default async function PhotosPage({ searchParams }: PageProps<"/painel/fo
   const scope = await getScope();
   const f = parseFilters(await searchParams, 7);
   const kind = f.kind === "before" || f.kind === "after" ? f.kind : null;
-  const [rep, options] = await Promise.all([photoReport(scope, { ...f, status: null, kind }, PAGE), filterOptions(scope)]);
+  const [rep, options] = await Promise.all([photoReport(scope, { ...f, status: null, kind }, f.pageSize > PAGE ? f.pageSize : PAGE), filterOptions(scope)]);
   const keep = { from: f.from, to: f.to, brand: f.brand, chain: f.chain, store: f.store, promoter: f.promoter, kind, q: f.q || null };
   const photos: ViewerPhoto[] = rep.rows.flatMap((r) =>
     r.photos
@@ -71,6 +71,35 @@ export default async function PhotosPage({ searchParams }: PageProps<"/painel/fo
         }}
         kindLabel="Antes e depois"
       />
+      {/* Exportar Excel: um registro por atendimento fotografado (a galeria não é tabela). */}
+      <table hidden data-export-title="Atendimentos fotografados">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Loja</th>
+            <th>Rede</th>
+            <th>Marca</th>
+            <th>Promotor</th>
+            <th>Fotos do antes</th>
+            <th>Fotos do depois</th>
+            <th>Fotos não enviadas</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rep.rows.map((r) => (
+            <tr key={r.id}>
+              <td>{fmtDate(r.date)}</td>
+              <td>{r.storeName}</td>
+              <td>{r.chainName ?? ""}</td>
+              <td>{r.brandName}</td>
+              <td>{r.promoterName}</td>
+              <td>{r.photos.filter((p) => p.kind === "before").length}</td>
+              <td>{r.photos.filter((p) => p.kind === "after").length}</td>
+              <td>{r.photos.filter((p) => !p.uploadedAt).length}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       {photos.length ? (
         <>
           <Gallery photos={photos} wall />

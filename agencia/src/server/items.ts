@@ -36,7 +36,7 @@ function conds(scope: Scope, f: F): (SQL | undefined)[] {
 /** status = severidade ("urgent" = vencido + crítico); kind = local (área de vendas / estoque). */
 export async function validityList(scope: Scope, f: F, opts: { page?: number; pageSize?: number } = {}) {
   const db = await getDb();
-  const pageSize = opts.pageSize ?? PAGE_SIZE;
+  const pageSize = opts.pageSize ?? f.pageSize ?? PAGE_SIZE;
   const where = and(
     eq(s.validities.agencyId, scope.agencyId),
     isNull(s.validities.deletedAt),
@@ -167,7 +167,7 @@ export function validitiesSheet(rows: Awaited<ReturnType<typeof validityList>>["
 /** kind = tipo da avaria. */
 export async function damageList(scope: Scope, f: F, opts: { page?: number; pageSize?: number } = {}) {
   const db = await getDb();
-  const pageSize = opts.pageSize ?? PAGE_SIZE;
+  const pageSize = opts.pageSize ?? f.pageSize ?? PAGE_SIZE;
   const where = and(
     eq(s.damages.agencyId, scope.agencyId),
     isNull(s.damages.deletedAt),

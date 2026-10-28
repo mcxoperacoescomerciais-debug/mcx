@@ -10,7 +10,7 @@ export default async function PasswordPage() {
   const user = await requireUser();
   return (
     <>
-      <PageHeader title="Trocar senha" subtitle={user.mustChangePassword ? "Sua senha foi definida pelo administrador. Defina uma senha pessoal para continuar com segurança." : "Ao trocar a senha, as outras sessões abertas são encerradas."} />
+      <PageHeader noExport title="Trocar senha" subtitle={user.mustChangePassword ? "Sua senha foi definida pelo administrador. Defina uma senha pessoal para continuar com segurança." : "Ao trocar a senha, as outras sessões abertas são encerradas."} />
       <SectionCard title="Nova senha" className="max-w-lg" bodyClass="px-5 pb-5">
         <PasswordForm />
       </SectionCard>

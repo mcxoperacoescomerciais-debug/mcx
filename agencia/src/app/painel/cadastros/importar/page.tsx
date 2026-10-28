@@ -11,7 +11,7 @@ export default async function ImportPage() {
   await requireRole(["admin"]);
   return (
     <>
-      <PageHeader title="Importar planilha" subtitle="Cadastre ou atualize produtos, lojas e promotores em lote, com validação linha a linha e relatório de erros." />
+      <PageHeader noExport title="Importar planilha" subtitle="Cadastre ou atualize produtos, lojas e promotores em lote, com validação linha a linha e relatório de erros." />
       <div className="grid xl:grid-cols-3 gap-6">
         <SectionCard className="xl:col-span-2" title="Enviar arquivo" bodyClass="px-5 pb-5">
           <ImportForm />

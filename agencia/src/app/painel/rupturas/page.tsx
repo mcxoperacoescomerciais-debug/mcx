@@ -4,7 +4,7 @@ import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { ruptureList, ruptureSummary } from "@/server/analytics";
-import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
+import { parseFilters, withParams } from "@/lib/filters";
 import { RUPTURE_SITUATION_LABEL } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { EmptyState, LinkButton, PageHeader } from "@/components/ui";
@@ -120,7 +120,7 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
                 ))}
               </tbody>
             </Table>
-            <Pagination page={f.page} total={list.total} pageSize={PAGE_SIZE} hrefFor={(p) => withParams(keep, { page: p })} />
+            <Pagination page={f.page} total={list.total} pageSize={f.pageSize} hrefFor={(p) => withParams(keep, { page: p })} />
           </>
         ) : (
           <EmptyState title="Nenhuma ruptura neste filtro" />

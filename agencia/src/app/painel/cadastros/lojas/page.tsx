@@ -3,7 +3,7 @@ import Link from "next/link";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { getScope, requireRole } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
-import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
+import { parseFilters, withParams } from "@/lib/filters";
 import { PageHeader, StatusBadge, inputClass, selectClass } from "@/components/ui";
 import { FilterBar } from "../../_components/filter-bar";
 import { Pagination, SectionCard, Table, Td, Th } from "../../_components/widgets";
@@ -48,8 +48,8 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/pain
       ),
     )
     .orderBy(asc(s.stores.name))
-    .limit(PAGE_SIZE)
-    .offset((f.page - 1) * PAGE_SIZE);
+    .limit(f.pageSize)
+    .offset((f.page - 1) * f.pageSize);
   const total = stores[0]?.total ?? 0;
   const cities = await db.selectDistinct({ city: s.stores.city }).from(s.stores).where(eq(s.stores.agencyId, scope.agencyId)).orderBy(asc(s.stores.city));
 
@@ -98,7 +98,7 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/pain
               ))}
             </tbody>
           </Table>
-          <Pagination page={f.page} total={total} pageSize={PAGE_SIZE} hrefFor={(p) => withParams({ q: f.q || null, chain: f.chain, city: f.city, brand: f.brand, status: f.status }, { page: p })} />
+          <Pagination page={f.page} total={total} pageSize={f.pageSize} hrefFor={(p) => withParams({ q: f.q || null, chain: f.chain, city: f.city, brand: f.brand, status: f.status }, { page: p })} />
         </div>
         <div className="space-y-6">
           <SectionCard title="Nova loja" bodyClass="px-5 pb-5">

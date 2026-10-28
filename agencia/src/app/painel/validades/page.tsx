@@ -4,7 +4,7 @@ import { FileDown } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { validityList, validitySummary } from "@/server/items";
-import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
+import { parseFilters, withParams } from "@/lib/filters";
 import { VALIDITY_LOCATION_LABEL, VALIDITY_LOCATIONS } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { describeDays, formatIsoBr, SEVERITIES, SEVERITY_COLOR, SEVERITY_LABEL } from "@/lib/validity";
@@ -135,7 +135,7 @@ export default async function ValiditiesPage({ searchParams }: PageProps<"/paine
                 ))}
               </tbody>
             </Table>
-            <Pagination page={f.page} total={list.total} pageSize={PAGE_SIZE} hrefFor={(p) => withParams(keep, { page: p })} />
+            <Pagination page={f.page} total={list.total} pageSize={f.pageSize} hrefFor={(p) => withParams(keep, { page: p })} />
           </>
         ) : (
           <EmptyState title="Nenhuma validade neste filtro" />

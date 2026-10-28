@@ -20,7 +20,7 @@ export default async function EditTasting({ params }: PageProps<"/painel/degusta
   return (
     <>
       <DegTabs />
-      <PageHeader title="Editar degustação" subtitle={`${d.brand.name} · ${t.storeName}`} />
+      <PageHeader noExport title="Editar degustação" subtitle={`${d.brand.name} · ${t.storeName}`} />
       <TastingForm brands={opts.brands} stores={opts.stores} users={opts.users} initial={{ ...t, id: t.id }} />
     </>
   );

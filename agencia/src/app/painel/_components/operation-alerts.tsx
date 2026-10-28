@@ -24,8 +24,10 @@ function AlertCard({
   count,
   icon,
   href,
+  columns,
   children,
 }: {
+  columns: string;
   title: string;
   empty: string;
   count: number;
@@ -45,7 +47,7 @@ function AlertCard({
       </header>
       {count ? (
         <>
-          <ul className="divide-y divide-line">{children}</ul>
+          <ul className="divide-y divide-line" data-export-list data-export-title={title} data-export-columns={columns}>{children}</ul>
           {count > SHOW ? (
             <Link href={href} className="flex items-center justify-center gap-1 px-5 py-2.5 text-[13px] font-semibold text-brand-700 border-t border-line hover:bg-subtle">
               Ver as {count} <ArrowRight className="size-3.5" />
@@ -68,9 +70,17 @@ export function OperationAlerts({ from, to, missed, incomplete }: { from: string
         count={missed.length}
         icon={<Store className="size-4" />}
         href={`/painel/visitas${withParams({ from, to, status: "missed" })}`}
+        columns="Data|Promotor|Loja|Cidade|Marcas"
       >
         {missed.slice(0, SHOW).map((m) => (
-          <li key={m.key}>
+          <li key={m.key} data-export-row>
+            <span hidden>
+              <span data-export-cell>{fmtDate(m.date)}</span>
+              <span data-export-cell>{m.promoterName}</span>
+              <span data-export-cell>{m.storeName}</span>
+              <span data-export-cell>{m.city}</span>
+              <span data-export-cell>{m.brands.join(", ")}</span>
+            </span>
             <Link href={`/painel/promotores/${m.promoterId}`} className="flex items-start gap-3 px-5 py-2.5 hover:bg-subtle">
               <span className="w-12 shrink-0 text-[12.5px] font-bold text-bad pt-px">{dayLabel(m.date)}</span>
               <span className="min-w-0 flex-1">
@@ -90,9 +100,18 @@ export function OperationAlerts({ from, to, missed, incomplete }: { from: string
         count={incomplete.length}
         icon={<CircleSlash className="size-4" />}
         href={`/painel/visitas${withParams({ from, to, status: "exception" })}`}
+        columns="Data|Promotor|Loja|Cidade|Marcas não atendidas e justificativa|Marcas feitas"
       >
         {incomplete.slice(0, SHOW).map((m) => (
-          <li key={m.key}>
+          <li key={m.key} data-export-row>
+            <span hidden>
+              <span data-export-cell>{fmtDate(m.date)}</span>
+              <span data-export-cell>{m.promoterName}</span>
+              <span data-export-cell>{m.storeName}</span>
+              <span data-export-cell>{m.city}</span>
+              <span data-export-cell>{m.brands.map((b) => `${b.name}${b.reason ? `: ${b.reason}` : " (sem justificativa)"}`).join(" | ")}</span>
+              <span data-export-cell>{`${m.doneBrands}/${m.totalBrands}`}</span>
+            </span>
             <Link href={`/painel/visitas/${m.visitId}`} className="flex items-start gap-3 px-5 py-2.5 hover:bg-subtle">
               <span className="w-12 shrink-0 text-[12.5px] font-bold text-bad pt-px">{dayLabel(m.date)}</span>
               <span className="min-w-0 flex-1">

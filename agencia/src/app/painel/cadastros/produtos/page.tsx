@@ -3,7 +3,7 @@ import Link from "next/link";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { getScope, requireRole } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
-import { PAGE_SIZE, parseFilters, withParams } from "@/lib/filters";
+import { parseFilters, withParams } from "@/lib/filters";
 import { PRODUCT_UNITS, UNIT_LABEL } from "@/lib/domain";
 import { PageHeader, StatusBadge, inputClass, selectClass } from "@/components/ui";
 import { FilterBar } from "../../_components/filter-bar";
@@ -34,8 +34,8 @@ export default async function ProductsAdminPage({ searchParams }: PageProps<"/pa
       ),
     )
     .orderBy(asc(s.brands.name), asc(s.products.sortOrder), asc(s.products.name))
-    .limit(PAGE_SIZE)
-    .offset((f.page - 1) * PAGE_SIZE);
+    .limit(f.pageSize)
+    .offset((f.page - 1) * f.pageSize);
   const total = rows[0]?.total ?? 0;
 
   return (
@@ -83,7 +83,7 @@ export default async function ProductsAdminPage({ searchParams }: PageProps<"/pa
               ))}
             </tbody>
           </Table>
-          <Pagination page={f.page} total={total} pageSize={PAGE_SIZE} hrefFor={(pg) => withParams({ brand: f.brand, status: f.status, q: f.q || null }, { page: pg })} />
+          <Pagination page={f.page} total={total} pageSize={f.pageSize} hrefFor={(pg) => withParams({ brand: f.brand, status: f.status, q: f.q || null }, { page: pg })} />
         </div>
         <SectionCard title="Novo produto" bodyClass="px-5 pb-5">
           <ProductForm product={null} brands={brands} defaultBrand={f.brand} />

@@ -72,7 +72,7 @@ describe("relatórios", () => {
     const scope = await scopeOf("gestor");
     const [b] = await db.select().from(s.brands).where(eq(s.brands.code, "BRAVO"));
     const from = addDays(todayIso(), -6);
-    const r = await brand.brandExecution(scope, { ...day(), from, to: todayIso(), kind: null, q: "", page: 1, brand: b.id });
+    const r = await brand.brandExecution(scope, { ...day(), from, to: todayIso(), kind: null, q: "", page: 1, pageSize: 50, brand: b.id });
     assert.ok(r.planned > 0);
     assert.equal(r.completed, r.attendances.filter((a) => a.status === "completed").length);
     assert.ok(r.attendances.every((a) => a.brandId === b.id), "só atendimentos da marca");

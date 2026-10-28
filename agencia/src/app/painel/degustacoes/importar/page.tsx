@@ -18,7 +18,7 @@ export default async function ImportSchedulePage() {
   return (
     <>
       <DegTabs />
-      <PageHeader title="Importar cronograma da marca" subtitle="A planilha é lida, você confere e corrige cada linha, e só então as degustações são criadas. Nada incerto é salvo sem conferência." />
+      <PageHeader noExport title="Importar cronograma da marca" subtitle="A planilha é lida, você confere e corrige cada linha, e só então as degustações são criadas. Nada incerto é salvo sem conferência." />
       <ScheduleImport brands={opts.brands.map((b) => ({ id: b.id, name: b.name }))} />
       <SectionCard title="Cronogramas recebidos" subtitle="Arquivos originais guardados para consulta" className="mt-6" bodyClass="pb-2">
         {batches.length ? (

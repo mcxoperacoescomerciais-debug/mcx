@@ -125,14 +125,25 @@ export function LiveMap({ stores }: { stores: MapStore[] }) {
               <RefreshCw className="size-4" />
             </button>
           </header>
-          <ul className="max-h-[455px] overflow-y-auto divide-y divide-line">
+          <ul className="max-h-[455px] overflow-y-auto divide-y divide-line" data-export-live data-export-list data-export-title="Promotores agora" data-export-columns="Promotor|Situação|Online|Onde está|Desde / previsto|Lojas concluídas|Lojas programadas|Atendimentos hoje|Último sinal">
             {!data ? <li className="px-4 py-6 text-[13px] text-muted">Carregando…</li> : null}
             {data && !promoters.length ? <li className="px-4 py-6 text-[13px] text-muted">Nenhum promotor com programação ou atividade hoje.</li> : null}
             {promoters.map((p) => {
               const st = STATUS[p.status];
               const expanded = open === p.promoterId;
               return (
-                <li key={p.promoterId} className="px-4 py-3">
+                <li key={p.promoterId} className="px-4 py-3" data-export-row>
+                  <span hidden>
+                    <span data-export-cell>{p.name}</span>
+                    <span data-export-cell>{st.label}</span>
+                    <span data-export-cell>{p.online ? "Sim" : "Não"}</span>
+                    <span data-export-cell>{p.current ? p.current.storeName : p.next && p.status !== "done" ? `Próxima: ${p.next.storeName}` : p.last ? `Encerrou ${p.last.storeName}` : ""}</span>
+                    <span data-export-cell>{p.current ? fmtTime(p.current.since) : p.next?.plannedStart ?? (p.last ? fmtTime(p.last.finishedAt) : "")}</span>
+                    <span data-export-cell>{p.completed}</span>
+                    <span data-export-cell>{p.scheduled}</span>
+                    <span data-export-cell>{p.done.length}</span>
+                    <span data-export-cell>{p.lastSeenAt ? fmtTime(p.lastSeenAt) : ""}</span>
+                  </span>
                   <div className="flex items-start gap-2.5">
                     <span className={clsx("mt-1.5 size-2.5 rounded-full shrink-0", p.online ? "bg-ok" : "bg-line-strong")} title={p.online ? "App online agora" : "App fechado ou sem sinal"} />
                     <div className="min-w-0 flex-1">
@@ -194,11 +205,16 @@ export function LiveMap({ stores }: { stores: MapStore[] }) {
       {data?.events.length ? (
         <section className="mt-4 bg-surface border border-line rounded-[var(--radius-card)]">
           <h2 className="px-4 pt-3 pb-2 text-[15px] font-semibold">Acontecendo hoje</h2>
-          <ul className="px-4 pb-3 grid sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1.5 max-h-56 overflow-y-auto">
+          <ul className="px-4 pb-3 grid sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1.5 max-h-56 overflow-y-auto" data-export-live data-export-list data-export-title="Acontecendo hoje" data-export-columns="Hora|Promotor|O que aconteceu">
             {data.events.slice(0, 30).map((e) => {
               const Icon = EVENT_ICON[e.kind];
               return (
-                <li key={e.id} className="text-[12.5px] flex gap-2 min-w-0">
+                <li key={e.id} className="text-[12.5px] flex gap-2 min-w-0" data-export-row>
+                  <span hidden>
+                    <span data-export-cell>{fmtTime(e.at)}</span>
+                    <span data-export-cell>{e.promoterName}</span>
+                    <span data-export-cell>{e.text}</span>
+                  </span>
                   <Icon className={clsx("size-4 shrink-0", EVENT_TONE[e.kind])} />
                   <span className="min-w-0">
                     <span className="tnum text-muted">{fmtTime(e.at)}</span> <strong>{e.promoterName}</strong> {e.text}

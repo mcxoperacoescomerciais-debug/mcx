@@ -54,9 +54,20 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
           ) : null}
           {[...byPromoter.entries()].map(([name, list]) => (
             <SectionCard key={name} title={name} subtitle={`${list.filter((x) => x.status === "active").length} loja(s) ativa(s)`}>
-              <ol className="divide-y divide-line border-t border-line">
+              <ol className="divide-y divide-line border-t border-line" data-export-list data-export-title="Programação" data-export-columns="Promotor|Ordem|Horário|Loja|Cidade|Marcas|Origem|Situação|Visita">
                 {list.map((r, idx) => (
-                  <li key={r.id} className={`px-5 py-3 ${r.status === "cancelled" ? "opacity-60" : ""}`}>
+                  <li key={r.id} data-export-row className={`px-5 py-3 ${r.status === "cancelled" ? "opacity-60" : ""}`}>
+                    <span hidden>
+                      <span data-export-cell>{name}</span>
+                      <span data-export-cell>{idx + 1}</span>
+                      <span data-export-cell>{r.plannedStart ?? ""}</span>
+                      <span data-export-cell>{r.storeName}</span>
+                      <span data-export-cell>{r.city}</span>
+                      <span data-export-cell>{r.brands.map((b) => b.name).join(", ")}</span>
+                      <span data-export-cell>{r.routeId ? "Roteiro" : "Avulsa"}</span>
+                      <span data-export-cell>{r.status === "cancelled" ? `Cancelada: ${r.cancelReason ?? ""}` : "Ativa"}</span>
+                      <span data-export-cell>{r.visitStatus ? VISIT_STATUS_LABEL[r.visitStatus as VisitStatus] : "Não iniciada"}</span>
+                    </span>
                     <div className="flex items-center gap-3">
                       <span className="size-7 rounded-full bg-brand-50 text-brand-800 grid place-items-center text-[12px] font-bold">{idx + 1}</span>
                       <div className="flex-1 min-w-0">

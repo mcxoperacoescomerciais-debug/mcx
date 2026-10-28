@@ -18,7 +18,7 @@ export default async function NewTasting({ searchParams }: PageProps<"/painel/de
   return (
     <>
       <DegTabs />
-      <PageHeader title="Nova degustação" subtitle="Cadastre o evento com o que a marca enviou; o que faltar pode ficar pendente." />
+      <PageHeader noExport title="Nova degustação" subtitle="Cadastre o evento com o que a marca enviou; o que faltar pode ficar pendente." />
       <TastingForm
         brands={opts.brands}
         stores={opts.stores}

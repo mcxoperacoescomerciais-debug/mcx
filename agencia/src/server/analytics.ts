@@ -74,7 +74,7 @@ export async function stockRecords(scope: Scope, f: F, opts: { page?: number; pa
         ? sql`and flagged.state = ${f.status}`
         : sql``;
   const q = f.q ? `%${f.q.toLowerCase()}%` : null;
-  const pageSize = opts.pageSize ?? PAGE_SIZE;
+  const pageSize = opts.pageSize ?? f.pageSize ?? PAGE_SIZE;
   const offset = ((opts.page ?? f.page) - 1) * pageSize;
   const result = await db.execute(sql`
     with base as (
@@ -225,7 +225,7 @@ export async function stockSummary(scope: Scope, f: F) {
 
 export async function ruptureList(scope: Scope, f: F, opts: { page?: number; pageSize?: number } = {}) {
   const db = await getDb();
-  const pageSize = opts.pageSize ?? PAGE_SIZE;
+  const pageSize = opts.pageSize ?? f.pageSize ?? PAGE_SIZE;
   const conds = and(
     eq(s.ruptures.agencyId, scope.agencyId),
     isNull(s.ruptures.deletedAt),

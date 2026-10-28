@@ -13,20 +13,20 @@ export function KpiCard({ label, value, sub, href, tone = "neutral", icon }: { l
   const inner = (
     <>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[12.5px] font-medium text-muted leading-tight">{label}</p>
+        <p data-kpi-label className="text-[12.5px] font-medium text-muted leading-tight">{label}</p>
         {icon ? <span className={clsx("shrink-0", accent || "text-muted")}>{icon}</span> : null}
       </div>
-      <p className={clsx("text-[26px] font-semibold tracking-tight tnum mt-1.5 leading-none", accent)}>{value}</p>
-      {sub ? <p className="text-[12px] text-muted mt-1.5 leading-snug">{sub}</p> : null}
+      <p data-kpi-value className={clsx("text-[26px] font-semibold tracking-tight tnum mt-1.5 leading-none", accent)}>{value}</p>
+      {sub ? <p data-kpi-sub className="text-[12px] text-muted mt-1.5 leading-snug">{sub}</p> : null}
     </>
   );
   const cls = "block bg-surface border border-line rounded-[var(--radius-card)] px-4 py-3.5 shadow-[var(--shadow-card)]";
   return href ? (
-    <Link href={href} className={clsx(cls, "hover:border-brand-200 hover:bg-subtle transition-colors focus-visible:ring-2")}>
+    <Link data-kpi href={href} className={clsx(cls, "hover:border-brand-200 hover:bg-subtle transition-colors focus-visible:ring-2")}>
       {inner}
     </Link>
   ) : (
-    <div className={cls}>{inner}</div>
+    <div data-kpi className={cls}>{inner}</div>
   );
 }
 

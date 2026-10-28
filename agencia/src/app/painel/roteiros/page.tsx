@@ -42,9 +42,21 @@ export default async function RoutesPage({ searchParams }: PageProps<"/painel/ro
               action={<StatusBadge tone={r.r.status === "active" ? "success" : "muted"} size="sm">{r.r.status === "active" ? "Ativo" : "Inativo"}</StatusBadge>}
               bodyClass="px-5 pb-5"
             >
-              <ol className="text-[13px] space-y-1 mb-3">
+              <ol className="text-[13px] space-y-1 mb-3" data-export-list data-export-title="Roteiros" data-export-columns="Roteiro|Promotor|Região|Dias|Ordem|Horário|Loja|Cidade|Marcas|Situação">
                 {r.stops.map((st, i) => (
-                  <li key={st.stop.id}>
+                  <li key={st.stop.id} data-export-row>
+                    <span hidden>
+                      <span data-export-cell>{r.r.name}</span>
+                      <span data-export-cell>{r.promoterName ?? "Sem promotor"}</span>
+                      <span data-export-cell>{r.r.region ?? ""}</span>
+                      <span data-export-cell>{r.r.weekdays.map((d) => DAYS[d]).join(", ")}</span>
+                      <span data-export-cell>{i + 1}</span>
+                      <span data-export-cell>{st.stop.plannedStart ?? ""}</span>
+                      <span data-export-cell>{st.storeName}</span>
+                      <span data-export-cell>{st.city}</span>
+                      <span data-export-cell>{st.stop.brandIds.length}</span>
+                      <span data-export-cell>{r.r.status === "active" ? "Ativo" : "Inativo"}</span>
+                    </span>
                     <span className="tnum text-muted mr-2">{i + 1}.</span>
                     {st.stop.plannedStart ? <span className="tnum mr-2">{st.stop.plannedStart}</span> : null}
                     {st.storeName} <span className="text-muted">· {st.city} · {st.stop.brandIds.length} marca(s)</span>

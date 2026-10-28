@@ -15,7 +15,7 @@ export default async function NewTaster() {
   return (
     <>
       <DegTabs />
-      <PageHeader title="Nova degustadora" />
+      <PageHeader noExport title="Nova degustadora" />
       <SectionCard title="Cadastro" bodyClass="px-5 pb-5">
         <TasterForm v={{ name: "", phone: null, city: "", state: "MG", region: null, area: null, availability: null, experience: null, usualFee: null, notes: null, status: "active" }} />
       </SectionCard>
