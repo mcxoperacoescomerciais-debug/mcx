@@ -226,6 +226,8 @@ export const stores = pgTable(
     state: text("state").notNull().default("MG"),
     lat: doublePrecision("lat"),
     lng: doublePrecision("lng"),
+    /** Origem da posição: endereço exato, endereço aproximado (rua), 1º check-in ou manual. */
+    geoSource: text("geo_source").$type<"address" | "address_approx" | "checkin" | "manual">(),
     status: text("status").$type<"active" | "inactive">().notNull().default("active"),
     rules: text("rules"),
     notes: text("notes"),

@@ -1,7 +1,7 @@
 /** Mapa ao vivo (onde cada promotor está agora) e permissão de foto da galeria. */
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { memDb } from "../scripts/_memdb";
 import * as s from "../src/server/db/schema";
 import type { DB } from "../src/server/db";
@@ -123,7 +123,7 @@ describe("presença na loja", () => {
     const today = todayIso();
     const [store] = await db.select().from(s.stores).where(eq(s.stores.agencyId, scopes.admin.agencyId)).limit(1);
     await db.update(s.stores).set({ lat: -19.92, lng: -43.94 }).where(eq(s.stores.id, store.id));
-    await db.update(s.visits).set({ status: "completed", finishedAt: new Date() }).where(eq(s.visits.promoterId, scopes.joao.userId));
+    await db.update(s.visits).set({ status: "completed", finishedAt: sql`greatest(${s.visits.startedAt}, now())` }).where(eq(s.visits.promoterId, scopes.joao.userId));
     const mk = (lat: number | null, lng: number | null) => ({ id: crypto.randomUUID(), agencyId: scopes.admin.agencyId, promoterId: scopes.joao.userId, storeId: store.id, visitDate: today, status: "completed" as const, origin: "extra" as const, extraReason: "teste", startedAt: new Date(), finishedAt: new Date(), lat, lng, accuracyM: lat == null ? null : 10, geoStatus: lat == null ? ("denied" as const) : ("captured" as const), createdBy: scopes.joao.userId, updatedBy: scopes.joao.userId });
     const far = mk(-19.95, -43.94);
     const none = mk(null, null);

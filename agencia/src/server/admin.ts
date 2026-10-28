@@ -134,7 +134,7 @@ export async function saveStore(scope: Scope, i: StoreInput): Promise<ActionResu
     status: i.status,
     rules: clean(i.rules),
     notes: clean(i.notes),
-    ...(i.coords !== undefined ? { lat: i.coords?.lat ?? null, lng: i.coords?.lng ?? null } : {}),
+    ...(i.coords !== undefined ? { lat: i.coords?.lat ?? null, lng: i.coords?.lng ?? null, geoSource: i.coords ? ("manual" as const) : null } : {}),
   };
   let id = i.id;
   try {
@@ -172,7 +172,7 @@ export async function setStoreCoords(scope: Scope, storeId: string, coords: { la
   const db = await getDb();
   const [before] = await db.select({ lat: s.stores.lat, lng: s.stores.lng }).from(s.stores).where(and(eq(s.stores.id, storeId), eq(s.stores.agencyId, scope.agencyId)));
   if (!before) return fail("Loja não encontrada.");
-  await db.update(s.stores).set({ lat: coords.lat, lng: coords.lng, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.stores.id, storeId));
+  await db.update(s.stores).set({ lat: coords.lat, lng: coords.lng, geoSource: "manual", updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.stores.id, storeId));
   await audit(actor(scope), "store", storeId, "location_set", { before, after: coords, reason: source });
   return { ok: true, message: "Localização da loja gravada." };
 }

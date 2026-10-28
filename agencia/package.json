@@ -11,8 +11,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --tsconfig tsconfig.scripts.json scripts/migrate.ts",
     "db:bootstrap": "tsx --tsconfig tsconfig.scripts.json scripts/bootstrap.ts",
+    "db:setup-data": "tsx --tsconfig tsconfig.scripts.json scripts/setup-data.ts",
     "typecheck": "tsc --noEmit",
-    "start:render": "npm run db:migrate && npm run db:bootstrap && next start",
+    "start:render": "npm run db:migrate && npm run db:bootstrap && npm run db:setup-data && next start",
     "start:demo": "node scripts/start-demo.mjs"
   },
   "dependencies": {

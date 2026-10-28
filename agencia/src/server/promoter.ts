@@ -30,6 +30,7 @@ import { classify } from "@/lib/validity";
 import { galleryAllowedFor } from "@/lib/settings";
 import { daysBetween } from "@/lib/dates";
 import { notifyCriticalAttendance } from "./whatsapp-alert";
+import { fillAddressFromPosition, learnStoreLocation } from "./store-location";
 import { applyPromoterMixChoices, mixesForStores } from "./mixes";
 import { effectiveWorkMode, periodWindow, weekEnd, weekStart } from "@/lib/portfolio";
 
@@ -484,6 +485,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
   const allowedBrands = access.get(input.storeId);
   if (!allowedBrands) throw new SyncError("forbidden", "Loja não autorizada para você.");
 
+  const postCommit: { address?: { lat: number; lng: number } } = {};
   const result = await db.transaction(async (tx): Promise<VisitSyncResult> => {
     const [existing] = await tx.select().from(s.visits).where(eq(s.visits.id, input.id));
     if (existing && (existing.promoterId !== promoterId || existing.agencyId !== scope.agencyId)) {
@@ -544,6 +546,12 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
         updatedBy: promoterId,
       });
       await audit(actor, "visit", input.id, "started", { after: { storeId: input.storeId, scheduleId: input.scheduleId, origin } }, tx);
+      // Loja sem posição (ou só aproximada): o 1º check-in com GPS bom define onde ela fica.
+      const learned = await learnStoreLocation(tx, input.storeId, input.geo);
+      if (learned.learned) {
+        await audit(actor, "store", input.storeId, "location_from_checkin", { after: { lat: input.geo?.lat, lng: input.geo?.lng, accuracyM: input.geo?.accuracy, visitId: input.id } }, tx);
+        if (learned.needsAddress) postCommit.address = { lat: input.geo!.lat!, lng: input.geo!.lng! };
+      }
     } else if (!visitLocked) {
       await tx
         .update(s.visits)
@@ -613,6 +621,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
   // Alerta de validade crítica (WhatsApp) só depois do commit e em segundo plano:
   // nunca atrasa nem derruba o envio do promotor.
   for (const r of result.attendances) if (r.completedNow) void notifyCriticalAttendance(scope, r.attendanceId);
+  if (postCommit.address) void fillAddressFromPosition(db, input.storeId, postCommit.address.lat, postCommit.address.lng);
   return result;
 }
 
