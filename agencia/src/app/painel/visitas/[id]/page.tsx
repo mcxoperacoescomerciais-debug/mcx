@@ -6,8 +6,10 @@ import { AlertTriangle, ArrowRight, FileDown, MapPin } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { getVisitDetail } from "@/server/details";
 import { checkinPresence, fmtDistance } from "@/lib/rules";
+import { brandTimes } from "@/server/brand-time";
+import { fmtMinutes } from "@/lib/work-time";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE, EXCEPTION_ITEM_LABEL, VISIT_ORIGIN_LABEL, VISIT_STATUS_LABEL, VISIT_STATUS_TONE, withPlacement } from "@/lib/domain";
-import { fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates";
+import { addDays, fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates";
 import { LinkButton, PageHeader, StatusBadge } from "@/components/ui";
 import { SectionCard } from "../../_components/widgets";
 import { BeforeAfter, type ViewerPhoto } from "../../_components/photo-viewer";
@@ -21,6 +23,14 @@ export default async function VisitPage({ params }: PageProps<"/painel/visitas/[
   const d = await getVisitDetail(scope, id);
   if (!d) notFound();
   const v = d.visit;
+  // Tempo por marca nesta visita × média do promotor e da equipe nos 30 dias até a visita.
+  const timed = d.attendances
+    .filter((x) => x.a.finishedAt && x.a.status === "completed")
+    .map((x) => ({ id: x.a.id, brandId: x.a.brandId, brandName: x.brandName, minutes: Math.round((x.a.finishedAt!.getTime() - x.a.startedAt.getTime()) / 60_000) }));
+  const window30 = { from: addDays(v.visitDate, -29), to: v.visitDate, brandIds: timed.map((t) => t.brandId) };
+  const [mine, team] = timed.length ? await Promise.all([brandTimes(scope, { ...window30, promoterId: v.promoterId }), brandTimes(scope, window30)]) : [[], []];
+  const visitMinutes = timed.reduce((n, t) => n + t.minutes, 0);
+  const maxBar = Math.max(1, ...timed.map((t) => t.minutes), ...mine.map((m) => m.avg ?? 0), ...team.map((m) => m.avg ?? 0));
   const presence = checkinPresence({ lat: v.lat, lng: v.lng, accuracyM: v.accuracyM }, { lat: d.store.lat, lng: d.store.lng }, scope.settings.checkinRadiusM);
   const brandIds = [...new Set([...d.planned.map((b) => b.id), ...d.attendances.map((x) => x.a.brandId)])];
   const viewer = (p: (typeof d.photos)[number], label: string): ViewerPhoto => ({ id: p.id, kind: p.kind, label: withPlacement(label, p.placement), takenAt: fmtDateTime(p.takenAt), uploaded: Boolean(p.uploadedAt), source: p.source });
@@ -91,6 +101,60 @@ export default async function VisitPage({ params }: PageProps<"/painel/visitas/[
         </div>
       ) : null}
       {v.origin === "extra" && v.extraReason ? <p className="text-[13.5px] text-ink-2 mb-6">Motivo da visita extraordinária: “{v.extraReason}”</p> : null}
+
+      {timed.length ? (
+        <SectionCard
+          title="Tempo por marca nesta visita"
+          subtitle={`${fmtMinutes(visitMinutes)} somando as marcas · comparado com a média deste promotor e da equipe nos 30 dias até ${fmtDate(v.visitDate)}`}
+          className="mb-6"
+          bodyClass="px-5 pb-5"
+        >
+          <div className="grid sm:grid-cols-3 gap-3 mb-4">
+            <div className="rounded-xl bg-canvas px-4 py-3">
+              <p className="text-[12px] text-muted">Marcas atendidas</p>
+              <p className="text-[22px] font-bold tnum">{timed.length}</p>
+            </div>
+            <div className="rounded-xl bg-canvas px-4 py-3">
+              <p className="text-[12px] text-muted">Tempo médio por marca nesta visita</p>
+              <p className="text-[22px] font-bold tnum">{fmtMinutes(Math.round(visitMinutes / timed.length))}</p>
+            </div>
+            <div className="rounded-xl bg-canvas px-4 py-3">
+              <p className="text-[12px] text-muted">Marca mais demorada</p>
+              <p className="text-[16px] font-bold">{[...timed].sort((a, b) => b.minutes - a.minutes)[0].brandName}</p>
+            </div>
+          </div>
+          <ul className="space-y-3">
+            {timed.map((t) => {
+              const m = mine.find((x) => x.brandId === t.brandId);
+              const tm = team.find((x) => x.brandId === t.brandId);
+              const bar = (v: number | null | undefined, cls: string) => <span className={`block h-2.5 rounded-full ${cls}`} style={{ width: `${Math.max(2, ((v ?? 0) / maxBar) * 100)}%` }} />;
+              return (
+                <li key={t.id}>
+                  <div className="flex items-baseline justify-between gap-2 text-[13.5px]">
+                    <Link href={`/painel/atendimentos/${t.id}`} className="font-semibold hover:underline">
+                      {t.brandName}
+                    </Link>
+                    <span className="tnum">
+                      <strong>{fmtMinutes(t.minutes)}</strong>
+                      <span className="text-muted"> · média do promotor {fmtMinutes(m?.avg)} · equipe {fmtMinutes(tm?.avg)}</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 space-y-1" aria-hidden>
+                    {bar(t.minutes, "bg-brand-700")}
+                    {bar(m?.avg, "bg-brand-500")}
+                    {bar(tm?.avg, "bg-brand-200")}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 flex flex-wrap gap-4 text-[12px] text-muted">
+            <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-brand-700" /> Nesta visita</span>
+            <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-brand-500" /> Média do promotor (30 dias)</span>
+            <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-brand-200" /> Média da equipe (30 dias)</span>
+          </p>
+        </SectionCard>
+      ) : null}
 
       <h2 className="text-[13px] font-semibold uppercase tracking-wide text-muted mb-3">Atendimentos por marca ({brandIds.length})</h2>
       <div className="grid lg:grid-cols-2 gap-5">

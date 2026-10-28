@@ -22,7 +22,9 @@ import {
   VISIT_ORIGIN_LABEL,
   type StockDisplayState,
 } from "@/lib/domain";
-import { fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates";
+import { addDays, fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates";
+import { brandTimes } from "@/server/brand-time";
+import { fmtMinutes } from "@/lib/work-time";
 import { isRelevantDivergence } from "@/lib/rules";
 import { Badge, LinkButton, PageHeader, StatusBadge, inputClass } from "@/components/ui";
 import { SeverityBadge } from "@/components/severity";
@@ -68,6 +70,12 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
   const informed = d.stockRows.filter((r) => r.entry).length;
   const openCorrection = d.corrections.find((c) => c.c.status === "open");
   const pctDiv = scope.settings.stockDivergencePct;
+  // Tempo nesta marca × médias (30 dias até a visita): do promotor e da equipe.
+  const minutes = a.finishedAt ? Math.round((a.finishedAt.getTime() - a.startedAt.getTime()) / 60_000) : null;
+  const win = { from: addDays(d.visit.visitDate, -29), to: d.visit.visitDate, brandIds: [a.brandId] };
+  const [mineT, teamT] = await Promise.all([brandTimes(scope, { ...win, promoterId: d.visit.promoterId }), brandTimes(scope, win)]);
+  const mineAvg = mineT[0]?.avg ?? null;
+  const teamAvg = teamT[0]?.avg ?? null;
 
   return (
     <>
@@ -94,6 +102,19 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
           </LinkButton>
         }
       />
+
+      {minutes !== null ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <TimeBox label={`Tempo em ${d.brand.name} nesta visita`} value={fmtMinutes(minutes)} sub={`${fmtTime(a.startedAt)} às ${fmtTime(a.finishedAt!)}`} strong />
+          <TimeBox label="Média do promotor nesta marca" value={fmtMinutes(mineAvg)} sub={`${mineT[0]?.n ?? 0} atendimento(s) em 30 dias`} />
+          <TimeBox label="Média da equipe nesta marca" value={fmtMinutes(teamAvg)} sub={`${teamT[0]?.n ?? 0} atendimento(s) em 30 dias`} />
+          <TimeBox
+            label="Comparado à média do promotor"
+            value={mineAvg === null ? "—" : minutes === mineAvg ? "Na média" : `${minutes > mineAvg ? "+" : "−"}${fmtMinutes(Math.abs(minutes - mineAvg))}`}
+            sub={mineAvg === null ? "sem histórico" : minutes > mineAvg ? "mais demorado que o normal" : minutes < mineAvg ? "mais rápido que o normal" : ""}
+          />
+        </div>
+      ) : null}
 
       <div className="space-y-3 mb-6">
         {openCorrection ? (
@@ -479,6 +500,16 @@ function Notice({ tone, icon, children }: { tone: "danger" | "warning"; icon: Re
     <div className={`flex gap-3 rounded-xl px-4 py-3 text-[13.5px] ${tone === "danger" ? "bg-bad-bg text-bad" : "bg-warn-bg text-warn"}`}>
       <span className="shrink-0 mt-0.5">{icon}</span>
       <div>{children}</div>
+    </div>
+  );
+}
+
+function TimeBox({ label, value, sub, strong }: { label: string; value: string; sub?: string; strong?: boolean }) {
+  return (
+    <div data-kpi className={`rounded-[var(--radius-card)] border px-4 py-3 ${strong ? "border-brand-200 bg-brand-50" : "border-line bg-surface"}`}>
+      <p data-kpi-label className="text-[12px] text-muted leading-tight">{label}</p>
+      <p data-kpi-value className="text-[22px] font-bold tnum mt-1">{value}</p>
+      {sub ? <p data-kpi-sub className="text-[11.5px] text-muted">{sub}</p> : null}
     </div>
   );
 }

@@ -118,9 +118,9 @@ export function Pagination({ page, total, pageSize, hrefFor }: { page: number; t
   );
 }
 
-export function SectionCard({ title, subtitle, action, children, className, bodyClass }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; bodyClass?: string }) {
+export function SectionCard({ title, subtitle, action, children, className, bodyClass, id }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; bodyClass?: string; id?: string }) {
   return (
-    <section className={clsx("bg-surface border border-line rounded-[var(--radius-card)] shadow-[var(--shadow-card)]", className)}>
+    <section id={id} className={clsx("scroll-mt-20","bg-surface border border-line rounded-[var(--radius-card)] shadow-[var(--shadow-card)]", className)}>
       <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold text-ink">{title}</h2>

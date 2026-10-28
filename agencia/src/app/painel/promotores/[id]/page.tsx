@@ -9,6 +9,8 @@ import { canSeePromoter } from "@/server/scope";
 import { getDayBoard, filterOptions, summarizePromoters, PROMOTER_STATUS_LABEL, PROMOTER_STATUS_TONE } from "@/server/operations";
 import { listVisits } from "@/server/history";
 import { workTimes } from "@/server/work-time";
+import { brandTimes } from "@/server/brand-time";
+import { withParams } from "@/lib/filters";
 import { fmtClock, fmtMinutes, type Stat } from "@/lib/work-time";
 import { KpiCard } from "../../_components/widgets";
 import { parseFilters } from "@/lib/filters";
@@ -37,7 +39,12 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
     listVisits(scope, { ...f, from, to, promoter: id }),
     filterOptions(scope),
   ]);
-  const work = (await workTimes(scope, from, to, id)).get(id) ?? null;
+  const [workMap, brands] = await Promise.all([workTimes(scope, from, to, id), brandTimes(scope, { from, to, promoterId: id })]);
+  const work = workMap.get(id) ?? null;
+  const showAll = raw.marcas === "todas";
+  const openBrand = typeof raw.marca === "string" ? brands.find((b) => b.brandId === raw.marca) ?? null : null;
+  const keepPeriod = { from, to };
+  const maxAvg = Math.max(1, ...brands.map((b) => b.avg ?? 0));
   const summary = summarizePromoters(board)[0];
   const [manager] = p.managerId ? await db.select({ name: s.users.name }).from(s.users).where(eq(s.users.id, p.managerId)) : [];
 
@@ -123,6 +130,99 @@ export default async function PromoterPage({ params, searchParams }: PageProps<"
           </>
         ) : (
           <EmptyState title="Nenhuma visita neste período" />
+        )}
+      </SectionCard>
+
+      <SectionCard
+        id="marcas"
+        title="Tempo médio por marca"
+        subtitle={`Do início ao fim do atendimento de cada marca · ${fmtDate(from)} a ${fmtDate(to)}${brands.length ? ` · ${brands.length} marca(s)` : ""}. Clique na marca para ver cada atendimento.`}
+        className="mb-6"
+        bodyClass="pb-2"
+      >
+        {brands.length ? (
+          <>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Marca</Th>
+                  <Th align="right">Atendimentos</Th>
+                  <Th>Tempo médio</Th>
+                  <Th align="right">Mínimo</Th>
+                  <Th align="right">Máximo</Th>
+                  <Th align="right">Tempo total</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {(showAll ? brands : brands.slice(0, 5)).map((b) => (
+                  <tr key={b.brandId} className={openBrand?.brandId === b.brandId ? "bg-brand-50" : "hover:bg-subtle"}>
+                    <Td>
+                      <Link href={`/painel/promotores/${id}${withParams({ ...keepPeriod, marcas: showAll ? "todas" : null, marca: openBrand?.brandId === b.brandId ? null : b.brandId })}#marcas`} scroll={false} className="font-semibold text-brand-700 hover:underline">
+                        {b.brandName}
+                      </Link>
+                    </Td>
+                    <Td align="right" className="tnum">{b.n}</Td>
+                    <Td>
+                      <div className="flex items-center gap-2 min-w-[160px]">
+                        <span className="h-2 rounded-full bg-brand-600" style={{ width: `${Math.max(4, ((b.avg ?? 0) / maxAvg) * 100)}%`, maxWidth: 120 }} />
+                        <span className="tnum font-semibold">{fmtMinutes(b.avg)}</span>
+                      </div>
+                    </Td>
+                    <Td align="right" className="tnum">{fmtMinutes(b.min)}</Td>
+                    <Td align="right" className="tnum">{fmtMinutes(b.max)}</Td>
+                    <Td align="right" className="tnum">{fmtMinutes(b.totalMinutes)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+            {brands.length > 5 ? (
+              <Link href={`/painel/promotores/${id}${withParams({ ...keepPeriod, marcas: showAll ? null : "todas", marca: openBrand?.brandId ?? null })}#marcas`} scroll={false} className="block px-5 py-2.5 text-[13px] font-semibold text-brand-700 hover:underline">
+                {showAll ? "Ver só as 5 principais" : `Ver mais (todas as ${brands.length} marcas)`}
+              </Link>
+            ) : null}
+            {openBrand ? (
+              <div className="mx-5 mt-3 mb-3 rounded-xl border border-line">
+                <p className="px-4 pt-3 pb-1 font-semibold text-[14px]">
+                  {openBrand.brandName}: {openBrand.n} atendimento(s) · média {fmtMinutes(openBrand.avg)}
+                </p>
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>Dia</Th>
+                      <Th>Loja</Th>
+                      <Th align="right">Tempo na marca</Th>
+                      <Th align="right">Comparado à média</Th>
+                      <Th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {openBrand.rows.map((r) => {
+                      const diff = openBrand.avg ? r.minutes - openBrand.avg : 0;
+                      return (
+                        <tr key={r.attendanceId} className="hover:bg-subtle">
+                          <Td className="tnum whitespace-nowrap">{fmtDate(r.date)}</Td>
+                          <Td>
+                            {r.storeName} <span className="text-muted">· {r.city}</span>
+                          </Td>
+                          <Td align="right" className="tnum font-semibold">{fmtMinutes(r.minutes)}</Td>
+                          <Td align="right" className={`tnum ${diff > 10 ? "text-warn" : diff < -10 ? "text-info" : "text-muted"}`}>
+                            {diff === 0 ? "na média" : `${diff > 0 ? "+" : "−"}${fmtMinutes(Math.abs(diff))}`}
+                          </Td>
+                          <Td align="right">
+                            <Link href={`/painel/atendimentos/${r.attendanceId}`} className="text-[13px] font-semibold text-brand-700 hover:underline whitespace-nowrap">
+                              Ver atendimento →
+                            </Link>
+                          </Td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <EmptyState title="Nenhum atendimento concluído neste período" />
         )}
       </SectionCard>
 
