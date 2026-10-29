@@ -160,6 +160,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
           whatsappApiKey: str(fd, "alert_apikey").toLowerCase() === "apagar" ? "" : str(fd, "alert_apikey") || scope.settings.alerts.whatsappApiKey,
           storageReport: scope.settings.alerts.storageReport,
         },
+        support: { name: str(fd, "support_name"), phone: normalizePhones(str(fd, "support_phone")).split(",")[0] ?? "" },
         promoterCost: {
           salary: moneyField(fd, "cost_salary"),
           meal: moneyField(fd, "cost_meal"),
@@ -211,7 +212,7 @@ export async function importAction(_: ImportState, fd: FormData): Promise<Import
   const scope = await getScope();
   if (scope.role !== "admin") return { error: "Somente administradores." };
   const kind = str(fd, "kind") as ImportKind;
-  if (!["produtos", "lojas", "promotores", "metas", "mix", "roteiros", "parceiros"].includes(kind)) return { error: "Tipo de importação inválido." };
+  if (!["produtos", "lojas", "promotores", "metas", "mix", "parceiros"].includes(kind)) return { error: "Tipo de importação inválido." };
   const file = fd.get("file");
   if (!(file instanceof File) || !file.size) return { error: "Escolha o arquivo." };
   if (file.size > 10 * 1024 * 1024) return { error: "Arquivo muito grande (máx. 10 MB)." };

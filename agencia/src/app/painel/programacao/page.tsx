@@ -2,19 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
-import { ArrowDown, ArrowUp, CalendarPlus, Wand2 } from "lucide-react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { filterOptions } from "@/server/operations";
-import { allowedBrands, listDaySchedules } from "@/server/schedules";
+import { listDaySchedules } from "@/server/schedules";
 import { matchText, parseFilters } from "@/lib/filters";
-import { addDays, fmtDateTime, fmtLongDate, todayIso } from "@/lib/dates";
+import { fmtDateTime, fmtLongDate, todayIso } from "@/lib/dates";
 import { VISIT_STATUS_LABEL, VISIT_STATUS_TONE, type VisitStatus } from "@/lib/domain";
-import { EmptyState, PageHeader, StatusBadge, inputClass, selectClass } from "@/components/ui";
+import { EmptyState, PageHeader, StatusBadge, inputClass } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
 import { SectionCard } from "../_components/widgets";
 import { ActionForm, Disclosure } from "../_components/action-form";
-import { cancelScheduleAction, createScheduleAction, generateAction, moveScheduleAction, updateScheduleAction } from "./actions";
+import { cancelScheduleAction, moveScheduleAction, updateScheduleAction } from "./actions";
 
 export const metadata: Metadata = { title: "Programação" };
 
@@ -26,8 +26,6 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
   const f = parseFilters(await searchParams);
   const [allRows, options] = await Promise.all([listDaySchedules(scope, f.date, f.promoter), filterOptions(scope)]);
   const rows = f.q ? allRows.filter((r) => matchText(f.q, r.promoterName, r.storeName, r.city, ...r.brands.map((b) => b.name))) : allRows;
-  const allowed = new Map(await Promise.all(rows.map(async (r) => [r.id, await allowedBrands(r.promoterId, r.storeId)] as const)));
-  const brandName = new Map(options.brands.map((b) => [b.id, b.name]));
   const byPromoter = new Map<string, typeof rows>();
   for (const r of rows) byPromoter.set(r.promoterName, [...(byPromoter.get(r.promoterName) ?? []), r]);
   const db = await getDb();
@@ -42,14 +40,14 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
 
   return (
     <>
-      <PageHeader title="Programação" subtitle={<span className="first-letter:uppercase inline-block">{fmtLongDate(f.date)} · lojas e marcas de cada promotor</span>} actions={<Link href="/painel/roteiros" className="text-[13px] font-semibold text-brand-700">Gerenciar roteiros →</Link>} />
+      <PageHeader title="Programação" subtitle={<span className="first-letter:uppercase inline-block">{fmtLongDate(f.date)} · lojas e marcas de cada promotor</span>} actions={<Link href="/painel/cadastros/usuarios" className="text-[13px] font-semibold text-brand-700">Lojas e marcas de cada promotor: Cadastros › Usuários →</Link>} />
       <FilterBar fields={["date", "promoter", "q"]} options={options} qPlaceholder="Promotor, loja, cidade ou marca" />
 
       <div className="grid xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-5">
           {byPromoter.size === 0 ? (
             <div className="bg-surface border border-line rounded-[var(--radius-card)]">
-              <EmptyState title="Nenhuma loja programada nesta data">Adicione lojas ao lado ou gere a programação a partir dos roteiros.</EmptyState>
+              <EmptyState title="Nenhuma loja programada nesta data">As lojas entram na programação pelo quadro da semana de cada promotor (Cadastros › Usuários).</EmptyState>
             </div>
           ) : null}
           {[...byPromoter.entries()].map(([name, list]) => (
@@ -107,16 +105,9 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
                     </div>
                     {r.status === "active" && !isPast ? (
                       <div className="grid sm:grid-cols-2 gap-2 mt-2 ml-10">
-                        <Disclosure label="Alterar horário ou marcas">
+                        <Disclosure label="Alterar horário">
                           <ActionForm action={updateScheduleAction} hidden={{ id: r.id }} submitLabel="Salvar alteração" resetOnSuccess={false}>
                             <input type="time" name="plannedStart" defaultValue={r.plannedStart ?? ""} className={inputClass} aria-label="Horário previsto" />
-                            <fieldset className="flex flex-wrap gap-3 text-[13px]">
-                              {(allowed.get(r.id) ?? []).map((b) => (
-                                <label key={b} className="inline-flex items-center gap-1.5">
-                                  <input type="checkbox" name="brandIds" value={b} defaultChecked={r.brands.some((x) => x.id === b)} /> {brandName.get(b)}
-                                </label>
-                              ))}
-                            </fieldset>
                             <input name="reason" required minLength={5} placeholder="Justificativa (obrigatória)" className={inputClass} />
                           </ActionForm>
                         </Disclosure>
@@ -137,38 +128,14 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
         </div>
 
         <div className="space-y-6">
-          <SectionCard title="Adicionar loja ao dia" subtitle="Também serve para trabalhos pontuais de freelancers" action={<CalendarPlus className="size-5 text-muted" />} bodyClass="px-5 pb-5">
-            <ActionForm action={createScheduleAction} hidden={{ date: f.date }} submitLabel="Adicionar">
-              <select name="promoterId" required className={selectClass} defaultValue={f.promoter ?? ""} aria-label="Promotor">
-                <option value="">Promotor</option>
-                {options.promoters.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <select name="storeId" required className={selectClass} defaultValue="" aria-label="Loja">
-                <option value="">Loja</option>
-                {options.stores.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.name} — {st.city}
-                  </option>
-                ))}
-              </select>
-              <input type="time" name="plannedStart" className={inputClass} aria-label="Horário previsto (opcional)" />
-              <input name="notes" placeholder="Observação (opcional)" className={inputClass} />
-              <p className="text-[12px] text-muted">As marcas são as autorizadas ao promotor nesta loja (ajuste depois em “Alterar”).</p>
-            </ActionForm>
-          </SectionCard>
-
-          <SectionCard title="Gerar a partir dos roteiros" action={<Wand2 className="size-5 text-muted" />} bodyClass="px-5 pb-5">
-            <ActionForm action={generateAction} hidden={{}} submitLabel="Gerar programação" variant="secondary">
-              <div className="grid grid-cols-2 gap-2">
-                <input type="date" name="from" defaultValue={f.date} className={inputClass} aria-label="De" />
-                <input type="date" name="to" defaultValue={addDays(f.date, 6)} className={inputClass} aria-label="Até" />
-              </div>
-              <p className="text-[12px] text-muted">Cria as lojas dos roteiros ativos nos dias da semana configurados. O que já existe não é duplicado.</p>
-            </ActionForm>
+          <SectionCard title="Incluir loja ou marca" bodyClass="px-5 pb-5">
+            <p className="text-[13px] text-ink-2">
+              Loja e marca de cada promotor são definidas só no <strong>quadro da semana</strong> do cadastro dele, em{" "}
+              <Link href="/painel/cadastros/usuarios" className="font-semibold text-brand-700 hover:underline">
+                Cadastros › Usuários
+              </Link>
+              . A programação dos próximos 14 dias acompanha sozinha. Aqui você só muda o horário, a ordem ou cancela uma loja do dia.
+            </p>
           </SectionCard>
 
           <SectionCard title="Histórico de alterações" bodyClass="px-5 pb-5">

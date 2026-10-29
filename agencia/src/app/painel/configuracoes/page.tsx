@@ -145,8 +145,8 @@ export default async function SettingsPage() {
             </div>
           </SectionCard>
           <SectionCard
-            title="Alerta de validade no WhatsApp"
-            subtitle={`Quando o promotor finaliza um atendimento com validade próxima, chega no WhatsApp: ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
+            title="Alerta de validade e avaria no WhatsApp"
+            subtitle={`Quando o promotor finaliza um atendimento com validade próxima ou com avaria, chega no WhatsApp: ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
             bodyClass="px-5 pb-5 space-y-3"
           >
             <Row label="Validade próxima: avisar tudo que vence em até (dias), qualquer quantidade">
@@ -170,6 +170,15 @@ export default async function SettingsPage() {
               <input name="alert_apikey" type="password" autoComplete="off" placeholder={st.alerts.whatsappApiKey ? "••••••• (salva)" : "ex.: 1234567"} className={inputClass} />
             </Row>
             <p className="text-[12px] text-muted">Sem número e chave, nenhum alerta é enviado. Depois de salvar, use “Enviar mensagem de teste” abaixo.</p>
+          </SectionCard>
+          <SectionCard title="Ajuda no app do promotor" subtitle="Balão do WhatsApp na tela inicial do promotor, para falar com a equipe quando tiver dúvida." bodyClass="px-5 pb-5 space-y-3">
+            <Row label="Nome mostrado no balão">
+              <input name="support_name" defaultValue={st.support.name} placeholder="ex.: Maria" maxLength={40} className={inputClass} />
+            </Row>
+            <Row label="WhatsApp (com DDD)">
+              <input name="support_phone" defaultValue={st.support.phone} placeholder={st.alerts.whatsappPhone ? `vazio = ${st.alerts.whatsappPhone.split(",")[0]} (o do alerta)` : "31 99999-8888"} className={inputClass} />
+            </Row>
+            <p className="text-[12px] text-muted">Vazio usa o primeiro número do alerta acima. Sem nenhum número, o balão não aparece. Chega no celular do promotor na próxima atualização do app.</p>
           </SectionCard>
           <SectionCard title="Prioridade das pendências" subtitle="1 = mais urgente. Define a ordem da Central de pendências." bodyClass="px-5 pb-5">
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2">
@@ -208,8 +217,8 @@ export default async function SettingsPage() {
       </SectionCard>
       <SectionCard
         className="mt-6"
-        title="Alertas de validade dos últimos 30 dias"
-        subtitle={`Todo atendimento com produto que entra na regra acima (vence em até ${near} dias ou grande quantidade) e o que aconteceu com o WhatsApp dele.`}
+        title="Alertas de validade e avaria dos últimos 30 dias"
+        subtitle={`Todo atendimento com validade na regra acima (vence em até ${near} dias ou grande quantidade) ou com avaria, e o que aconteceu com o WhatsApp dele.`}
         bodyClass="pb-2"
       >
         {log.length ? (

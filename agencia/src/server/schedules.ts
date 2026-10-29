@@ -135,17 +135,18 @@ async function loadSchedule(scope: Scope, id: string) {
   return row;
 }
 
-export async function updateSchedule(scope: Scope, id: string, patch: { plannedStart: string | null; brandIds: string[] }, reason: string): Promise<ActionResult> {
+/** Altera o horário (e, se vierem, as marcas) de uma loja do dia. Sem `brandIds`, as marcas ficam como estão. */
+export async function updateSchedule(scope: Scope, id: string, patch: { plannedStart: string | null; brandIds?: string[] }, reason: string): Promise<ActionResult> {
   if (!canPlan(scope)) return fail("Sem permissão.");
   if (reason.trim().length < 5) return fail("Informe a justificativa da alteração.");
   if (patch.plannedStart && !HHMM.test(patch.plannedStart)) return fail("Horário inválido.");
   const row = await loadSchedule(scope, id);
   if (!row || row.status !== "active") return fail("Programação não encontrada.");
-  const allowed = await allowedBrands(row.promoterId, row.storeId);
-  const brandIds = patch.brandIds.filter((b) => allowed.includes(b));
-  if (!brandIds.length) return fail("Escolha ao menos uma marca autorizada.");
   const db = await getDb();
   const before = (await db.select({ id: s.scheduleBrands.brandId }).from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, id))).map((r) => r.id);
+  const allowed = await allowedBrands(row.promoterId, row.storeId);
+  const brandIds = patch.brandIds ? patch.brandIds.filter((b) => allowed.includes(b)) : before;
+  if (!brandIds.length) return fail("Escolha ao menos uma marca autorizada.");
   await db.transaction(async (tx) => {
     await tx.update(s.schedules).set({ plannedStart: patch.plannedStart, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.schedules.id, id));
     await tx.delete(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, id));

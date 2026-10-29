@@ -25,7 +25,6 @@ export function ImportForm() {
               <option value="promotores">Promotores (com marcas e lojas)</option>
               <option value="metas">Atribuições: promotor × loja × marca × dias × vezes (planilha padrão)</option>
               <option value="mix">Mix de produtos (por formato da rede ou por loja)</option>
-              <option value="roteiros">Roteiros (promotor, dias e lojas)</option>
               <option value="parceiros">Atendimentos via parceiros (loja, marca, promotor e parceiro)</option>
             </select>
           </label>
@@ -55,9 +54,6 @@ export function ImportForm() {
           </a>
           <a href="/api/templates/mix" className={buttonClass("ghost")}>
             <Download className="size-4" /> Modelo de mix
-          </a>
-          <a href="/api/templates/roteiros" className={buttonClass("ghost")}>
-            <Download className="size-4" /> Modelo de roteiros
           </a>
           <a href="/api/templates/parceiros" className={buttonClass("ghost")}>
             <Download className="size-4" /> Modelo de atendimentos via parceiros

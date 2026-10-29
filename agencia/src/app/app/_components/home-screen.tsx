@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { AlertOctagon, ArrowRight, CalendarClock, ChevronRight, Clock, MapPin, PencilLine, PlayCircle, RotateCcw, Store } from "lucide-react";
+import { AlertOctagon, ArrowRight, MessageCircle, CalendarClock, ChevronRight, Clock, MapPin, PencilLine, PlayCircle, RotateCcw, Store } from "lucide-react";
 import clsx from "clsx";
 import { Button, McxFooter, Progress, StatusBadge, TradeWordmark } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
@@ -250,6 +250,7 @@ export function HomeScreen() {
 
       <McxFooter variant="dark" className="mt-8 mb-2" />
       {sheets}
+      <SupportBubble support={local.bootstrap!.settings.support ?? null} promoter={user.name} />
       <BottomTabs active="hoje" />
     </Screen>
   );
@@ -328,5 +329,24 @@ function StopCard({ stop, index, onStart }: { stop: { schedule: BootstrapSchedul
         )}
       </div>
     </article>
+  );
+}
+
+/** Balão do WhatsApp de ajuda (configurado pela agência): abre a conversa já com uma mensagem pronta. */
+function SupportBubble({ support, promoter }: { support: { name: string; phone: string } | null; promoter: string }) {
+  if (!support) return null;
+  const text = `Olá, ${support.name}! Aqui é ${promoter.split(" ")[0]} (promotor). Tenho uma dúvida:`;
+  return (
+    <a
+      href={`https://wa.me/${support.phone}?text=${encodeURIComponent(text)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fixed right-4 z-40 inline-flex items-center gap-2 rounded-full bg-[#25D366] text-white pl-3.5 pr-4 h-12 shadow-[0_8px_24px_rgb(0_0_0/0.25)] font-semibold text-[14px] active:scale-95 transition-transform"
+      style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
+      aria-label={`Falar com ${support.name} no WhatsApp`}
+    >
+      <MessageCircle className="size-5" fill="currentColor" strokeWidth={1.5} />
+      Dúvidas? {support.name}
+    </a>
   );
 }

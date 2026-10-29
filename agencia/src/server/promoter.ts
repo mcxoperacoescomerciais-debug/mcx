@@ -27,7 +27,7 @@ import type {
 } from "@/lib/sync-types";
 import { brandChecklist, type AttendanceStatus, type WorkMode } from "@/lib/domain";
 import { classify } from "@/lib/validity";
-import { galleryAllowedFor } from "@/lib/settings";
+import { galleryAllowedFor, type AgencySettings } from "@/lib/settings";
 import { daysBetween } from "@/lib/dates";
 import { notifyCriticalAttendance } from "./whatsapp-alert";
 import { fillAddressFromPosition, learnStoreLocation } from "./store-location";
@@ -86,6 +86,12 @@ export async function trackedProducts(db: DB | Tx, storeId: string, brandId: str
 }
 
 // ───────────────────────────── Bootstrap ─────────────────────────────
+
+/** Ajuda do promotor: o contato configurado ou, sem número, o primeiro número do alerta. */
+function supportContact(st: AgencySettings): { name: string; phone: string } | null {
+  const phone = (st.support.phone || st.alerts.whatsappPhone.split(",")[0] || "").replace(/\D/g, "");
+  return phone.length >= 10 ? { name: st.support.name || "Suporte", phone } : null;
+}
 
 export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
   const db = await getDb();
@@ -194,6 +200,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
       captureLocation: scope.settings.captureLocation,
       allowExceptions: scope.settings.allowExceptions,
       validityBands: scope.settings.validityBands,
+      support: supportContact(scope.settings),
     },
     today,
     brands: brandRows

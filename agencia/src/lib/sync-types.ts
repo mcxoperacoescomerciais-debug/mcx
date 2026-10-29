@@ -283,6 +283,8 @@ export interface BootstrapPayload {
     allowExceptions: boolean;
     /** Faixas de validade da agência: classificação instantânea no celular, sem internet. */
     validityBands: SeverityBands;
+    /** Ajuda no WhatsApp (balão da tela inicial); null = sem número configurado. */
+    support?: { name: string; phone: string } | null;
   };
   today: string;
   brands: BootstrapBrand[];

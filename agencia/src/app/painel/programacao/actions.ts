@@ -11,21 +11,13 @@ const done = (r: Awaited<ReturnType<typeof sch.createSchedule>>): FormState => {
   return r;
 };
 
-export async function createScheduleAction(_: FormState, fd: FormData): Promise<FormState> {
-  return done(
-    await sch.createSchedule(await getScope(), {
-      promoterId: str(fd, "promoterId"),
-      storeId: str(fd, "storeId"),
-      date: str(fd, "date"),
-      plannedStart: str(fd, "plannedStart") || null,
-      brandIds: fd.getAll("brandIds").map(String),
-      notes: str(fd, "notes") || null,
-    }),
-  );
-}
-
+/**
+ * Loja e marca do promotor entram só pelo quadro da semana do cadastro dele
+ * (Cadastros › Usuários); aqui a programação do dia muda só horário, ordem e
+ * cancelamento.
+ */
 export async function updateScheduleAction(_: FormState, fd: FormData): Promise<FormState> {
-  return done(await sch.updateSchedule(await getScope(), str(fd, "id"), { plannedStart: str(fd, "plannedStart") || null, brandIds: fd.getAll("brandIds").map(String) }, str(fd, "reason")));
+  return done(await sch.updateSchedule(await getScope(), str(fd, "id"), { plannedStart: str(fd, "plannedStart") || null }, str(fd, "reason")));
 }
 
 export async function cancelScheduleAction(_: FormState, fd: FormData): Promise<FormState> {
@@ -35,28 +27,4 @@ export async function cancelScheduleAction(_: FormState, fd: FormData): Promise<
 export async function moveScheduleAction(fd: FormData): Promise<void> {
   await sch.moveSchedule(await getScope(), str(fd, "id"), str(fd, "dir") === "up" ? -1 : 1);
   revalidatePath("/painel/programacao");
-}
-
-export async function generateAction(_: FormState, fd: FormData): Promise<FormState> {
-  return done(await sch.generateFromRoutes(await getScope(), str(fd, "from"), str(fd, "to")));
-}
-
-export async function saveRouteAction(_: FormState, fd: FormData): Promise<FormState> {
-  const storeIds = fd.getAll("stopStore").map(String);
-  const times = fd.getAll("stopTime").map(String);
-  return done(
-    await sch.saveRoute(
-      await getScope(),
-      {
-        id: str(fd, "id") || null,
-        name: str(fd, "name"),
-        region: str(fd, "region") || null,
-        promoterId: str(fd, "promoterId") || null,
-        weekdays: fd.getAll("weekdays").map(Number).filter((n) => n >= 0 && n <= 6),
-        status: str(fd, "status") === "inactive" ? "inactive" : "active",
-        stops: storeIds.map((storeId, i) => ({ storeId, plannedStart: times[i] || null })).filter((x) => x.storeId),
-      },
-      str(fd, "reason"),
-    ),
-  );
 }

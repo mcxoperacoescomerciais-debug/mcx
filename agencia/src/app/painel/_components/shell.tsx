@@ -28,7 +28,6 @@ import {
   Map as MapIcon,
   Menu,
   PackageSearch,
-  Route,
   Settings,
   ShieldAlert,
   SlidersHorizontal,
@@ -77,7 +76,6 @@ const MAIN: NavItem[] = [
 
 const SETTINGS: NavItem[] = [
   { href: "/painel/programacao", label: "Programação", icon: CalendarRange, fullScope: true },
-  { href: "/painel/roteiros", label: "Roteiros", icon: Route, fullScope: true },
   { href: "/painel/cadastros/marcas", label: "Marcas", icon: Tags, roles: ["admin"] },
   { href: "/painel/cadastros/lojas", label: "Redes e lojas", icon: Building2, roles: ["admin"] },
   { href: "/painel/cadastros/produtos", label: "Produtos", icon: Boxes, roles: ["admin"] },

@@ -1,9 +1,10 @@
 /**
- * Alerta de validade crítica no WhatsApp da gestão (modo SUINCO), por agência.
+ * Alerta de validade próxima e de avaria no WhatsApp da gestão, por agência.
  *
- * Quando o promotor FINALIZA um atendimento com validade próxima, a agência
- * recebe: nome da agência, marca, promotor, loja, cidade, os itens e o link do
- * PDF do atendimento. Entra no alerta (ajustável em Configurações de cada agência):
+ * Quando o promotor FINALIZA um atendimento com validade próxima ou com avaria,
+ * a agência recebe: nome da agência, marca, promotor, loja, cidade, os itens e o
+ * link do PDF do atendimento. Toda avaria entra; na validade entra (ajustável
+ * em Configurações de cada agência):
  *   - vencido ou vencendo em até `alerts.nearDays` dias (ou "Crítico até", se maior);
  *   - grande quantidade: vencendo em até `alerts.bulkDays` dias e quantidade
  *     acima de `alerts.bulkMinQty`.
@@ -18,7 +19,7 @@ import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import type { ActionResult } from "./manager";
-import { VALIDITY_LOCATION_LABEL } from "@/lib/domain";
+import { DAMAGE_KIND_LABEL, VALIDITY_LOCATION_LABEL } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { alertNearDays, describeDays, formatIsoBr, isAlertItem, type AlertRule } from "@/lib/validity";
 import { addDays, todayIso } from "@/lib/dates";
@@ -74,15 +75,21 @@ export async function buildAlertMessage(scope: Pick<Scope, "agencyId" | "agencyN
     .orderBy(s.validities.daysToExpiry);
   const rule = alertRule(scope.settings);
   const items = rows.filter((r) => isAlertItem(r.days, r.quantity, rule));
-  if (!items.length) return null;
+  const damages = await db
+    .select({ product: s.products.name, kind: s.damages.kind, quantity: s.damages.quantity, unit: s.damages.unit })
+    .from(s.damages)
+    .innerJoin(s.products, eq(s.products.id, s.damages.productId))
+    .where(and(eq(s.damages.attendanceId, attendanceId), isNull(s.damages.deletedAt)));
+  if (!items.length && !damages.length) return null;
   const near = alertNearDays(rule);
 
   const line = (i: (typeof items)[number]) =>
     `• ${i.product} – ${i.days < 0 ? `VENCIDO (${formatIsoBr(i.expiryDate, false)})` : `vence ${formatIsoBr(i.expiryDate, false)} (${describeDays(i.days)})`} · ${i.quantity} ${i.unit} · ${VALIDITY_LOCATION_LABEL[i.location]}`;
   const urgent = items.filter((i) => i.days <= near);
   const bulk = items.filter((i) => i.days > near);
+  const title = items.length && damages.length ? "Validade próxima e avaria" : items.length ? "Validade próxima" : "Avaria";
   const text = [
-    `⚠️ *Validade próxima – ${scope.agencyName}*`,
+    `⚠️ *${title} – ${scope.agencyName}*`,
     `*Marca:* ${a.brand}`,
     `*Promotor:* ${a.promoter}`,
     `*Loja:* ${a.chain && !a.store.toLowerCase().includes(a.chain.toLowerCase()) ? `${a.chain} · ` : ""}${a.store}${a.code && !a.store.includes(a.code) ? ` · ${a.code}` : ""}`,
@@ -92,10 +99,12 @@ export async function buildAlertMessage(scope: Pick<Scope, "agencyId" | "agencyN
     ...(urgent.length ? [`*Vencidos ou vencendo em até ${near} dias (${urgent.length}):*`, ...urgent.map(line)] : []),
     ...(urgent.length && bulk.length ? [""] : []),
     ...(bulk.length ? [`*Grande quantidade – vence em até ${rule.bulkDays} dias, acima de ${rule.bulkMinQty} (${bulk.length}):*`, ...bulk.map(line)] : []),
+    ...(items.length && damages.length ? [""] : []),
+    ...(damages.length ? [`*Avarias (${damages.length}):*`, ...damages.map((d) => `• ${d.product} – ${DAMAGE_KIND_LABEL[d.kind] ?? d.kind} · ${d.quantity} ${d.unit}`)] : []),
     "",
     `📄 Relatório (PDF): ${baseUrl()}/r/${linkId}`,
   ].join("\n");
-  return { text, items: items.length };
+  return { text, items: items.length + damages.length };
 }
 
 export async function sendCallMeBot(phone: string, apikey: string, text: string): Promise<void> {
@@ -133,7 +142,7 @@ async function sendAttendanceAlert(scope: Scope, attendanceId: string, resend: b
   const msg = await buildAlertMessage(scope, attendanceId, row.id);
   if (!msg) {
     await db.delete(s.whatsappAlerts).where(eq(s.whatsappAlerts.id, row.id));
-    return { ok: false, error: "Nenhum item deste atendimento entra na regra do alerta." };
+    return { ok: false, error: "Nenhuma validade na regra do alerta nem avaria neste atendimento." };
   }
   const errors: string[] = [];
   for (const r of to) await sendCallMeBot(r.phone, r.apikey, msg.text).catch((e: Error) => errors.push(e.message));
@@ -166,8 +175,8 @@ export async function resendAlert(scope: Scope, attendanceId: string): Promise<A
 export type AlertLogStatus = "sent" | "error" | "missing";
 
 /**
- * Conferência dos últimos `days` dias: todo atendimento finalizado com item que
- * entra na regra atual do alerta, e o que aconteceu com o WhatsApp dele.
+ * Conferência dos últimos `days` dias: todo atendimento com validade na regra
+ * atual do alerta ou com avaria, e o que aconteceu com o WhatsApp dele.
  */
 export async function alertLog(scope: Scope, days = 30) {
   const db = await getDb();
@@ -201,6 +210,29 @@ export async function alertLog(scope: Scope, days = 30) {
     g.items++;
     byAtt.set(r.attendanceId, g);
   }
+  // Avarias: todo atendimento com avaria também é avisado.
+  const damageRows = await db
+    .select({
+      attendanceId: s.attendances.id,
+      status: s.attendances.status,
+      visitDate: s.visits.visitDate,
+      brand: s.brands.name,
+      store: s.stores.name,
+      city: s.stores.city,
+      promoter: s.users.name,
+    })
+    .from(s.damages)
+    .innerJoin(s.attendances, eq(s.attendances.id, s.damages.attendanceId))
+    .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+    .innerJoin(s.brands, eq(s.brands.id, s.attendances.brandId))
+    .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+    .innerJoin(s.users, eq(s.users.id, s.visits.promoterId))
+    .where(and(eq(s.damages.agencyId, scope.agencyId), isNull(s.damages.deletedAt), gte(s.visits.visitDate, from)));
+  for (const r of damageRows) {
+    const g = byAtt.get(r.attendanceId) ?? { attendanceId: r.attendanceId, finished: r.status === "completed", visitDate: r.visitDate, brand: r.brand, store: r.store, city: r.city, promoter: r.promoter, items: 0 };
+    g.items++;
+    byAtt.set(r.attendanceId, g);
+  }
   const ids = [...byAtt.keys()];
   const sent = ids.length ? await db.select().from(s.whatsappAlerts).where(inArray(s.whatsappAlerts.attendanceId, ids)) : [];
   return [...byAtt.values()].map((g) => {
@@ -217,9 +249,10 @@ export async function sendTestAlert(scope: Scope): Promise<ActionResult> {
   const st = scope.settings;
   const text = [
     `✅ *Teste – alertas ${scope.agencyName}*`,
-    "Este número vai receber os avisos de validade próxima:",
+    "Este número vai receber os avisos de validade próxima e de avaria:",
     `• vencidos ou vencendo em até ${Math.max(st.validityBands.critical, st.alerts.nearDays)} dias`,
     `• vencendo em até ${st.alerts.bulkDays} dias com mais de ${st.alerts.bulkMinQty} unidades`,
+    "• toda avaria registrada",
   ].join("\n");
   const errors: string[] = [];
   for (const r of to) await sendCallMeBot(r.phone, r.apikey, text).catch((e: Error) => errors.push(`${r.phone}: ${e.message}`));
