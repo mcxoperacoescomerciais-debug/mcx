@@ -145,8 +145,8 @@ export default async function SettingsPage() {
             </div>
           </SectionCard>
           <SectionCard
-            title="Alerta de validade e avaria no WhatsApp"
-            subtitle={`Quando o promotor finaliza um atendimento com validade próxima ou com avaria, chega no WhatsApp: ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
+            title="Alerta de validade, avaria e ruptura no WhatsApp"
+            subtitle={`Quando o promotor finaliza um atendimento com validade próxima, avaria ou ruptura, chega no WhatsApp (uma mensagem por atendimento): ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
             bodyClass="px-5 pb-5 space-y-3"
           >
             <Row label="Validade próxima: avisar tudo que vence em até (dias), qualquer quantidade">
@@ -222,8 +222,8 @@ export default async function SettingsPage() {
       </SectionCard>
       <SectionCard
         className="mt-6"
-        title="Alertas de validade e avaria dos últimos 30 dias"
-        subtitle={`Todo atendimento com validade na regra acima (vence em até ${near} dias ou grande quantidade) ou com avaria, e o que aconteceu com o WhatsApp dele.`}
+        title="Alertas de validade, avaria e ruptura dos últimos 30 dias"
+        subtitle={`Todo atendimento com validade na regra acima (vence em até ${near} dias ou grande quantidade), com avaria ou com ruptura, e o que aconteceu com o WhatsApp dele.`}
         bodyClass="pb-2"
       >
         {log.length ? (
