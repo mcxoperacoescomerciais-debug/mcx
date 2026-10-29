@@ -145,8 +145,8 @@ export default async function SettingsPage() {
             </div>
           </SectionCard>
           <SectionCard
-            title="Alerta de validade, avaria e ruptura no WhatsApp"
-            subtitle={`Quando o promotor finaliza um atendimento com validade próxima, avaria ou ruptura, chega no WhatsApp (uma mensagem por atendimento): ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
+            title="Alerta de validade e avaria no WhatsApp"
+            subtitle={`Quando o promotor finaliza um atendimento com validade próxima ou com avaria (e ruptura, se marcado abaixo), chega no WhatsApp (uma mensagem por atendimento): ${scope.agencyName}, marca, promotor, loja, cidade, os itens e o link do PDF.`}
             bodyClass="px-5 pb-5 space-y-3"
           >
             <Row label="Validade próxima: avisar tudo que vence em até (dias), qualquer quantidade">
@@ -163,6 +163,13 @@ export default async function SettingsPage() {
                 <input type="number" name="alert_bulkMinQty" min={0} defaultValue={st.alerts.bulkMinQty} className={inputClass} />
               </Row>
             </div>
+            <label className="flex items-start gap-2.5 text-[13.5px] cursor-pointer">
+              <input type="checkbox" name="alert_rupture" defaultChecked={st.alerts.rupture} className="mt-0.5 size-4 accent-brand-700" />
+              <span>
+                <strong>Avisar também ruptura</strong>
+                <span className="block text-[12px] text-muted">Os produtos em ruptura entram na mesma mensagem do atendimento (até 25; a lista completa fica no PDF). Vale só para esta agência.</span>
+              </span>
+            </label>
             <Row label="Número do WhatsApp (com DDD; vários: separe por vírgula)">
               <input name="alert_phone" defaultValue={st.alerts.whatsappPhone} placeholder="31 99999-8888" className={inputClass} />
             </Row>
@@ -222,8 +229,8 @@ export default async function SettingsPage() {
       </SectionCard>
       <SectionCard
         className="mt-6"
-        title="Alertas de validade, avaria e ruptura dos últimos 30 dias"
-        subtitle={`Todo atendimento com validade na regra acima (vence em até ${near} dias ou grande quantidade), com avaria ou com ruptura, e o que aconteceu com o WhatsApp dele.`}
+        title={st.alerts.rupture ? "Alertas de validade, avaria e ruptura dos últimos 30 dias" : "Alertas de validade e avaria dos últimos 30 dias"}
+        subtitle={`Todo atendimento com validade na regra acima (vence em até ${near} dias ou grande quantidade), com avaria${st.alerts.rupture ? " ou com ruptura" : ""}, e o que aconteceu com o WhatsApp dele.`}
         bodyClass="pb-2"
       >
         {log.length ? (

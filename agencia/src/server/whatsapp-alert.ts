@@ -3,9 +3,9 @@
  *
  * Quando o promotor FINALIZA um atendimento com validade próxima, avaria ou
  * ruptura, a agência recebe uma mensagem só: nome da agência, marca, promotor,
- * loja, cidade, os itens e o link do PDF do atendimento. Toda avaria e toda
- * ruptura entram (a ruptura em lista, com no máximo MAX_RUPTURE_LINES produtos
- * para a mensagem não ficar enorme); na validade entra (ajustável
+ * loja, cidade, os itens e o link do PDF do atendimento. Toda avaria entra; a
+ * ruptura só quando a agência liga `alerts.rupture` (em lista, com no máximo
+ * MAX_RUPTURE_LINES produtos para a mensagem não ficar enorme); na validade entra (ajustável
  * em Configurações de cada agência):
  *   - vencido ou vencendo em até `alerts.nearDays` dias (ou "Crítico até", se maior);
  *   - grande quantidade: vencendo em até `alerts.bulkDays` dias e quantidade
@@ -84,12 +84,14 @@ export async function buildAlertMessage(scope: Pick<Scope, "agencyId" | "agencyN
     .from(s.damages)
     .innerJoin(s.products, eq(s.products.id, s.damages.productId))
     .where(and(eq(s.damages.attendanceId, attendanceId), isNull(s.damages.deletedAt)));
-  const ruptures = await db
-    .select({ product: s.products.name, situation: s.ruptures.situation })
-    .from(s.ruptures)
-    .innerJoin(s.products, eq(s.products.id, s.ruptures.productId))
-    .where(and(eq(s.ruptures.attendanceId, attendanceId), isNull(s.ruptures.deletedAt)))
-    .orderBy(s.products.name);
+  const ruptures = scope.settings.alerts.rupture
+    ? await db
+        .select({ product: s.products.name, situation: s.ruptures.situation })
+        .from(s.ruptures)
+        .innerJoin(s.products, eq(s.products.id, s.ruptures.productId))
+        .where(and(eq(s.ruptures.attendanceId, attendanceId), isNull(s.ruptures.deletedAt)))
+        .orderBy(s.products.name)
+    : [];
   if (!items.length && !damages.length && !ruptures.length) return null;
   const near = alertNearDays(rule);
 
@@ -249,8 +251,10 @@ export async function alertLog(scope: Scope, days = 30) {
     g.items++;
     byAtt.set(r.attendanceId, g);
   }
-  // Rupturas: todo atendimento com ruptura também é avisado.
-  const ruptureRows = await db
+  // Rupturas: avisadas só quando a agência ligou a opção.
+  const ruptureRows = !scope.settings.alerts.rupture
+    ? []
+    : await db
     .select({
       attendanceId: s.attendances.id,
       status: s.attendances.status,
@@ -288,11 +292,11 @@ export async function sendTestAlert(scope: Scope): Promise<ActionResult> {
   const st = scope.settings;
   const text = [
     `✅ *Teste – alertas ${scope.agencyName}*`,
-    "Este número vai receber os avisos de validade próxima, avaria e ruptura:",
+    `Este número vai receber os avisos de validade próxima${st.alerts.rupture ? ", avaria e ruptura" : " e de avaria"}:`,
     `• vencidos ou vencendo em até ${Math.max(st.validityBands.critical, st.alerts.nearDays)} dias`,
     `• vencendo em até ${st.alerts.bulkDays} dias com mais de ${st.alerts.bulkMinQty} unidades`,
     "• toda avaria registrada",
-    `• toda ruptura registrada (até ${MAX_RUPTURE_LINES} produtos por mensagem)`,
+    ...(st.alerts.rupture ? [`• toda ruptura registrada (até ${MAX_RUPTURE_LINES} produtos por mensagem)`] : []),
   ].join("\n");
   const errors: string[] = [];
   for (const r of to) await sendCallMeBot(r.phone, r.apikey, text).catch((e: Error) => errors.push(`${r.phone}: ${e.message}`));

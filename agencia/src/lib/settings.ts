@@ -18,6 +18,8 @@ export interface AlertSettings {
   /** Números com DDI e chaves do CallMeBot, separados por vírgula na mesma ordem. */
   whatsappPhone: string;
   whatsappApiKey: string;
+  /** Rupturas do atendimento também entram no alerta (cada agência decide). */
+  rupture: boolean;
   /** Equipe MCX: este número também recebe o aviso semanal de armazenamento (fotos e banco). */
   storageReport: boolean;
 }
@@ -116,7 +118,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   stockDivergencePct: 50,
   issuePriority: DEFAULT_ISSUE_PRIORITY,
   validityBands: DEFAULT_BANDS,
-  alerts: { nearDays: 7, bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "", storageReport: false },
+  alerts: { nearDays: 7, bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "", rupture: false, storageReport: false },
   support: { name: "", phone: "", message: DEFAULT_SUPPORT_MESSAGE },
   defaultWorkMode: "route",
   promoterCost: { salary: null, meal: null, fuel: null, other: null, chargesPct: DEFAULT_CHARGES_PCT },
@@ -159,6 +161,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
       bulkMinQty: num(r.alerts?.bulkMinQty, DEFAULT_SETTINGS.alerts.bulkMinQty, 0, 100_000),
       whatsappPhone: typeof r.alerts?.whatsappPhone === "string" ? r.alerts.whatsappPhone : "",
       whatsappApiKey: typeof r.alerts?.whatsappApiKey === "string" ? r.alerts.whatsappApiKey : "",
+      rupture: bool(r.alerts?.rupture, false),
       storageReport: bool(r.alerts?.storageReport, false),
     },
     support: {

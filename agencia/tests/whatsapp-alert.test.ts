@@ -30,7 +30,7 @@ describe("alerta de validade, avaria e ruptura", () => {
     assert.ok(msg!.items >= 1);
   });
 
-  test("ruptura entra na mesma mensagem, listada por produto", async () => {
+  test("ruptura entra na mesma mensagem, listada por produto, quando a agência liga a opção", async () => {
     const [att] = await db.select({ id: s.attendances.id, agencyId: s.attendances.agencyId, brandId: s.attendances.brandId }).from(s.attendances).limit(1);
     await db.delete(s.validities).where(eq(s.validities.attendanceId, att.id));
     await db.delete(s.damages).where(eq(s.damages.attendanceId, att.id));
@@ -38,7 +38,9 @@ describe("alerta de validade, avaria e ruptura", () => {
     const [product] = await db.select({ id: s.products.id, name: s.products.name }).from(s.products).where(eq(s.products.brandId, att.brandId)).limit(1);
     await db.insert(s.ruptures).values({ id: crypto.randomUUID(), agencyId: att.agencyId, attendanceId: att.id, productId: product.id, situation: "total", recordedAt: new Date() });
     const [agency] = await db.select().from(s.agencies).where(eq(s.agencies.id, att.agencyId));
-    const msg = await buildAlertMessage({ agencyId: att.agencyId, agencyName: agency.name, settings: mergeSettings(agency.settings) }, att.id, "00000000-0000-0000-0000-000000000000");
+    const msg = await buildAlertMessage({ agencyId: att.agencyId, agencyName: agency.name, settings: mergeSettings({ ...(agency.settings as object), alerts: { rupture: true } }) }, att.id, "00000000-0000-0000-0000-000000000000");
+    const off = await buildAlertMessage({ agencyId: att.agencyId, agencyName: agency.name, settings: mergeSettings({ ...(agency.settings as object), alerts: { rupture: false } }) }, att.id, "00000000-0000-0000-0000-000000000000");
+    assert.equal(off, null, "desligada, a ruptura sozinha não gera alerta");
     assert.ok(msg, "deveria montar a mensagem só com a ruptura");
     assert.match(msg!.text, /\*Ruptura – /);
     assert.match(msg!.text, /\*Rupturas \(1\):\*/);

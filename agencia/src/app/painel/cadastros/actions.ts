@@ -158,6 +158,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
           whatsappPhone: normalizePhones(str(fd, "alert_phone")),
           // A chave nunca volta para a tela: vazio mantém a atual; "apagar" remove.
           whatsappApiKey: str(fd, "alert_apikey").toLowerCase() === "apagar" ? "" : str(fd, "alert_apikey") || scope.settings.alerts.whatsappApiKey,
+          rupture: fd.get("alert_rupture") === "on",
           storageReport: scope.settings.alerts.storageReport,
         },
         support: { name: str(fd, "support_name"), phone: normalizePhones(str(fd, "support_phone")).split(",")[0] ?? "", message: str(fd, "support_message") },
