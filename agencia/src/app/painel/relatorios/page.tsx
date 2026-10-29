@@ -43,6 +43,7 @@ export default async function ReportsPage() {
       <PageHeader
         title="Relatórios e exportação"
         subtitle="Gerados na hora a partir dos registros armazenados, respeitando suas permissões. Toda exportação fica registrada na auditoria."
+        noExport
       />
       <div className="grid lg:grid-cols-2 gap-6">
         <ReportCard icon={<CalendarDays className="size-5" />} title="Relatório diário da operação" text="Lojas programadas, visitas realizadas, atendimentos por marca, promotores, pendências, rupturas, estoque zero e ocorrências do dia.">

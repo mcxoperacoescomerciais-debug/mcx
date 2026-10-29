@@ -12,7 +12,6 @@ import {
   PlayCircle,
   ShieldAlert,
   Store,
-  Tags,
   Users,
 } from "lucide-react";
 import { getScope } from "@/server/auth";
@@ -36,8 +35,7 @@ export const metadata: Metadata = { title: "Visão geral" };
 /** Relatórios independentes — cada um abre a própria página, com os próprios filtros. */
 const REPORTS = [
   { href: "/painel/mapa", label: "Mapa operacional", text: "Lojas no mapa com a situação do dia", icon: MapIcon },
-  { href: "/painel/visitas", label: "Visitas", text: "Lojas programadas, horários e situação", icon: Store },
-  { href: "/painel/marcas", label: "Atendimentos por marca", text: "Execução de cada marca no período", icon: Tags },
+  { href: "/painel/visitas", label: "Visitas", text: "Lojas programadas, horários, situação e atendimentos de cada marca", icon: Store },
   { href: "/painel/fotos", label: "Relatório fotográfico", text: "Antes e depois de cada atendimento", icon: Camera },
   { href: "/painel/estoque", label: "Estoque e ruptura", text: "Estoque, ruptura, validade e avaria", icon: PackageSearch },
   { href: "/painel/promotores", label: "Promotores", text: "Roteiro e histórico de cada profissional", icon: Users },
@@ -74,9 +72,6 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
           <>
             <LinkButton variant="secondary" href={`/api/reports/daily${withParams({ date: f.date, format: "pdf" })}`} prefetch={false}>
               <FileDown className="size-4" /> Relatório do dia (PDF)
-            </LinkButton>
-            <LinkButton variant="secondary" href={`/api/reports/daily${withParams({ date: f.date, format: "xlsx" })}`} prefetch={false}>
-              <FileDown className="size-4" /> Excel
             </LinkButton>
           </>
         }

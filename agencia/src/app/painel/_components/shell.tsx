@@ -14,7 +14,6 @@ import {
   Boxes,
   Building,
   Building2,
-  CalendarRange,
   Camera,
   ChevronDown,
   FileText,
@@ -64,9 +63,8 @@ const MAIN: NavItem[] = [
   { href: "/painel", label: "Visão geral", icon: LayoutDashboard },
   { href: "/painel/indicadores", label: "Indicadores", icon: BarChart3 },
   { href: "/painel/mapa", label: "Mapa operacional", icon: MapIcon },
-  { href: "/painel/visitas", label: "Visitas", icon: Store, also: ["/painel/lojas"] },
+  { href: "/painel/visitas", label: "Visitas", icon: Store, also: ["/painel/lojas", "/painel/atendimentos"] },
   { href: "/painel/metas", label: "Carteira e metas", icon: Target },
-  { href: "/painel/marcas", label: "Atendimentos por marca", icon: Tags, also: ["/painel/atendimentos"] },
   { href: "/painel/fotos", label: "Relatório fotográfico", icon: Camera },
   { href: "/painel/estoque", label: "Estoque e ruptura", icon: PackageSearch, also: ["/painel/rupturas", "/painel/validades", "/painel/avarias"] },
   { href: "/painel/promotores", label: "Promotores", icon: Users },
@@ -76,7 +74,6 @@ const MAIN: NavItem[] = [
 ];
 
 const SETTINGS: NavItem[] = [
-  { href: "/painel/programacao", label: "Programação", icon: CalendarRange, fullScope: true },
   { href: "/painel/roteiros", label: "Roteiros", icon: Route, fullScope: true },
   { href: "/painel/cadastros/marcas", label: "Marcas", icon: Tags, roles: ["admin"] },
   { href: "/painel/cadastros/lojas", label: "Redes e lojas", icon: Building2, roles: ["admin"] },

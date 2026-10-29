@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, FileDown } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions, getRangeBoard } from "@/server/operations";
-import { fHas, parseDayRange, withParams } from "@/lib/filters";
+import { fHas, parseDayRange } from "@/lib/filters";
 import { STOP_BUCKET_LABEL, STOP_BUCKET_TONE, STOP_BUCKETS } from "@/lib/domain";
 import { fmtDate, fmtLongDate, fmtTime } from "@/lib/dates";
 import { matchesQuery } from "@/lib/rules";
-import { EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { FilterBar } from "../_components/filter-bar";
 import { Table, Td, Th } from "../_components/widgets";
 
@@ -33,15 +33,10 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
       <PageHeader
         title="Visitas"
         subtitle={<span className="first-letter:uppercase inline-block">{oneDay ? fmtLongDate(f.from) : `${fmtDate(f.from)} a ${fmtDate(f.to)}`} · {stops.length} de {board.stops.length} visita(s) · cada visita reúne os atendimentos das marcas na loja</span>}
-        actions={
-          <LinkButton variant="secondary" href={`/api/export/stores${withParams({ from: f.from, to: f.to, brand: f.brand, chain: f.chain, promoter: f.promoter, city: f.city })}`} prefetch={false}>
-            <FileDown className="size-4" /> Exportar (Excel)
-          </LinkButton>
-        }
       />
       <FilterBar
         range={{ from: f.from, to: f.to }}
-        fields={["period", "promoter", "city", "chain", "store", "status", "q"]}
+        fields={["period", "brand", "promoter", "city", "chain", "store", "status", "q"]}
         options={{ ...options, statuses: [{ id: "open", name: "Pendentes, atrasadas ou não realizadas" }, ...STOP_BUCKETS.map((b) => ({ id: b, name: STOP_BUCKET_LABEL[b] }))] }}
         statusLabel="Todas as situações"
         qPlaceholder="Buscar loja, rede ou promotor"

@@ -21,14 +21,12 @@ export interface Panel {
 export const PANELS: Panel[] = [
   { key: "visao_geral", label: "Visão geral", group: "Operação", paths: ["/painel"] },
   { key: "mapa", label: "Mapa operacional", group: "Operação", paths: ["/painel/mapa"] },
-  { key: "visitas", label: "Visitas", group: "Operação", paths: ["/painel/visitas", "/painel/lojas"] },
-  { key: "marcas", label: "Atendimentos por marca", group: "Operação", paths: ["/painel/marcas", "/painel/atendimentos"] },
+  { key: "visitas", label: "Visitas e atendimentos", group: "Operação", paths: ["/painel/visitas", "/painel/lojas", "/painel/atendimentos", "/painel/marcas", "/painel/programacao"] },
   { key: "fotos", label: "Relatório fotográfico e Book", group: "Operação", paths: ["/painel/fotos"] },
   { key: "estoque", label: "Estoque, ruptura, validade e avaria", group: "Operação", paths: ["/painel/estoque", "/painel/rupturas", "/painel/validades", "/painel/avarias"] },
   { key: "promotores", label: "Promotores", group: "Operação", paths: ["/painel/promotores"] },
   { key: "pendencias", label: "Central de pendências", group: "Operação", paths: ["/painel/pendencias"] },
   { key: "metas", label: "Carteira e metas", group: "Planejamento", paths: ["/painel/metas"] },
-  { key: "programacao", label: "Programação", group: "Planejamento", paths: ["/painel/programacao"] },
   { key: "roteiros", label: "Roteiros", group: "Planejamento", paths: ["/painel/roteiros"] },
   { key: "exportacoes", label: "Exportações", group: "Planejamento", paths: ["/painel/relatorios"] },
   { key: "degustacoes", label: "Degustações (agenda, degustadoras e painel)", group: "Degustações e financeiro", paths: ["/painel/degustacoes"] },
@@ -74,8 +72,13 @@ export function panelForPath(pathname: string): Panel | null {
 export function effectivePermissions(role: Role, permissions: string[] | null | undefined): Set<string> {
   const allowed = new Set(panelsForRole(role).map((p) => p.key));
   if (!permissions) return allowed;
-  return new Set(permissions.filter((k) => allowed.has(k)));
+  // Painéis que viraram parte de Visitas: quem tinha um deles continua vendo Visitas.
+  const migrated = permissions.flatMap((k) => (LEGACY_TO_VISITAS.has(k) ? ["visitas"] : [k]));
+  return new Set(migrated.filter((k) => allowed.has(k)));
 }
+
+/** "Atendimentos por marca" e "Programação" saíram do menu e ficaram dentro de Visitas. */
+const LEGACY_TO_VISITAS = new Set(["marcas", "programacao"]);
 
 export const AGENCY_ROLE_LABEL: Record<Role, string> = { admin: "Gestor da agência", manager: "Supervisor", promoter: "Promotor" };
 export const PLATFORM_ROLE_LABEL = { owner: "Dono", master: "Master" } as const;

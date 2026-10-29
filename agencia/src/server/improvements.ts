@@ -109,7 +109,7 @@ const SYSTEM_PROMPT = `Você ajuda a equipe da MCX Soluções Operacionais a ava
 
 Sobre o MCX Trade:
 - App do promotor no celular (funciona sem sinal e sincroniza depois): roteiro do dia, check-in na loja, atendimento por marca com fotos de antes e depois, estoque, ruptura, validade, avaria, ocorrências e histórico.
-- Painel do gestor da agência: programação e roteiros, atendimentos por marca, central de pendências, relatório fotográfico, mapa ao vivo dos promotores, carteira e metas por loja e marca, degustações, financeiro (DRE, despesas fixas), parceiros de atendimento, cadastros (lojas, redes, marcas, produtos, usuários com perfis de acesso), importação por planilha, exportações em PDF, Excel e PowerPoint, auditoria e alertas de validade no WhatsApp.
+- Painel do gestor da agência: visitas (lojas do dia e atendimentos de cada marca), roteiros (consulta do quadro da semana de cada promotor, que é ajustado no cadastro do promotor), indicadores, central de pendências, relatório fotográfico, mapa ao vivo dos promotores, carteira e metas por loja e marca, degustações, financeiro (DRE, despesas fixas), parceiros de atendimento, cadastros (lojas, redes, marcas, produtos, usuários com perfis de acesso), importação por planilha, exportações em PDF, Excel e PowerPoint, auditoria e alertas de validade no WhatsApp.
 - Visão MCX: a equipe MCX vê todas as agências, cria agências e envia escopos de serviço a potenciais clientes.
 - Perfis: promotor, supervisor, gestor da agência e equipe MCX. Cada agência só vê os próprios dados.
 
