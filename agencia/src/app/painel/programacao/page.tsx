@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { filterOptions } from "@/server/operations";
@@ -51,7 +51,17 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
             </div>
           ) : null}
           {[...byPromoter.entries()].map(([name, list]) => (
-            <SectionCard key={name} title={name} subtitle={`${list.filter((x) => x.status === "active").length} loja(s) ativa(s)`}>
+            <details key={name} className="group bg-surface border border-line rounded-[var(--radius-card)] shadow-[var(--shadow-card)] overflow-hidden">
+              <summary className="flex items-center gap-3 px-5 py-3.5 cursor-pointer list-none hover:bg-subtle [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="size-5 text-muted shrink-0 transition-transform group-open:rotate-90" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold text-[15px]">{name}</span>
+                  <span className="block text-[12.5px] text-muted">
+                    {list.filter((x) => x.status === "active").length} loja(s) ativa(s)
+                    {list.some((x) => x.visitStatus) ? ` · ${list.filter((x) => x.visitStatus === "completed").length} concluída(s)` : ""}
+                  </span>
+                </span>
+              </summary>
               <ol className="divide-y divide-line border-t border-line" data-export-list data-export-title="Programação" data-export-columns="Promotor|Ordem|Horário|Loja|Cidade|Marcas|Origem|Situação|Visita">
                 {list.map((r, idx) => (
                   <li key={r.id} data-export-row className={`px-5 py-3 ${r.status === "cancelled" ? "opacity-60" : ""}`}>
@@ -123,7 +133,7 @@ export default async function SchedulePage({ searchParams }: PageProps<"/painel/
                   </li>
                 ))}
               </ol>
-            </SectionCard>
+            </details>
           ))}
         </div>
 

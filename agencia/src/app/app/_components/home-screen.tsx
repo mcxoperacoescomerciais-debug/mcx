@@ -333,9 +333,9 @@ function StopCard({ stop, index, onStart }: { stop: { schedule: BootstrapSchedul
 }
 
 /** Balão do WhatsApp de ajuda (configurado pela agência): abre a conversa já com uma mensagem pronta. */
-function SupportBubble({ support, promoter }: { support: { name: string; phone: string } | null; promoter: string }) {
+function SupportBubble({ support, promoter }: { support: { name: string; phone: string; message?: string } | null; promoter: string }) {
   if (!support) return null;
-  const text = `Olá, ${support.name}! Aqui é ${promoter.split(" ")[0]} (promotor). Tenho uma dúvida:`;
+  const text = (support.message || "Olá, {contato}! Aqui é {promotor} (promotor). Tenho uma dúvida:").replaceAll("{contato}", support.name).replaceAll("{promotor}", promoter.split(" ")[0]);
   return (
     <a
       href={`https://wa.me/${support.phone}?text=${encodeURIComponent(text)}`}

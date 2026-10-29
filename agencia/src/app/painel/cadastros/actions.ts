@@ -160,7 +160,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
           whatsappApiKey: str(fd, "alert_apikey").toLowerCase() === "apagar" ? "" : str(fd, "alert_apikey") || scope.settings.alerts.whatsappApiKey,
           storageReport: scope.settings.alerts.storageReport,
         },
-        support: { name: str(fd, "support_name"), phone: normalizePhones(str(fd, "support_phone")).split(",")[0] ?? "" },
+        support: { name: str(fd, "support_name"), phone: normalizePhones(str(fd, "support_phone")).split(",")[0] ?? "", message: str(fd, "support_message") },
         promoterCost: {
           salary: moneyField(fd, "cost_salary"),
           meal: moneyField(fd, "cost_meal"),

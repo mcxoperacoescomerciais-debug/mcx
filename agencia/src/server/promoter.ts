@@ -88,9 +88,9 @@ export async function trackedProducts(db: DB | Tx, storeId: string, brandId: str
 // ───────────────────────────── Bootstrap ─────────────────────────────
 
 /** Ajuda do promotor: o contato configurado ou, sem número, o primeiro número do alerta. */
-function supportContact(st: AgencySettings): { name: string; phone: string } | null {
+function supportContact(st: AgencySettings): { name: string; phone: string; message: string } | null {
   const phone = (st.support.phone || st.alerts.whatsappPhone.split(",")[0] || "").replace(/\D/g, "");
-  return phone.length >= 10 ? { name: st.support.name || "Suporte", phone } : null;
+  return phone.length >= 10 ? { name: st.support.name || "Suporte", phone, message: st.support.message } : null;
 }
 
 export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {

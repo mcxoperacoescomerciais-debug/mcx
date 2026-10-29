@@ -28,7 +28,11 @@ export interface SupportSettings {
   name: string;
   /** WhatsApp com DDD; vazio = o primeiro número do alerta de validade. */
   phone: string;
+  /** Mensagem que já vem escrita na conversa; {promotor} e {contato} viram os nomes. */
+  message: string;
 }
+
+export const DEFAULT_SUPPORT_MESSAGE = "Olá, {contato}! Aqui é {promotor} (promotor). Tenho uma dúvida:";
 
 export interface AgencySettings {
   /** Gestor precisa aprovar/reprovar atendimentos concluídos. */
@@ -113,7 +117,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   issuePriority: DEFAULT_ISSUE_PRIORITY,
   validityBands: DEFAULT_BANDS,
   alerts: { nearDays: 7, bulkDays: 15, bulkMinQty: 15, whatsappPhone: "", whatsappApiKey: "", storageReport: false },
-  support: { name: "", phone: "" },
+  support: { name: "", phone: "", message: DEFAULT_SUPPORT_MESSAGE },
   defaultWorkMode: "route",
   promoterCost: { salary: null, meal: null, fuel: null, other: null, chargesPct: DEFAULT_CHARGES_PCT },
   galleryPolicy: "brand",
@@ -160,6 +164,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
     support: {
       name: typeof r.support?.name === "string" ? r.support.name.trim().slice(0, 40) : "",
       phone: typeof r.support?.phone === "string" ? r.support.phone : "",
+      message: typeof r.support?.message === "string" && r.support.message.trim() ? r.support.message.trim().slice(0, 500) : DEFAULT_SUPPORT_MESSAGE,
     },
     defaultWorkMode: (WORK_MODES as readonly string[]).includes(r.defaultWorkMode as string) ? (r.defaultWorkMode as WorkMode) : DEFAULT_SETTINGS.defaultWorkMode,
     promoterCost: {

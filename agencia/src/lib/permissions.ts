@@ -29,6 +29,7 @@ export const PANELS: Panel[] = [
   { key: "pendencias", label: "Central de pendências", group: "Operação", paths: ["/painel/pendencias"] },
   { key: "metas", label: "Carteira e metas", group: "Planejamento", paths: ["/painel/metas"] },
   { key: "programacao", label: "Programação", group: "Planejamento", paths: ["/painel/programacao"] },
+  { key: "roteiros", label: "Roteiros", group: "Planejamento", paths: ["/painel/roteiros"] },
   { key: "exportacoes", label: "Exportações", group: "Planejamento", paths: ["/painel/relatorios"] },
   { key: "degustacoes", label: "Degustações (agenda, degustadoras e painel)", group: "Degustações e financeiro", paths: ["/painel/degustacoes"] },
   { key: "financeiro", label: "Financeiro", group: "Degustações e financeiro", paths: ["/painel/financeiro"], adminOnly: true },
