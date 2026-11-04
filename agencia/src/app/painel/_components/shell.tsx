@@ -4,7 +4,8 @@ import { panelForPath } from "@/lib/permissions";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
+import { clearPanelCache, PanelOffline } from "./offline";
 import {
   BarChart3,
   ClipboardCheck,
@@ -226,7 +227,7 @@ function UserBox({ name, role, scopeNote, logout }: { name: string; role: Role; 
       <Link href="/painel/senha" className="size-8 grid place-items-center rounded-lg text-brand-200 hover:bg-white/10 hover:text-white" aria-label="Trocar senha" title="Trocar senha">
         <KeyRound className="size-4" />
       </Link>
-      <form action={logout}>
+      <form action={logout} onSubmit={() => void clearPanelCache()}>
         <button className="size-8 grid place-items-center rounded-lg text-brand-200 hover:bg-white/10 hover:text-white" aria-label="Sair" title="Sair">
           <LogOut className="size-4" />
         </button>
@@ -358,6 +359,9 @@ export function PanelShell({
       ) : null}
 
       <main className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1480px]">
+        <Suspense fallback={null}>
+          <PanelOffline agencyId={mcx || !agency ? "mcx" : agency.id} />
+        </Suspense>
         {children}
       </main>
     </div>
