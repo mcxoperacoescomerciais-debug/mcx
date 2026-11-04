@@ -371,6 +371,35 @@ export const ISSUE_REVIEW_LABEL: Record<IssueReviewStatus | "open", string> = {
 export const CORRECTION_STATUSES = ["open", "answered", "cancelled"] as const;
 export type CorrectionStatus = (typeof CORRECTION_STATUSES)[number];
 
+// ───────────────────────────── Perguntas de situação da marca ─────────────────────────────
+
+/**
+ * Pergunta de sim/não que a marca faz em todo atendimento (ex.: "O freezer está
+ * funcionando normalmente?"). "Não" = problema: o promotor precisa descrever e,
+ * se a marca tiver WhatsApp de alerta, o aviso sai ao finalizar.
+ */
+export interface QuestionAnswer {
+  question: string;
+  ok: boolean;
+  /** Descrição do problema (obrigatória quando ok = false). */
+  note: string | null;
+}
+
+export const QUESTION_NOTE_MIN = 5;
+
+/** Perguntas da marca sem resposta válida (sem resposta, ou "problema" sem descrição). */
+export function pendingQuestions(questions: string[], answers: QuestionAnswer[]): string[] {
+  return questions.filter((q) => {
+    const a = answers.find((x) => x.question === q);
+    return !a || (!a.ok && (a.note ?? "").trim().length < QUESTION_NOTE_MIN);
+  });
+}
+
+/** Respostas com problema, na ordem das perguntas da marca. */
+export function questionProblems(answers: QuestionAnswer[]): QuestionAnswer[] {
+  return answers.filter((a) => !a.ok);
+}
+
 // ───────────────────────────── Checklist da execução ─────────────────────────────
 
 /** Item fixo do checklist de toda marca. */

@@ -69,5 +69,6 @@ export function missingFor(a: LocalAttendance, brand: BootstrapBrand, tracked: B
     exceptionNote: a.exceptionNote,
     allowExceptions,
     checklist: { items: brand.activities, done: a.activitiesDone },
+    questions: { items: brand.questions ?? [], answers: a.answers ?? [] },
   });
 }

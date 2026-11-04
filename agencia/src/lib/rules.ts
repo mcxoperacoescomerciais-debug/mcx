@@ -8,6 +8,8 @@ import {
   EXCEPTION_ITEM_LABEL,
   type ExceptionItem,
   type ExceptionReason,
+  pendingQuestions,
+  type QuestionAnswer,
   type StockState,
   type StopBucket,
   type VisitStatus,
@@ -155,9 +157,11 @@ export interface AttendanceCheckInput {
   allowExceptions: boolean;
   /** Checklist da execução: todos os itens precisam de OK (só o app confere; o servidor aceita dados antigos). */
   checklist?: { items: string[]; done: string[] };
+  /** Perguntas de situação da marca: todas respondidas; "problema" exige descrição. */
+  questions?: { items: string[]; answers: QuestionAnswer[] };
 }
 
-export type MissingKind = ExceptionItem | "damage_photo" | "exception_reason" | "checklist";
+export type MissingKind = ExceptionItem | "damage_photo" | "exception_reason" | "checklist" | "questions";
 
 export interface MissingItem {
   kind: MissingKind;
@@ -200,6 +204,10 @@ export function attendanceMissing(i: AttendanceCheckInput): MissingItem[] {
   if (i.checklist) {
     const pending = i.checklist.items.filter((x) => !i.checklist!.done.includes(x)).length;
     if (pending > 0) out.push({ kind: "checklist", message: `Execução: ${plural(pending, "item", "itens")} do checklist sem OK.`, excusable: false });
+  }
+  if (i.questions) {
+    const pending = pendingQuestions(i.questions.items, i.questions.answers);
+    if (pending.length) out.push({ kind: "questions", message: `Execução: responda ${pending.map((q) => `“${q}”`).join(", ")} (com problema, descreva o que houve).`, excusable: false });
   }
   // Ruptura no modo SUINCO não exige foto; avaria sempre exige.
   const damageNoPhoto = i.damages.filter((d) => d.photos === 0).length;

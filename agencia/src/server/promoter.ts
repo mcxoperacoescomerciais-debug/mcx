@@ -29,7 +29,7 @@ import { brandChecklist, type AttendanceStatus, type WorkMode } from "@/lib/doma
 import { classify } from "@/lib/validity";
 import { galleryAllowedFor, type AgencySettings } from "@/lib/settings";
 import { daysBetween } from "@/lib/dates";
-import { notifyCriticalAttendance } from "./whatsapp-alert";
+import { notifyBrandQuestions, notifyCriticalAttendance } from "./whatsapp-alert";
 import { fillAddressFromPosition, learnStoreLocation } from "./store-location";
 import { applyPromoterMixChoices, mixesForStores } from "./mixes";
 import { effectiveWorkMode, periodWindow, weekEnd, weekStart } from "@/lib/portfolio";
@@ -214,6 +214,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
         rupturePhotoRequired: b.rupturePhotoRequired,
         allowGallery: b.allowGallery && gallery,
         activities: brandChecklist(b.activities),
+        questions: b.questions,
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
     stores: storeRows
@@ -355,6 +356,7 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
           startedAt: a.startedAt.toISOString(),
           finishedAt: iso(a.finishedAt),
           activitiesDone: a.activitiesDone,
+          answers: a.answers,
           notes: a.notes,
           exceptionItems: a.exceptionItems,
           exceptionReason: a.exceptionReason,
@@ -627,7 +629,11 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
   });
   // Alerta de validade crítica (WhatsApp) só depois do commit e em segundo plano:
   // nunca atrasa nem derruba o envio do promotor.
-  for (const r of result.attendances) if (r.completedNow) void notifyCriticalAttendance(scope, r.attendanceId);
+  for (const r of result.attendances) {
+    if (!r.completedNow) continue;
+    void notifyCriticalAttendance(scope, r.attendanceId);
+    void notifyBrandQuestions(scope, r.attendanceId);
+  }
   if (postCommit.address) void fillAddressFromPosition(db, input.storeId, postCommit.address.lat, postCommit.address.lng);
   return result;
 }
@@ -691,6 +697,7 @@ async function applyAttendance(
       exceptionReason: a.exceptionReason,
       exceptionNote: a.exceptionNote,
       allowExceptions: scope.settings.allowExceptions,
+      questions: { items: brand.questions, answers: a.answers },
     });
     if (missing.length) {
       statusError = `Atendimento não finalizado: ${missing.map((m) => m.message).join(" ")}`;
@@ -710,6 +717,7 @@ async function applyAttendance(
     startedAt,
     finishedAt: targetStatus === "completed" || targetStatus === "cancelled" ? (finishedRaw < startedAt ? startedAt : finishedRaw) : null,
     activitiesDone: a.activitiesDone,
+    answers: a.answers.map((x) => ({ question: x.question, ok: x.ok, note: x.ok ? null : x.note })),
     notes: a.notes,
     exceptionItems: scope.settings.allowExceptions ? a.exceptionItems : [],
     exceptionReason: a.exceptionItems.length ? a.exceptionReason : null,

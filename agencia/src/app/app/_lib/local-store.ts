@@ -26,7 +26,7 @@ import type {
   VisitInput,
   VisitSyncResult,
 } from "@/lib/sync-types";
-import type { AttendanceDisplayStatus, AttendanceStatus, ExceptionItem, ExceptionReason, PhotoKind, PhotoPlacement, PhotoSource, VisitStatus } from "@/lib/domain";
+import type { AttendanceDisplayStatus, AttendanceStatus, ExceptionItem, ExceptionReason, PhotoKind, PhotoPlacement, PhotoSource, QuestionAnswer, VisitStatus } from "@/lib/domain";
 import { todayIso } from "@/lib/dates";
 
 export interface LocalPhoto extends PhotoInput {
@@ -44,6 +44,8 @@ export interface LocalAttendance {
   startedAt: string;
   finishedAt: string | null;
   activitiesDone: string[];
+  /** Respostas às perguntas de situação da marca (aparelhos antigos podem não ter). */
+  answers?: QuestionAnswer[];
   notes: string;
   exceptionItems: ExceptionItem[];
   exceptionReason: ExceptionReason | null;
@@ -279,6 +281,7 @@ function fromServerVisit(sv: ServerVisit, plannedBrandIds: string[], previous?: 
       startedAt: a.startedAt,
       finishedAt: a.finishedAt,
       activitiesDone: a.activitiesDone,
+      answers: a.answers ?? [],
       notes: a.notes ?? "",
       exceptionItems: a.exceptionItems,
       exceptionReason: a.exceptionReason,
@@ -459,6 +462,7 @@ export async function startAttendance(visitId: string, brandId: string): Promise
     startedAt: new Date().toISOString(),
     finishedAt: null,
     activitiesDone: [],
+    answers: [],
     notes: "",
     exceptionItems: [],
     exceptionReason: null,
@@ -487,7 +491,7 @@ export async function startAttendance(visitId: string, brandId: string): Promise
   return id;
 }
 
-export function updateAttendance(visitId: string, attendanceId: string, patch: Partial<Pick<LocalAttendance, "activitiesDone" | "notes" | "exceptionItems" | "exceptionReason" | "exceptionNote">>) {
+export function updateAttendance(visitId: string, attendanceId: string, patch: Partial<Pick<LocalAttendance, "activitiesDone" | "answers" | "notes" | "exceptionItems" | "exceptionReason" | "exceptionNote">>) {
   return bumpAttendance(visitId, attendanceId, (a) => ({ ...a, ...patch }));
 }
 
@@ -739,6 +743,7 @@ function toAttendanceInput(a: LocalAttendance): AttendanceInput {
     startedAt: a.startedAt,
     finishedAt: a.finishedAt,
     activitiesDone: a.activitiesDone,
+    answers: (a.answers ?? []).map((x) => ({ question: x.question, ok: x.ok, note: x.ok ? null : x.note || null })),
     notes: a.notes || null,
     exceptionItems: a.exceptionItems,
     exceptionReason: a.exceptionItems.length ? a.exceptionReason : null,

@@ -109,6 +109,7 @@ export const attendanceInput = z.object({
   startedAt: instant,
   finishedAt: instant.nullable(),
   activitiesDone: z.array(z.string().max(200)).max(50),
+  answers: z.array(z.object({ question: z.string().max(200), ok: z.boolean(), note: shortText(500) })).max(20).default([]),
   notes: shortText(1000),
   exceptionItems: z.array(z.enum(EXCEPTION_ITEMS)).max(3),
   exceptionReason: z.enum(EXCEPTION_REASONS).nullable(),
@@ -200,6 +201,8 @@ export interface BootstrapBrand {
   rupturePhotoRequired: boolean;
   allowGallery: boolean;
   activities: string[];
+  /** Perguntas de sim/não da marca (ex.: freezer funcionando?). */
+  questions: string[];
 }
 
 export interface BootstrapStore {

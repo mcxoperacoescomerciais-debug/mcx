@@ -46,6 +46,23 @@ export async function GET(request: Request) {
       },
       { ...stockSheet(r.latest), name: "Último estoque por loja" },
       rupturesSheet(r.ruptures),
+      ...(r.questionSummary.length
+        ? [
+            {
+              name: "Situação nas lojas",
+              columns: [
+                { header: "Data", key: "date" },
+                { header: "Loja", key: "store", width: 32 },
+                { header: "Cidade", key: "city", width: 18 },
+                { header: "Promotor", key: "promoter", width: 22 },
+                { header: "Pergunta", key: "question", width: 38 },
+                { header: "Resposta", key: "answer" },
+                { header: "Problema informado", key: "note", width: 50 },
+              ],
+              rows: r.answers.map((x) => ({ ...x, answer: x.ok ? "Sim" : "Não", note: x.note ?? "" })),
+            },
+          ]
+        : []),
     ],
     { agency: scope.agencyName, title: `Relatório ${r.brand.name}` },
   );

@@ -39,6 +39,12 @@ export interface BrandInput {
   rupturePhotoRequired: boolean;
   allowGallery: boolean;
   activities: string[];
+  /** Perguntas de sim/não do atendimento (ausente = mantém as atuais). */
+  questions?: string[];
+  /** WhatsApp da marca para os problemas das perguntas (ausente = mantém). */
+  alertPhone?: string | null;
+  /** Chave do CallMeBot: undefined/vazio mantém a atual; "apagar" remove. */
+  alertApiKey?: string | null;
   notes: string | null;
 }
 
@@ -57,6 +63,9 @@ export async function saveBrand(scope: Scope, i: BrandInput): Promise<ActionResu
     rupturePhotoRequired: i.rupturePhotoRequired,
     allowGallery: i.allowGallery,
     activities: i.activities.map((a) => a.trim()).filter(Boolean).slice(0, 20),
+    ...(i.questions ? { questions: [...new Set(i.questions.map((q) => q.trim()).filter(Boolean))].slice(0, 10) } : {}),
+    ...(i.alertPhone !== undefined ? { alertPhone: clean(i.alertPhone) } : {}),
+    ...(i.alertApiKey ? { alertApiKey: i.alertApiKey.trim().toLowerCase() === "apagar" ? null : i.alertApiKey.trim() } : {}),
     notes: clean(i.notes),
   };
   try {

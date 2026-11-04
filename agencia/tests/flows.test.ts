@@ -45,6 +45,7 @@ function attendancePayload(over: Partial<AttendanceInput> & { brandId: string })
     startedAt: now,
     finishedAt: null,
     activitiesDone: [],
+    answers: [],
     notes: null,
     exceptionItems: [],
     exceptionReason: null,

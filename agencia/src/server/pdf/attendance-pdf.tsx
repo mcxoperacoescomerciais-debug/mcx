@@ -221,6 +221,11 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
       <Text style={{ fontSize: 8.5, color: C.ink2 }}>
         {d.brand.activities.length ? d.brand.activities.map((act) => `${act} (${a.activitiesDone.includes(act) ? "feito" : "não marcado"})`).join("  ·  ") : "Sem atividades cadastradas para a marca."}
       </Text>
+      {a.answers.map((x) => (
+        <Text key={x.question} style={{ fontSize: 8.5, marginTop: 3, color: x.ok ? C.ink2 : C.bad }}>
+          {`${x.question} ${x.ok ? "Sim" : `NÃO — ${x.note ?? ""}`}`}
+        </Text>
+      ))}
       {a.notes ? <Text style={{ fontSize: 8.5, marginTop: 3 }}>Observação: “{a.notes}”</Text> : null}
 
       <Text style={base.h3}>Relatório de estoque {zero ? `· ${zero} com estoque zero` : ""}</Text>

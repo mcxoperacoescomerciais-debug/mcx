@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, Check, ChevronRight, FileDown, History, MapPin, PencilLine, X } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { getAttendanceDetail } from "@/server/details";
+import { questionAlertStatus } from "@/server/whatsapp-alert";
+import { resendQuestionAlertAction } from "../../cadastros/actions";
 import { withPlacement } from "@/lib/domain";
 import {
   ATTENDANCE_STATUS_LABEL,
@@ -56,6 +58,8 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
   const d = await getAttendanceDetail(scope, id);
   if (!d) notFound();
   const a = d.attendance;
+  const problems = a.answers.filter((x) => !x.ok);
+  const brandAlert = problems.length ? await questionAlertStatus(a.id) : null;
   const toViewer = (p: (typeof d.photos)[number], label: string, caption?: string): ViewerPhoto => ({
     id: p.id,
     kind: p.kind,
@@ -411,6 +415,28 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
             ) : (
               <p className="text-[13px] text-muted">Marca sem atividades cadastradas.</p>
             )}
+            {a.answers.length ? (
+              <ul className="mt-3 pt-3 border-t border-line space-y-2 text-[13.5px]">
+                {a.answers.map((x) => (
+                  <li key={x.question}>
+                    <span className="font-semibold">{x.question}</span>{" "}
+                    {x.ok ? <span className="text-ok font-semibold">Sim</span> : <span className="text-bad font-semibold">Não — problema</span>}
+                    {!x.ok && x.note ? <span className="block text-ink-2">“{x.note}”</span> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {problems.length && a.status === "completed" ? (
+              <div className="mt-3 pt-3 border-t border-line text-[12.5px] text-ink-2 space-y-2">
+                <p>
+                  WhatsApp da marca:{" "}
+                  {brandAlert?.sentAt ? `aviso enviado em ${fmtDateTime(brandAlert.sentAt)}` : brandAlert?.error ? `falhou — ${brandAlert.error.slice(0, 120)}` : d.brand.alertPhone && d.brand.alertApiKey ? "ainda não enviado" : "sem número e chave no cadastro da marca"}
+                </p>
+                {scope.role === "admin" && d.brand.alertPhone && d.brand.alertApiKey ? (
+                  <ActionForm action={resendQuestionAlertAction} hidden={{ attendanceId: a.id }} submitLabel={brandAlert?.sentAt ? "Reenviar aviso" : "Enviar aviso agora"} variant="secondary" resetOnSuccess={false} />
+                ) : null}
+              </div>
+            ) : null}
           </SectionCard>
 
           <SectionCard title="Ações do gestor" bodyClass="px-5 pb-5 space-y-3">

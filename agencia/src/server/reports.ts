@@ -389,8 +389,24 @@ export async function brandReport(scope: Scope, f: PanelFilters) {
     const row = byProduct.get(rc.productId);
     if (row) row.ruptures = rc.n;
   }
+  // Perguntas de situação da marca (ex.: freezer): cada resposta no período.
+  const answerRows = await db
+    .select({ date: s.visits.visitDate, store: s.stores.name, city: s.stores.city, promoter: s.users.name, answers: s.attendances.answers })
+    .from(s.attendances)
+    .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+    .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+    .innerJoin(s.users, eq(s.users.id, s.visits.promoterId))
+    .where(and(filterIn(s.attendances.brandId, f.brand), gte(s.visits.visitDate, f.from), lte(s.visits.visitDate, f.to), promoterFilter(scope, s.visits.promoterId), sql`jsonb_array_length(${s.attendances.answers}) > 0`))
+    .orderBy(s.visits.visitDate, s.stores.name);
+  const answers = answerRows.flatMap((r) => r.answers.map((x) => ({ date: r.date, store: r.store, city: r.city, promoter: r.promoter, question: x.question, ok: x.ok, note: x.note })));
+  const questionSummary = (brand?.questions ?? []).map((q) => {
+    const rows = answers.filter((x) => x.question === q);
+    return { question: q, ok: rows.filter((x) => x.ok).length, problems: rows.filter((x) => !x.ok).length };
+  });
   return {
     brand,
+    answers,
+    questionSummary,
     attendances: atts,
     byStore: [...byStore.values()].sort((a, b) => a.store.localeCompare(b.store, "pt-BR")),
     byProduct: [...byProduct.values()].sort((a, b) => a.product.localeCompare(b.product, "pt-BR")),

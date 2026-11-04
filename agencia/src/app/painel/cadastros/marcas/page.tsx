@@ -74,6 +74,12 @@ export default async function BrandsPage({ searchParams }: PageProps<"/painel/ca
                     {b.requireStock ? "Estoque obrigatório" : "Estoque opcional"}
                     <br />
                     {b.allowGallery ? "Permite galeria" : "Só câmera"} · {b.activities.length} atividade(s)
+                    {b.questions.length ? (
+                      <>
+                        <br />
+                        {b.questions.length} pergunta(s) de situação{b.alertPhone && b.alertApiKey ? " · aviso no WhatsApp" : ""}
+                      </>
+                    ) : null}
                   </Td>
                   <Td>
                     <StatusBadge tone={b.status === "active" ? "success" : "muted"} size="sm">
@@ -129,6 +135,20 @@ function BrandForm({ brand }: { brand: Brand | null }) {
         Atividades da execução (uma por linha)
         <textarea name="activities" rows={4} defaultValue={brand?.activities.join("\n")} className={inputClass + " h-auto py-2"} />
       </label>
+      <label className="block text-[12px] text-ink-2">
+        Perguntas de situação (uma por linha) — o promotor responde Sim ou Não; no Não, descreve o problema
+        <textarea name="questions" rows={2} defaultValue={brand?.questions.join("\n")} placeholder="ex.: O freezer está funcionando normalmente?" className={inputClass + " h-auto py-2"} />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-[12px] text-ink-2">
+          WhatsApp que recebe os problemas (com DDD; vários: vírgula)
+          <input name="alertPhone" defaultValue={brand?.alertPhone ?? ""} placeholder="31 99999-8888" className={inputClass} />
+        </label>
+        <label className="text-[12px] text-ink-2">
+          {brand?.alertApiKey ? "Chave do CallMeBot — salva ✓ (vazio mantém; apagar remove)" : "Chave do CallMeBot (uma por número, mesma ordem)"}
+          <input name="alertApiKey" type="password" autoComplete="off" placeholder={brand?.alertApiKey ? "••••••• (salva)" : "ex.: 1234567"} className={inputClass} />
+        </label>
+      </div>
       <input name="notes" defaultValue={brand?.notes ?? ""} placeholder="Observações operacionais" className={inputClass} />
     </ActionForm>
   );

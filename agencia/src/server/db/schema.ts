@@ -49,6 +49,7 @@ import type {
   PhotoKind,
   PhotoPlacement,
   PhotoSource,
+  QuestionAnswer,
   ReviewStatus,
   Role,
   RuptureSituation,
@@ -186,6 +187,11 @@ export const brands = pgTable(
     allowGallery: boolean("allow_gallery").notNull().default(true),
     /** Atividades da etapa "Execução" (checklist curto exibido ao promotor). */
     activities: jsonb("activities").$type<string[]>().notNull().default([]),
+    /** Perguntas de sim/não feitas em todo atendimento (ex.: freezer funcionando?). */
+    questions: jsonb("questions").$type<string[]>().notNull().default([]),
+    /** WhatsApp (CallMeBot) que recebe os problemas das perguntas desta marca. */
+    alertPhone: text("alert_phone"),
+    alertApiKey: text("alert_api_key"),
     /** Financeiro: quanto a marca paga por mês à agência pela promotoria (contrato). */
     monthlyFee: money("monthly_fee"),
     notes: text("notes"),
@@ -531,6 +537,8 @@ export const attendances = pgTable(
     finishedAt: ts("finished_at"),
     /** Atividades da execução marcadas como feitas. */
     activitiesDone: jsonb("activities_done").$type<string[]>().notNull().default([]),
+    /** Respostas às perguntas de situação da marca. */
+    answers: jsonb("answers").$type<QuestionAnswer[]>().notNull().default([]),
     notes: text("notes"),
     /** Exceção justificada: itens obrigatórios dispensados. */
     exceptionItems: jsonb("exception_items").$type<ExceptionItem[]>().notNull().default([]),
@@ -790,6 +798,21 @@ export const whatsappAlerts = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("whatsapp_alerts_attendance_uq").on(t.attendanceId)],
+);
+
+/** Aviso de problema nas perguntas da marca (WhatsApp da marca), um por atendimento. */
+export const brandAlerts = pgTable(
+  "brand_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id").notNull().references(() => agencies.id),
+    attendanceId: uuid("attendance_id").notNull().references(() => attendances.id),
+    items: integer("items").notNull(),
+    sentAt: ts("sent_at"),
+    error: text("error"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("brand_alerts_attendance_uq").on(t.attendanceId)],
 );
 
 // ───────────────────────────── Acompanhamento ─────────────────────────────

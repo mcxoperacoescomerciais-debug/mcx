@@ -83,6 +83,7 @@ describe("carteira com meta semanal", () => {
       startedAt: now,
       finishedAt: now,
       activitiesDone: [],
+      answers: [],
       notes: null,
       exceptionItems: [],
       exceptionReason: null,

@@ -142,6 +142,10 @@ export async function buildLocalPdf(i: LocalPdfInput): Promise<File> {
     h2("Execução");
     for (const act of a.activitiesDone) line(`• ${act}`);
   }
+  if (a.answers?.length) {
+    h2("Situação");
+    for (const ans of a.answers) line(`• ${ans.question} ${ans.ok ? "Sim" : `NÃO — ${ans.note ?? ""}`}`);
+  }
 
   // Fotos (antes, depois, demais), 3 por linha. Cada miniatura leva à foto ampliada no fim do PDF.
   const order = (k: string) => (k === "before" ? 0 : k === "after" ? 1 : 2);

@@ -161,6 +161,27 @@ export async function renderBrandPdf(agency: PdfAgency, r: BrandData, from: stri
               ]}
             />
           </View>
+          {r.questionSummary.length ? (
+            <>
+              <H2>Situação nas lojas</H2>
+              {r.questionSummary.map((q) => (
+                <Text key={q.question} style={{ fontSize: 8.5, marginBottom: 2 }}>
+                  {`${q.question}  ·  Sim: ${q.ok}  ·  Com problema: ${q.problems}`}
+                </Text>
+              ))}
+              <PdfTable
+                cols={[
+                  { label: "Data", width: "9%", render: (x: BrandData["answers"][number]) => fmtDate(x.date).slice(0, 5) },
+                  { label: "Loja", width: "25%", render: (x) => x.store },
+                  { label: "Promotor", width: "16%", render: (x) => x.promoter },
+                  { label: "Pergunta", width: "20%", render: (x) => x.question },
+                  { label: "Problema informado", width: "30%", render: (x) => x.note ?? "—" },
+                ]}
+                rows={r.answers.filter((x) => !x.ok)}
+                empty="Nenhum problema informado no período."
+              />
+            </>
+          ) : null}
           <H2>Por loja</H2>
           <PdfTable
             cols={[

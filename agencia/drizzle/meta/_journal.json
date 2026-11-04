@@ -134,6 +134,13 @@
       "when": 1793185079695,
       "tag": "0018_posicao_loja",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793832416035,
+      "tag": "0019_perguntas_marca",
+      "breakpoints": true
     }
   ]
 }

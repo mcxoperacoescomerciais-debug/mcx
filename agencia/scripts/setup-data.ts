@@ -2,6 +2,9 @@
  * Cargas de dados aplicadas no deploy (idempotentes, rodam a cada início):
  *  1. endereços das lojas (scripts/carga/enderecos-lojas.json): preenche endereço,
  *     bairro e posição só onde a loja ainda não tem — nunca sobrescreve;
+ *  2. marca Ygloo (sorvetes) na AF Merchandising, com o checklist do freezer e a
+ *     pergunta "freezer funcionando?": só cria se a AF não tiver marca com o código
+ *     YGLOO ou o nome Ygloo — nunca altera nem recria uma marca existente;
  *  (a carga inicial da AVIVAR rodou uma vez em 28/10/2026 e saiu daqui: recriava a
  *   agência quando ela era renomeada.)
  *
@@ -70,9 +73,33 @@ async function storeAddresses() {
   console.log(`[dados] Endereços: ${matched} loja(s) encontradas na planilha, ${address} endereço(s) e ${coords} posição(ões) gravados.`);
 }
 
+export const YGLOO = {
+  name: "Ygloo",
+  code: "YGLOO",
+  activities: ["Freezer limpo e organizado"],
+  questions: ["O freezer está funcionando normalmente?"],
+};
+
+/** Marca Ygloo na AF: criada uma única vez; ajustes depois só pelo cadastro. */
+export async function yglooBrand() {
+  const db = await getDb();
+  const agencies = (await db.select({ id: s.agencies.id, name: s.agencies.name }).from(s.agencies).where(eq(s.agencies.kind, "client"))).filter((a) => /^AF( |$)/.test(norm(a.name)));
+  if (agencies.length !== 1) return console.log(`[dados] Ygloo: ${agencies.length} agência(s) AF encontradas — nada feito.`);
+  const af = agencies[0];
+  const [exists] = await db
+    .select({ id: s.brands.id })
+    .from(s.brands)
+    .where(and(eq(s.brands.agencyId, af.id), or(sql`lower(${s.brands.code}) = 'ygloo'`, sql`lower(${s.brands.name}) = 'ygloo'`)));
+  if (exists) return console.log("[dados] Ygloo: marca já existe na AF — nada feito.");
+  // Sem SKUs ainda: estoque opcional até os produtos serem importados.
+  await db.insert(s.brands).values({ agencyId: af.id, ...YGLOO, requireStock: false, minBeforePhotos: 1, minAfterPhotos: 1, notes: "Sorvetes. Checklist do freezer e aviso no WhatsApp da marca quando o freezer tiver problema." });
+  console.log(`[dados] Ygloo: marca criada em ${af.name}.`);
+}
+
 async function main() {
   for (const [name, job] of [
     ["endereços", storeAddresses],
+    ["Ygloo", yglooBrand],
   ] as const) {
     try {
       await job();
@@ -83,4 +110,5 @@ async function main() {
   process.exit(0);
 }
 
-void main();
+// Importado pelos testes: só roda as cargas quando chamado como script.
+if (process.argv[1]?.includes("setup-data")) void main();

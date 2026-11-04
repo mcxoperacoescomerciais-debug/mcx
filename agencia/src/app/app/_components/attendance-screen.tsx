@@ -20,6 +20,7 @@ import {
 } from "@/lib/domain";
 import { fmtDate, fmtDuration, fmtTime } from "@/lib/dates";
 import { exceptionIsValid } from "@/lib/rules";
+import { pendingQuestions, QUESTION_NOTE_MIN, type QuestionAnswer } from "@/lib/domain";
 import { attendanceDisplayStatus, cancelAttendance, finishAttendance, requestShare, updateAttendance, type LocalAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useLocal, useVisit } from "../_lib/hooks";
 import { missingFor } from "../_lib/derive";
@@ -86,7 +87,7 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
 
   const stepDone: Record<StepId, boolean> = {
     antes: attendance.photos.filter((p) => p.kind === "before").length >= brand.minBeforePhotos || attendance.exceptionItems.includes("before_photo"),
-    execucao: brand.activities.every((x) => attendance.activitiesDone.includes(x)),
+    execucao: brand.activities.every((x) => attendance.activitiesDone.includes(x)) && !pendingQuestions(brand.questions ?? [], attendance.answers ?? []).length,
     depois: attendance.photos.filter((p) => p.kind === "after").length >= brand.minAfterPhotos || attendance.exceptionItems.includes("after_photo"),
     estoque: !brand.requireStock || tracked.every((p) => attendance.stock[p.id]) || attendance.exceptionItems.includes("stock"),
     avaria: Object.values(attendance.damages ?? {}).every((d) => attendance.photos.some((p) => p.damageId === d.id)),
@@ -233,7 +234,7 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             cta="ABRIR CÂMERA E FOTOGRAFAR"
           />
         ) : current === "execucao" ? (
-          <ExecutionStep visitId={visitId} attendance={attendance} activities={brand.activities} editable={editable} />
+          <ExecutionStep visitId={visitId} attendance={attendance} activities={brand.activities} questions={brand.questions ?? []} editable={editable} />
         ) : current === "depois" ? (
           <PhotoCapture
             visitId={visitId}
@@ -274,7 +275,7 @@ function firstOpenStep(a: LocalAttendance, brand: { minBeforePhotos: number }, _
   return "depois";
 }
 
-function ExecutionStep({ visitId, attendance, activities, editable }: { visitId: string; attendance: LocalAttendance; activities: string[]; editable: boolean }) {
+function ExecutionStep({ visitId, attendance, activities, questions, editable }: { visitId: string; attendance: LocalAttendance; activities: string[]; questions: string[]; editable: boolean }) {
   const toggle = (act: string) => {
     const done = attendance.activitiesDone.includes(act) ? attendance.activitiesDone.filter((x) => x !== act) : [...attendance.activitiesDone, act];
     haptic(10);
@@ -299,6 +300,7 @@ function ExecutionStep({ visitId, attendance, activities, editable }: { visitId:
       ) : (
         <p className="text-[14px] text-muted bg-surface border border-line rounded-2xl p-4">Esta marca não tem atividades cadastradas. Siga para a revisão.</p>
       )}
+      {questions.length ? <QuestionList visitId={visitId} attendance={attendance} questions={questions} editable={editable} /> : null}
       <div className="mt-4">
         {editable ? (
           <TextArea label="Observação da execução (opcional)" value={attendance.notes} onChange={(v) => void updateAttendance(visitId, attendance.id, { notes: v })} rows={2} />
@@ -306,6 +308,60 @@ function ExecutionStep({ visitId, attendance, activities, editable }: { visitId:
           <p className="text-[14px] text-ink-2">“{attendance.notes}”</p>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** Perguntas de situação da marca: Sim ou Não; no Não, o promotor descreve o problema. */
+function QuestionList({ visitId, attendance, questions, editable }: { visitId: string; attendance: LocalAttendance; questions: string[]; editable: boolean }) {
+  const answers = attendance.answers ?? [];
+  const save = (question: string, patch: Partial<QuestionAnswer>) => {
+    const prev = answers.find((x) => x.question === question) ?? { question, ok: true, note: null };
+    const next = { ...prev, ...patch };
+    haptic(10);
+    void updateAttendance(visitId, attendance.id, { answers: [...answers.filter((x) => x.question !== question), next] });
+  };
+  return (
+    <div className="mt-4 space-y-3">
+      {questions.map((q) => {
+        const a = answers.find((x) => x.question === q);
+        const short = a && !a.ok && (a.note ?? "").trim().length < QUESTION_NOTE_MIN;
+        return (
+          <div key={q} className={clsx("bg-surface border rounded-2xl p-4", a && !a.ok ? "border-bad" : "border-line")}>
+            <p className="text-[15px] font-semibold mb-3">{q}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={!editable}
+                onClick={() => save(q, { ok: true, note: null })}
+                aria-pressed={a?.ok === true}
+                className={clsx("min-h-12 rounded-xl border-2 font-semibold text-[15px]", a?.ok === true ? "bg-ok border-ok text-white" : "border-line-strong")}
+              >
+                Sim
+              </button>
+              <button
+                type="button"
+                disabled={!editable}
+                onClick={() => save(q, { ok: false })}
+                aria-pressed={a?.ok === false}
+                className={clsx("min-h-12 rounded-xl border-2 font-semibold text-[15px]", a?.ok === false ? "bg-bad border-bad text-white" : "border-line-strong")}
+              >
+                Não, tem problema
+              </button>
+            </div>
+            {a && !a.ok ? (
+              <div className="mt-3">
+                {editable ? (
+                  <TextArea label="Descreva o problema" value={a.note ?? ""} onChange={(v) => save(q, { note: v })} rows={3} placeholder="ex.: freezer desligado, gelo acumulado, porta não fecha…" />
+                ) : (
+                  <p className="text-[14px] text-ink-2">“{a.note}”</p>
+                )}
+                {short && editable ? <p className="text-[12.5px] text-bad mt-1">Descreva o problema para finalizar (mínimo {QUESTION_NOTE_MIN} letras).</p> : null}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

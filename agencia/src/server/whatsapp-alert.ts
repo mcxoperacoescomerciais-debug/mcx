@@ -21,7 +21,7 @@ import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import type { ActionResult } from "./manager";
-import { DAMAGE_KIND_LABEL, RUPTURE_SITUATION_LABEL, VALIDITY_LOCATION_LABEL } from "@/lib/domain";
+import { DAMAGE_KIND_LABEL, questionProblems, RUPTURE_SITUATION_LABEL, VALIDITY_LOCATION_LABEL } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { alertNearDays, describeDays, formatIsoBr, isAlertItem, type AlertRule } from "@/lib/validity";
 import { addDays, todayIso } from "@/lib/dates";
@@ -32,8 +32,11 @@ export const LINK_DAYS = 30;
 export const MAX_RUPTURE_LINES = 25;
 
 export function recipients(st: AgencySettings): { phone: string; apikey: string }[] {
-  const phoneList = st.alerts.whatsappPhone || process.env.ALERT_WHATSAPP_PHONE || "";
-  const keyList = st.alerts.whatsappApiKey || process.env.ALERT_WHATSAPP_APIKEY || "";
+  return pairRecipients(st.alerts.whatsappPhone || process.env.ALERT_WHATSAPP_PHONE || "", st.alerts.whatsappApiKey || process.env.ALERT_WHATSAPP_APIKEY || "");
+}
+
+/** Números e chaves separados por vírgula, na mesma ordem (uma chave sozinha vale para todos). */
+function pairRecipients(phoneList: string, keyList: string): { phone: string; apikey: string }[] {
   const phones = phoneList.split(",").map((p) => p.trim()).filter(Boolean);
   const keys = keyList.split(",").map((k) => k.trim());
   return phones.map((phone, i) => ({ phone, apikey: keys[i] ?? keys[0] ?? "" })).filter((r) => r.apikey);
@@ -136,7 +139,9 @@ export async function sendCallMeBot(phone: string, apikey: string, text: string)
 export async function resolveAlertLink(id: string): Promise<{ agencyId: string; attendanceId: string } | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const db = await getDb();
-  const [row] = await db.select().from(s.whatsappAlerts).where(eq(s.whatsappAlerts.id, id));
+  // O link pode ser do alerta de validade/avaria ou do aviso das perguntas da marca.
+  const [found] = await db.select().from(s.whatsappAlerts).where(eq(s.whatsappAlerts.id, id));
+  const row = found ?? (await db.select().from(s.brandAlerts).where(eq(s.brandAlerts.id, id)))[0];
   if (!row || Date.now() - row.createdAt.getTime() > LINK_DAYS * 86_400_000) return null;
   return { agencyId: row.agencyId, attendanceId: row.attendanceId };
 }
@@ -188,6 +193,111 @@ export async function resendAlert(scope: Scope, attendanceId: string): Promise<A
   } catch (err) {
     return { ok: false, error: `Falha no envio: ${(err as Error).message.slice(0, 200)}` };
   }
+}
+
+// ───────────────────────────── Perguntas da marca (ex.: freezer) ─────────────────────────────
+
+/**
+ * Mensagem do problema informado nas perguntas da marca (ex.: "O freezer está
+ * funcionando normalmente?" → Não + descrição). null = nenhuma resposta com problema.
+ */
+export async function buildQuestionMessage(scope: Pick<Scope, "agencyId" | "agencyName">, attendanceId: string, linkId: string): Promise<{ text: string; items: number } | null> {
+  const db = await getDb();
+  const [a] = await db
+    .select({
+      answers: s.attendances.answers,
+      brand: s.brands.name,
+      visitDate: s.visits.visitDate,
+      promoter: s.users.name,
+      store: s.stores.name,
+      code: s.stores.code,
+      city: s.stores.city,
+      chain: s.chains.name,
+    })
+    .from(s.attendances)
+    .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+    .innerJoin(s.brands, eq(s.brands.id, s.attendances.brandId))
+    .innerJoin(s.users, eq(s.users.id, s.visits.promoterId))
+    .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+    .leftJoin(s.chains, eq(s.chains.id, s.stores.chainId))
+    .where(and(eq(s.attendances.id, attendanceId), eq(s.attendances.agencyId, scope.agencyId)));
+  const problems = a ? questionProblems(a.answers) : [];
+  if (!a || !problems.length) return null;
+  const text = [
+    `🚨 *Problema informado – ${a.brand}*`,
+    `*Agência:* ${scope.agencyName}`,
+    `*Promotor:* ${a.promoter}`,
+    `*Loja:* ${a.chain && !a.store.toLowerCase().includes(a.chain.toLowerCase()) ? `${a.chain} · ` : ""}${a.store}${a.code && !a.store.includes(a.code) ? ` · ${a.code}` : ""}`,
+    `*Cidade:* ${a.city}`,
+    `*Visita:* ${fmtDate(a.visitDate)}`,
+    "",
+    ...problems.flatMap((p) => [`*${p.question}*`, `❌ Não — ${p.note ?? "sem descrição"}`]),
+    "",
+    `📄 Relatório (PDF): ${baseUrl()}/r/${linkId}`,
+  ].join("\n");
+  return { text, items: problems.length };
+}
+
+/** WhatsApp da marca (CallMeBot) para os problemas das perguntas. */
+async function brandRecipients(attendanceId: string) {
+  const db = await getDb();
+  const [b] = await db.select({ phone: s.brands.alertPhone, key: s.brands.alertApiKey }).from(s.attendances).innerJoin(s.brands, eq(s.brands.id, s.attendances.brandId)).where(eq(s.attendances.id, attendanceId));
+  return b ? pairRecipients(b.phone ?? "", b.key ?? "") : [];
+}
+
+/**
+ * Envia o aviso de problema das perguntas da marca (uma vez por atendimento;
+ * `resend` manda de novo). Sem número da marca, só fica registrado no painel.
+ */
+async function sendQuestionAlert(scope: Scope, attendanceId: string, resend: boolean): Promise<ActionResult> {
+  const to = await brandRecipients(attendanceId);
+  if (!to.length) return { ok: false, error: "A marca não tem WhatsApp e chave do CallMeBot no cadastro." };
+  const db = await getDb();
+  if (resend) await db.delete(s.brandAlerts).where(and(eq(s.brandAlerts.attendanceId, attendanceId), eq(s.brandAlerts.agencyId, scope.agencyId)));
+  const [row] = await db.insert(s.brandAlerts).values({ agencyId: scope.agencyId, attendanceId, items: 0 }).onConflictDoNothing().returning();
+  if (!row) return { ok: true, message: "Aviso já registrado para este atendimento." };
+  const msg = await buildQuestionMessage(scope, attendanceId, row.id);
+  if (!msg) {
+    await db.delete(s.brandAlerts).where(eq(s.brandAlerts.id, row.id));
+    return { ok: false, error: "Nenhum problema informado neste atendimento." };
+  }
+  const errors: string[] = [];
+  for (const r of to) await sendCallMeBot(r.phone, r.apikey, msg.text).catch((e: Error) => errors.push(e.message));
+  await db
+    .update(s.brandAlerts)
+    .set({ items: msg.items, sentAt: errors.length < to.length ? new Date() : null, error: errors.length ? errors.join(" | ").slice(0, 500) : null })
+    .where(eq(s.brandAlerts.id, row.id));
+  if (errors.length) console.error("[aviso da marca]", attendanceId, errors);
+  return errors.length === to.length ? { ok: false, error: `Falha no envio: ${errors.join(" | ").slice(0, 200)}` } : { ok: true, message: "Aviso enviado no WhatsApp da marca." };
+}
+
+/** Chamado depois que o atendimento finalizado é gravado. Nunca lança erro. */
+export async function notifyBrandQuestions(scope: Scope, attendanceId: string): Promise<void> {
+  try {
+    const db = await getDb();
+    const [a] = await db.select({ answers: s.attendances.answers }).from(s.attendances).where(eq(s.attendances.id, attendanceId));
+    if (!a || !questionProblems(a.answers).length) return;
+    await sendQuestionAlert(scope, attendanceId, false);
+  } catch (err) {
+    console.error("[aviso da marca] falhou", attendanceId, err);
+  }
+}
+
+/** Botão "Reenviar aviso" no atendimento. */
+export async function resendQuestionAlert(scope: Scope, attendanceId: string): Promise<ActionResult> {
+  if (scope.role !== "admin") return { ok: false, error: "Somente administradores." };
+  try {
+    return await sendQuestionAlert(scope, attendanceId, true);
+  } catch (err) {
+    return { ok: false, error: `Falha no envio: ${(err as Error).message.slice(0, 200)}` };
+  }
+}
+
+/** Situação do aviso da marca de um atendimento (para o detalhe no painel). */
+export async function questionAlertStatus(attendanceId: string) {
+  const db = await getDb();
+  const [row] = await db.select().from(s.brandAlerts).where(eq(s.brandAlerts.attendanceId, attendanceId));
+  return row ? { sentAt: row.sentAt, error: row.error } : null;
 }
 
 export type AlertLogStatus = "sent" | "error" | "missing";

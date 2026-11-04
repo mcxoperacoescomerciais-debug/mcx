@@ -33,6 +33,9 @@ export async function saveBrandAction(_: FormState, fd: FormData): Promise<FormS
       rupturePhotoRequired: bool(fd, "rupturePhotoRequired"),
       allowGallery: bool(fd, "allowGallery"),
       activities: str(fd, "activities").split("\n"),
+      questions: str(fd, "questions").split("\n"),
+      alertPhone: normalizePhones(str(fd, "alertPhone")) || null,
+      alertApiKey: str(fd, "alertApiKey") || null,
       notes: str(fd, "notes") || null,
     }),
   );
@@ -205,6 +208,12 @@ export async function resendAlertAction(_: FormState, fd: FormData): Promise<For
   const { resendAlert } = await import("@/server/whatsapp-alert");
   const r = await resendAlert(scope, str(fd, "attendanceId"));
   return done(r);
+}
+
+export async function resendQuestionAlertAction(_: FormState, fd: FormData): Promise<FormState> {
+  const scope = await getScope();
+  const { resendQuestionAlert } = await import("@/server/whatsapp-alert");
+  return done(await resendQuestionAlert(scope, str(fd, "attendanceId")));
 }
 
 export type ImportState = { report?: ImportReport; error?: string } | null;
