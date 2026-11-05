@@ -55,6 +55,9 @@ export default async function BrandsPage({ searchParams }: PageProps<"/painel/ca
                   <Td>
                     <p className="font-semibold">{b.name}</p>
                     <p className="text-[11.5px] text-muted">{b.code}</p>
+                    <Link href={`/painel/marca/${b.id}`} className="inline-block mt-1 text-[12.5px] font-semibold text-brand-700 hover:underline">
+                      Painel da marca →
+                    </Link>
                     <div className="mt-2 max-w-md">
                       <Disclosure label="Editar">
                         <BrandForm brand={b} />

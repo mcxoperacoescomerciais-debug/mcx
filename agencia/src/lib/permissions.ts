@@ -19,7 +19,7 @@ export interface Panel {
 }
 
 export const PANELS: Panel[] = [
-  { key: "visao_geral", label: "Visão geral", group: "Operação", paths: ["/painel"] },
+  { key: "visao_geral", label: "Visão geral e painel da marca", group: "Operação", paths: ["/painel", "/painel/marca"] },
   { key: "mapa", label: "Mapa operacional", group: "Operação", paths: ["/painel/mapa"] },
   { key: "visitas", label: "Visitas e atendimentos", group: "Operação", paths: ["/painel/visitas", "/painel/lojas", "/painel/atendimentos", "/painel/marcas", "/painel/programacao"] },
   { key: "fotos", label: "Relatório fotográfico e Book", group: "Operação", paths: ["/painel/fotos"] },
