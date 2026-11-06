@@ -52,8 +52,9 @@ describe("indicadores e demonstração", () => {
 
   test("módulos da agência escondem Degustações e Financeiro", async () => {
     const { hiddenPanels, mergeSettings } = await import("../src/lib/settings");
-    assert.deepEqual(hiddenPanels(mergeSettings({})), []);
-    assert.deepEqual(hiddenPanels(mergeSettings({ modules: { tastings: false, finance: false } })), ["degustacoes", "financeiro"]);
+    // Sistemática (relatório mensal formato Etros) vem desligada; as demais, ligadas.
+    assert.deepEqual(hiddenPanels(mergeSettings({})), ["sistematica"]);
+    assert.deepEqual(hiddenPanels(mergeSettings({ modules: { tastings: false, finance: false, sistematica: true } })), ["degustacoes", "financeiro"]);
     assert.equal(mergeSettings({ overviewStyle: "executive" }).overviewStyle, "executive");
   });
 });

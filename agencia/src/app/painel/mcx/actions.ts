@@ -55,7 +55,7 @@ export async function createAgencyAction(_: FormState, fd: FormData): Promise<Fo
     adminName: str(fd, "adminName"),
     adminUsername: str(fd, "adminUsername"),
     adminPassword: String(fd.get("adminPassword") ?? ""),
-    modules: { tastings: fd.get("tastings") === "on", finance: fd.get("finance") === "on" },
+    modules: { tastings: fd.get("tastings") === "on", finance: fd.get("finance") === "on", sistematica: fd.get("sistematica") === "on" },
     overviewStyle: str(fd, "overviewStyle") === "executive" ? "executive" : "standard",
   });
   if (r.ok) {
@@ -78,6 +78,7 @@ export async function agencyModulesAction(_: FormState, fd: FormData): Promise<F
   const r = await platform.setAgencyModules(await requirePlatform(), str(fd, "id"), {
     tastings: fd.get("tastings") === "on",
     finance: fd.get("finance") === "on",
+    sistematica: fd.get("sistematica") === "on",
     overviewStyle: str(fd, "overviewStyle") === "executive" ? "executive" : "standard",
   });
   if (r.ok) revalidatePath("/painel", "layout");

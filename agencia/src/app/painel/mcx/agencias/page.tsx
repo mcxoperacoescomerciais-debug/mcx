@@ -72,6 +72,9 @@ export default async function AgenciesPage() {
             <label className="flex items-center gap-2 text-[13.5px]">
               <input type="checkbox" name="finance" defaultChecked={true} /> Financeiro
             </label>
+            <label className="flex items-center gap-2 text-[13.5px]">
+              <input type="checkbox" name="sistematica" defaultChecked={false} /> Sistemática e relatório mensal (formato Etros)
+            </label>
             <Labeled label="Visão geral" hint="Executiva: ruptura (área de vendas e estoque), datas críticas, avarias e lojas não atendidas com gráficos — para agência de uma marca só.">
               <select name="overviewStyle" defaultValue="standard" className={inputClass}>
                 <option value="standard">Padrão (operação)</option>

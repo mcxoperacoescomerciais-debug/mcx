@@ -71,6 +71,9 @@ export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agen
             <label className="flex items-center gap-2 text-[13.5px]">
               <input type="checkbox" name="finance" defaultChecked={settings.modules.finance} /> Financeiro
             </label>
+            <label className="flex items-center gap-2 text-[13.5px]">
+              <input type="checkbox" name="sistematica" defaultChecked={settings.modules.sistematica} /> Sistemática e relatório mensal (formato Etros)
+            </label>
             <label className="block">
               <span className="block text-[12.5px] font-semibold text-ink-2 mb-1">Visão geral</span>
               <select name="overviewStyle" defaultValue={settings.overviewStyle} className={selectClass}>

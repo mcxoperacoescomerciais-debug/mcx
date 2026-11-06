@@ -117,7 +117,7 @@ export interface NewAgencyInput {
   adminName: string;
   adminUsername: string;
   adminPassword: string;
-  modules?: { tastings: boolean; finance: boolean };
+  modules?: { tastings: boolean; finance: boolean; sistematica: boolean };
   overviewStyle?: "standard" | "executive";
 }
 
@@ -138,7 +138,7 @@ export async function createAgency(user: SessionUser, i: NewAgencyInput): Promis
   if (slugTaken) slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
   const passwordHash = await hashPassword(i.adminPassword);
   const id = await db.transaction(async (tx) => {
-    const settings = mergeSettings({ modules: i.modules ?? { tastings: true, finance: true }, overviewStyle: i.overviewStyle ?? "standard" });
+    const settings = mergeSettings({ modules: i.modules ?? { tastings: true, finance: true, sistematica: false }, overviewStyle: i.overviewStyle ?? "standard" });
     const [agency] = await tx.insert(s.agencies).values({ name, slug, kind: "client", settings }).returning();
     const [admin] = await tx
       .insert(s.users)
@@ -172,12 +172,12 @@ export async function updateAgency(user: SessionUser, id: string, i: { name: str
 }
 
 /** Módulos da agência e estilo da visão geral (só a equipe MCX). */
-export async function setAgencyModules(user: SessionUser, id: string, i: { tastings: boolean; finance: boolean; overviewStyle: "standard" | "executive" }): Promise<PlatformResult> {
+export async function setAgencyModules(user: SessionUser, id: string, i: { tastings: boolean; finance: boolean; sistematica: boolean; overviewStyle: "standard" | "executive" }): Promise<PlatformResult> {
   if (!user.platform) return fail("Somente a equipe MCX.");
   const before = await getClientAgency(id);
   if (!before) return fail("Agência não encontrada.");
   const prev = mergeSettings(before.settings);
-  const next = mergeSettings({ ...prev, modules: { tastings: i.tastings, finance: i.finance }, overviewStyle: i.overviewStyle });
+  const next = mergeSettings({ ...prev, modules: { tastings: i.tastings, finance: i.finance, sistematica: i.sistematica }, overviewStyle: i.overviewStyle });
   const db = await getDb();
   await db.update(s.agencies).set({ settings: next, updatedAt: new Date() }).where(eq(s.agencies.id, id));
   await audit({ agencyId: id, userId: user.id }, "agency", id, "modules", { before: { modules: prev.modules, overviewStyle: prev.overviewStyle }, after: { modules: next.modules, overviewStyle: next.overviewStyle } });

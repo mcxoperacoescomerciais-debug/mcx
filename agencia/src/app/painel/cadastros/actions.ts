@@ -144,6 +144,9 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         // Definidos pela equipe MCX na tela da agência: a tela de Configurações não muda.
         modules: scope.settings.modules,
         overviewStyle: scope.settings.overviewStyle,
+        // Editados na tela Sistemática.
+        holidays: scope.settings.holidays,
+        visitValue: scope.settings.visitValue,
         lateToleranceMin: Number(str(fd, "lateToleranceMin")),
         dayEndsAt: str(fd, "dayEndsAt"),
         stockDivergencePct: Number(str(fd, "stockDivergencePct")),

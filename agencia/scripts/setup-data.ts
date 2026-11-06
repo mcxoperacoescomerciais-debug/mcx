@@ -246,8 +246,27 @@ export async function costaFoodsToAf() {
   }
 }
 
+/**
+ * Sistemática e relatório mensal ligados na ETROS (pedido dela). Só liga se o
+ * módulo nunca foi definido — se a equipe MCX desligar depois, fica desligado.
+ */
+export async function etrosSystematic() {
+  const db = await getDb();
+  const etros = (await db.select().from(s.agencies).where(eq(s.agencies.kind, "client"))).filter((a) => norm(a.name).startsWith("ETROS"));
+  for (const a of etros) {
+    const settings = (a.settings ?? {}) as { modules?: Record<string, unknown> };
+    if (settings.modules && "sistematica" in settings.modules) continue;
+    await db
+      .update(s.agencies)
+      .set({ settings: { ...settings, modules: { ...(settings.modules ?? {}), sistematica: true } }, updatedAt: new Date() })
+      .where(eq(s.agencies.id, a.id));
+    console.log(`[dados] Sistemática ligada em ${a.name}.`);
+  }
+}
+
 async function main() {
   for (const [name, job] of [
+    ["Sistemática Etros", etrosSystematic],
     ["endereços", storeAddresses],
     ["Ygloo", yglooBrand],
     ["Costa Foods", costaFoodsToAf],

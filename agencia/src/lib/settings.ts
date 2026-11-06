@@ -71,16 +71,22 @@ export interface AgencySettings {
   checkinRadiusM: number;
   /** Foto da galeria: "brand" = regra de cada marca; "none" = só câmera; "authorized" = só promotores autorizados (e a marca permitir). */
   galleryPolicy: GalleryPolicy;
+  /** Feriados (AAAA-MM-DD): no relatório mensal, visita prevista não feita em feriado conta como válida. */
+  holidays: string[];
+  /** Valor pago por visita válida (relatório mensal e sistemática); null = não informado. */
+  visitValue: number | null;
 }
 
 export interface AgencyModules {
   tastings: boolean;
   finance: boolean;
+  /** Menu Sistemática + relatório mensal de atendimentos por marca (formato Etros). */
+  sistematica: boolean;
 }
 
 /** Painéis (lib/permissions) escondidos pelos módulos desligados. */
 export function hiddenPanels(st: Pick<AgencySettings, "modules">): string[] {
-  return [...(st.modules.tastings ? [] : ["degustacoes"]), ...(st.modules.finance ? [] : ["financeiro"])];
+  return [...(st.modules.tastings ? [] : ["degustacoes"]), ...(st.modules.finance ? [] : ["financeiro"]), ...(st.modules.sistematica ? [] : ["sistematica"])];
 }
 
 export type GalleryPolicy = "brand" | "none" | "authorized";
@@ -124,8 +130,10 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   promoterCost: { salary: null, meal: null, fuel: null, other: null, chargesPct: DEFAULT_CHARGES_PCT },
   galleryPolicy: "brand",
   checkinRadiusM: 300,
-  modules: { tastings: true, finance: true },
+  modules: { tastings: true, finance: true, sistematica: false },
   overviewStyle: "standard",
+  holidays: [],
+  visitValue: null,
 };
 
 export function mergeSettings(raw: unknown): AgencySettings {
@@ -136,7 +144,9 @@ export function mergeSettings(raw: unknown): AgencySettings {
   const priority = { ...DEFAULT_ISSUE_PRIORITY };
   for (const k of ISSUE_KINDS) priority[k] = num(r.issuePriority?.[k], DEFAULT_ISSUE_PRIORITY[k], 1, 9);
   return {
-    modules: { tastings: bool(r.modules?.tastings, true), finance: bool(r.modules?.finance, true) },
+    modules: { tastings: bool(r.modules?.tastings, true), finance: bool(r.modules?.finance, true), sistematica: bool(r.modules?.sistematica, false) },
+    holidays: Array.isArray(r.holidays) ? [...new Set(r.holidays.filter((d): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort().slice(-200) : [],
+    visitValue: money(r.visitValue),
     overviewStyle: r.overviewStyle === "executive" ? "executive" : "standard",
     checkinRadiusM: num(r.checkinRadiusM, DEFAULT_SETTINGS.checkinRadiusM, 50, 5000),
     galleryPolicy: r.galleryPolicy === "none" || r.galleryPolicy === "authorized" ? r.galleryPolicy : DEFAULT_SETTINGS.galleryPolicy,
