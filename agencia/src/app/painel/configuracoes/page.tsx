@@ -192,6 +192,18 @@ export default async function SettingsPage() {
               Na mensagem, <strong>{"{promotor}"}</strong> vira o primeiro nome do promotor e <strong>{"{contato}"}</strong> o nome acima. Vazio volta à mensagem padrão. O número vazio usa o primeiro número do alerta acima; sem nenhum número, o balão não aparece. Chega no celular do promotor na próxima atualização do app.
             </p>
           </SectionCard>
+          <SectionCard title="Relatório da visita no WhatsApp" subtitle="Ao encerrar a visita, o app pergunta: “Deseja enviar o relatório preenchido?”. No Sim, abre o WhatsApp com os produtos próximos ao vencimento (data, quantidade e valor) e os produtos em ruptura de cada marca." bodyClass="px-5 pb-5 space-y-3">
+            <label className="flex items-start gap-2.5 text-[13.5px] cursor-pointer">
+              <input type="checkbox" name="visitReport_enabled" defaultChecked={st.visitReport.enabled} className="mt-0.5 size-4 accent-brand-700" />
+              <span>
+                <strong>Perguntar ao encerrar a visita</strong>
+                <span className="block text-[12px] text-muted">Vale só para esta agência. Funciona sem internet: o WhatsApp envia quando houver sinal.</span>
+              </span>
+            </label>
+            <Row label="WhatsApp que recebe (com DDD; vazio = o promotor escolhe o contato ou grupo)">
+              <input name="visitReport_phone" defaultValue={st.visitReport.phone} placeholder="31 99999-8888" className={inputClass} />
+            </Row>
+          </SectionCard>
           <SectionCard title="Prioridade das pendências" subtitle="1 = mais urgente. Define a ordem da Central de pendências." bodyClass="px-5 pb-5">
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2">
               {ISSUE_KINDS.map((k) => (

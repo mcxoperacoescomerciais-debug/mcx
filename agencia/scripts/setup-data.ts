@@ -264,8 +264,28 @@ export async function etrosSystematic() {
   }
 }
 
+/**
+ * Pergunta "Deseja enviar o relatório preenchido?" ao encerrar a visita, ligada
+ * na AF (pedido dela). Só liga se a opção nunca foi salva — depois vale o que a
+ * AF escolher em Configurações.
+ */
+export async function afVisitReport() {
+  const db = await getDb();
+  const af = await afAgency();
+  if (!af) return;
+  const [row] = await db.select({ settings: s.agencies.settings }).from(s.agencies).where(eq(s.agencies.id, af.id));
+  const settings = (row?.settings ?? {}) as { visitReport?: unknown };
+  if (settings.visitReport !== undefined) return;
+  await db
+    .update(s.agencies)
+    .set({ settings: { ...settings, visitReport: { enabled: true, phone: "" } } as never, updatedAt: new Date() })
+    .where(eq(s.agencies.id, af.id));
+  console.log(`[dados] Relatório da visita no WhatsApp ligado em ${af.name}.`);
+}
+
 async function main() {
   for (const [name, job] of [
+    ["Relatório da visita AF", afVisitReport],
     ["Sistemática Etros", etrosSystematic],
     ["endereços", storeAddresses],
     ["Ygloo", yglooBrand],

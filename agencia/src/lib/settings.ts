@@ -75,6 +75,8 @@ export interface AgencySettings {
   holidays: string[];
   /** Valor pago por visita válida (relatório mensal e sistemática); null = não informado. */
   visitValue: number | null;
+  /** Ao encerrar a visita, o app pergunta se o promotor quer enviar o relatório (vencimentos e rupturas) no WhatsApp. phone vazio = o promotor escolhe o contato. */
+  visitReport: { enabled: boolean; phone: string };
 }
 
 export interface AgencyModules {
@@ -134,6 +136,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   overviewStyle: "standard",
   holidays: [],
   visitValue: null,
+  visitReport: { enabled: false, phone: "" },
 };
 
 export function mergeSettings(raw: unknown): AgencySettings {
@@ -147,6 +150,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
     modules: { tastings: bool(r.modules?.tastings, true), finance: bool(r.modules?.finance, true), sistematica: bool(r.modules?.sistematica, false) },
     holidays: Array.isArray(r.holidays) ? [...new Set(r.holidays.filter((d): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort().slice(-200) : [],
     visitValue: money(r.visitValue),
+    visitReport: { enabled: bool(r.visitReport?.enabled, false), phone: typeof r.visitReport?.phone === "string" ? r.visitReport.phone : "" },
     overviewStyle: r.overviewStyle === "executive" ? "executive" : "standard",
     checkinRadiusM: num(r.checkinRadiusM, DEFAULT_SETTINGS.checkinRadiusM, 50, 5000),
     galleryPolicy: r.galleryPolicy === "none" || r.galleryPolicy === "authorized" ? r.galleryPolicy : DEFAULT_SETTINGS.galleryPolicy,

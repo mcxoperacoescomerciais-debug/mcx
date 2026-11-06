@@ -288,6 +288,8 @@ export interface BootstrapPayload {
     validityBands: SeverityBands;
     /** Ajuda no WhatsApp (balão da tela inicial); null = sem número configurado. */
     support?: { name: string; phone: string; message?: string } | null;
+    /** Pergunta ao encerrar a visita: enviar o relatório no WhatsApp (null = desligado; phone vazio = o promotor escolhe). */
+    visitReport?: { phone: string } | null;
   };
   today: string;
   brands: BootstrapBrand[];
