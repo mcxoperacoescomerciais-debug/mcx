@@ -15,16 +15,16 @@ const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", curren
 
 export function visitReportText(
   visit: LocalVisit,
-  ctx: { agency: string; promoter: string; store: BootstrapStore | undefined; brandById: Map<string, BootstrapBrand>; productById: Map<string, BootstrapProduct>; brandIds?: string[] | null },
+  ctx: { agency: string; promoter: string; store: BootstrapStore | undefined; brandById: Map<string, BootstrapBrand>; productById: Map<string, BootstrapProduct>; brandIds?: string[] | null; attendanceId?: string },
 ): string {
   const product = (id: string) => ctx.productById.get(id)?.name ?? "Produto";
   const lines = [
-    `📋 *Relatório da visita – ${ctx.agency}*`,
+    `📋 *${ctx.attendanceId ? "Relatório do atendimento" : "Relatório da visita"} – ${ctx.agency}*`,
     `*Loja:* ${ctx.store ? `${ctx.store.chainName && !ctx.store.name.toLowerCase().includes(ctx.store.chainName.toLowerCase()) ? `${ctx.store.chainName} · ` : ""}${ctx.store.name} · ${ctx.store.city}` : "—"}`,
     `*Promotor:* ${ctx.promoter}`,
     `*Data:* ${fmtDate(visit.visitDate)}`,
   ];
-  const atts = reportAttendances(visit, ctx.brandIds);
+  const atts = reportAttendances(visit, ctx.brandIds).filter((a) => !ctx.attendanceId || a.id === ctx.attendanceId);
   for (const a of atts) {
     const validities = Object.values(a.validities ?? {}).sort((x, y) => x.expiryDate.localeCompare(y.expiryDate));
     const ruptures = Object.values(a.ruptures);

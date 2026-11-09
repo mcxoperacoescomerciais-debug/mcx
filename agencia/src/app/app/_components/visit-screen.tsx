@@ -7,8 +7,7 @@ import { Button, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtDuration, fmtTime } from "@/lib/dates";
 import { addPlannedBrand, cancelAttendance, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
-import { go, haptic, useCatalog, useLocal, useVisit } from "../_lib/hooks";
-import { reportAttendances, visitReportText, whatsappLink } from "../_lib/visit-report";
+import { go, haptic, useCatalog, useVisit } from "../_lib/hooks";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
 import { Notice, Screen, SectionTitle, Sheet, TextArea, toast, TopBar } from "./primitives";
 import { SharePdf } from "./share-pdf";
@@ -17,7 +16,6 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
   const visit = useVisit(visitId);
   const cat = useCatalog();
   const [closeOpen, setCloseOpen] = useState(closing);
-  const [askReport, setAskReport] = useState(false);
   // Relatório a enviar no grupo (aberto sozinho logo depois de finalizar um atendimento).
   const [shareId, setShareId] = useState<string | null>(() => peekShareRequest());
   const closeShare = () => {
@@ -237,8 +235,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
       </Sheet>
 
       <DiscardSheet open={discardOpen} onClose={() => setDiscardOpen(false)} visitId={visitId} />
-      {closeOpen && open ? <CloseVisitSheet visitId={visitId} onClose={() => setCloseOpen(false)} onNotAttended={setNotAttended} onFinished={() => setAskReport(true)} /> : null}
-      {askReport ? <SendReportSheet visitId={visitId} /> : null}
+      {closeOpen && open ? <CloseVisitSheet visitId={visitId} onClose={() => setCloseOpen(false)} onNotAttended={setNotAttended} /> : null}
       {notAttended ? <NotAttendedSheet visitId={visitId} brandId={notAttended} onClose={() => setNotAttended(null)} /> : null}
     </Screen>
   );
@@ -348,53 +345,7 @@ function NotAttendedSheet({ visitId, brandId, onClose }: { visitId: string; bran
   );
 }
 
-/** Ao encerrar a visita (agência com a opção ligada): enviar o relatório no WhatsApp? */
-function SendReportSheet({ visitId }: { visitId: string }) {
-  const visit = useVisit(visitId)!;
-  const cat = useCatalog();
-  const local = useLocal();
-  const report = cat.settings?.visitReport ?? null;
-  const leave = () => go("", true);
-  return (
-    <Sheet
-      open
-      onClose={leave}
-      title="Deseja enviar o relatório preenchido?"
-      footer={
-        <div className="flex gap-2">
-          <Button size="xl" variant="secondary" className="flex-1" onClick={leave}>
-            Não
-          </Button>
-          <Button
-            size="xl"
-            className="flex-[2]"
-            onClick={() => {
-              const text = visitReportText(visit, {
-                agency: local.bootstrap?.agency.name ?? "",
-                promoter: local.bootstrap?.user.name ?? "",
-                store: cat.storeById.get(visit.storeId),
-                brandById: cat.brandById,
-                productById: cat.productById,
-                brandIds: report?.brandIds,
-              });
-              // Sempre abre o WhatsApp para escolher o contato ou grupo.
-              window.open(whatsappLink(text, null), "_blank");
-              leave();
-            }}
-          >
-            <Send className="size-5" /> Sim, enviar
-          </Button>
-        </div>
-      }
-    >
-      <p className="text-[14px] text-ink-2">
-        Abre o WhatsApp para você escolher o contato ou grupo, com os produtos próximos ao vencimento (data, quantidade e valor) e os produtos em ruptura de cada marca desta visita.
-      </p>
-    </Sheet>
-  );
-}
-
-function CloseVisitSheet({ visitId, onClose, onNotAttended, onFinished }: { visitId: string; onClose: () => void; onNotAttended: (brandId: string) => void; onFinished: () => void }) {
+function CloseVisitSheet({ visitId, onClose, onNotAttended }: { visitId: string; onClose: () => void; onNotAttended: (brandId: string) => void }) {
   const visit = useVisit(visitId)!;
   const cat = useCatalog();
   const schedule = visit.scheduleId ? cat.scheduleById.get(visit.scheduleId) : undefined;
@@ -410,7 +361,6 @@ function CloseVisitSheet({ visitId, onClose, onNotAttended, onFinished }: { visi
   const notAttended = slots.filter((s) => s.status === "cancelled");
   const unresolved = [...inProgress, ...pending];
   const canClose = unresolved.length === 0;
-  const report = cat.settings?.visitReport ?? null;
 
   return (
     <Sheet
@@ -427,9 +377,7 @@ function CloseVisitSheet({ visitId, onClose, onNotAttended, onFinished }: { visi
             await finishVisit(visitId, null);
             haptic(30);
             toast(notAttended.length ? "Visita encerrada. O gestor verá as marcas não atendidas." : "Visita encerrada.");
-            // Agência com o relatório no WhatsApp ligado: pergunta antes de voltar ao início.
-            if (report && reportAttendances(visit, report.brandIds).length) onFinished();
-            else go("", true);
+            go("", true);
           }}
         >
           ENCERRAR VISITA

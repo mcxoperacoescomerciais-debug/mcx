@@ -4,6 +4,7 @@
  * "carimbadas" que as agências já usam. A foto original não é alterada.
  */
 import { fmtDateTime } from "@/lib/dates";
+import { PHOTO_KIND_LABEL, PHOTO_KINDS, type PhotoKind } from "@/lib/domain";
 import { getPhotoBlob, type LocalPhoto } from "./local-store";
 
 export interface StampInfo {
@@ -43,6 +44,22 @@ async function stamp(blob: Blob, lines: string[]): Promise<Blob> {
     g.fillText(t, pad, bmp.height - band + pad + i * size * 1.3, bmp.width - pad * 2);
   });
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b ?? blob), "image/jpeg", 0.85));
+}
+
+/** Todas as fotos do atendimento (antes, depois, ruptura, validade, avaria, ocorrência), com a faixa de identificação — relatório no WhatsApp. */
+export async function attendancePhotoFiles(photos: LocalPhoto[], info: StampInfo): Promise<File[]> {
+  const order = PHOTO_KINDS as readonly string[];
+  const list = [...photos].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || a.takenAt.localeCompare(b.takenAt));
+  const safe = (v: string) => v.normalize("NFD").replace(/[^\w]+/g, "_").replace(/^_|_$/g, "");
+  const files: File[] = [];
+  for (const [i, p] of list.entries()) {
+    const blob = await photoBlob(p);
+    if (!blob) continue;
+    const label = PHOTO_KIND_LABEL[p.kind as PhotoKind] ?? "Foto";
+    const stamped = await stamp(blob, [info.store.toUpperCase(), `${label} · ${fmtDateTime(p.takenAt)}`, info.promoter ? `Promotor: ${info.promoter}` : ""].filter(Boolean)).catch(() => blob);
+    files.push(new File([stamped], `${String(i + 1).padStart(2, "0")}_${safe(label)}_${safe(info.store)}.jpg`, { type: "image/jpeg" }));
+  }
+  return files;
 }
 
 export async function afterPhotoFiles(photos: LocalPhoto[], info: StampInfo): Promise<File[]> {

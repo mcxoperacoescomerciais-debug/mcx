@@ -5,7 +5,7 @@
  * (no celular), então o promotor pode sair e voltar sem perder nada.
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Ban, Check, CheckCircle2, CloudUpload, Lock, PencilLine } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Ban, Check, CheckCircle2, CloudUpload, Lock, PencilLine, Send } from "lucide-react";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
 import {
@@ -33,6 +33,7 @@ import { daysBetween } from "@/lib/dates";
 import { classify, DEFAULT_BANDS, SEVERITY_LABEL } from "@/lib/validity";
 import { OccurrenceStep } from "./occurrence-step";
 import { SharePdf } from "./share-pdf";
+import { visitReportText, whatsappLink } from "../_lib/visit-report";
 
 const STEPS = [
   { id: "antes", label: "Antes" },
@@ -378,6 +379,13 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
   const status = attendanceDisplayStatus(attendance);
   const [exceptionOpen, setExceptionOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [askReport, setAskReport] = useState(false);
+  const report = cat.settings?.visitReport ?? null;
+  const backToStore = () => {
+    // De volta à loja já com o envio do PDF aberto (o promotor sempre manda no grupo).
+    requestShare(attendance.id);
+    go(`visita/${visitId}`, true);
+  };
   const stockCounts = Object.values(attendance.stock).reduce<Record<string, number>>((acc, s) => ({ ...acc, [s.state]: (acc[s.state] ?? 0) + 1 }), {});
   const informed = tracked.filter((p) => attendance.stock[p.id]).length;
   const before = attendance.photos.filter((p) => p.kind === "before");
@@ -556,10 +564,10 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
             onClick={async () => {
               await finishAttendance(visitId, attendance.id);
               haptic(40);
-              // De volta à loja já com o envio do relatório aberto (o promotor sempre manda no grupo).
-              requestShare(attendance.id);
               toast(local.sync.online ? "Atendimento finalizado. Enviando…" : "Atendimento finalizado no celular. Será enviado quando houver sinal.");
-              go(`visita/${visitId}`, true);
+              // Marca marcada em Configurações › Relatório no WhatsApp: pergunta antes de voltar à loja.
+              if (report && (!report.brandIds || report.brandIds.includes(attendance.brandId))) setAskReport(true);
+              else backToStore();
             }}
           >
             <CheckCircle2 className="size-6" /> FINALIZAR ATENDIMENTO
@@ -572,6 +580,18 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
         </>
       ) : null}
 
+      {askReport ? (
+        <ReportShareSheet
+          visitId={visitId}
+          attendance={attendance}
+          brandIds={report?.brandIds}
+          onDone={(sent) => {
+            setAskReport(false);
+            if (sent) go(`visita/${visitId}`, true);
+            else backToStore();
+          }}
+        />
+      ) : null}
       {exceptionOpen ? (
         <ExceptionSheet
           items={excusable.map((m) => m.kind as ExceptionItem)}
@@ -595,6 +615,100 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * "Deseja enviar o relatório preenchido?" ao finalizar a marca: no Sim, o
+ * compartilhar do celular abre com o texto (vencimentos e rupturas) e as fotos do
+ * atendimento — o promotor escolhe o WhatsApp e o contato ou grupo. Celular que
+ * não compartilha arquivos: abre o WhatsApp só com o texto.
+ */
+function ReportShareSheet({ visitId, attendance, brandIds, onDone }: { visitId: string; attendance: LocalAttendance; brandIds: string[] | null | undefined; onDone: (sent: boolean) => void }) {
+  const visit = useVisit(visitId)!;
+  const cat = useCatalog();
+  const local = useLocal();
+  const store = cat.storeById.get(visit.storeId);
+  const brand = cat.brandById.get(attendance.brandId);
+  const [files, setFiles] = useState<File[] | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const text = visitReportText(visit, {
+    agency: local.bootstrap?.agency.name ?? "",
+    promoter: local.bootstrap?.user.name ?? "",
+    store,
+    brandById: cat.brandById,
+    productById: cat.productById,
+    brandIds,
+    attendanceId: attendance.id,
+  });
+  // Prepara as fotos antes do toque (o compartilhar precisa sair no mesmo toque).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { attendancePhotoFiles } = await import("../_lib/photo-stamp");
+      const f = await attendancePhotoFiles(attendance.photos, {
+        store: store?.name ?? "",
+        city: [store?.city, store?.state].filter(Boolean).join(" - "),
+        promoter: local.bootstrap?.user.name ?? "",
+      }).catch(() => []);
+      if (!cancelled) setFiles(f);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- uma vez ao abrir
+  }, []);
+
+  async function send() {
+    setMsg(null);
+    // Texto também na área de transferência (alguns WhatsApp ignoram o texto quando vão fotos).
+    navigator.clipboard?.writeText(text).then(
+      () => undefined,
+      () => undefined,
+    );
+    const all = files ?? [];
+    try {
+      if (all.length && navigator.canShare?.({ files: all, text })) {
+        await navigator.share({ files: all, text, title: "Relatório do atendimento" });
+        onDone(true);
+        return;
+      }
+      if (all.length && navigator.canShare?.({ files: all })) {
+        await navigator.share({ files: all, title: "Relatório do atendimento" });
+        setMsg("Fotos enviadas. O texto foi copiado: cole na conversa do WhatsApp.");
+        return;
+      }
+      window.open(whatsappLink(text, null), "_blank");
+      onDone(true);
+    } catch (e) {
+      const n = (e as Error)?.name;
+      if (n === "NotAllowedError") setMsg("O celular bloqueou a janela de compartilhar. Toque de novo.");
+      else if (n !== "AbortError") setMsg("Não foi possível compartilhar agora. Tente de novo.");
+    }
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={() => onDone(false)}
+      title="Deseja enviar o relatório preenchido?"
+      footer={
+        <div className="flex gap-2">
+          <Button size="xl" variant="secondary" className="flex-1" onClick={() => onDone(false)}>
+            Não
+          </Button>
+          <Button size="xl" className="flex-[2]" disabled={files === null} onClick={() => void send()}>
+            <Send className="size-5" /> {files === null ? "Preparando fotos…" : "Sim, enviar"}
+          </Button>
+        </div>
+      }
+    >
+      <p className="text-[14px] text-ink-2">
+        Vai pelo WhatsApp (você escolhe o contato ou grupo): os produtos de {brand?.name ?? "da marca"} próximos ao vencimento (data, quantidade e valor), os produtos em ruptura
+        {files?.length ? ` e ${files.length} foto(s) do atendimento` : ""}.
+      </p>
+      {msg ? <p className="mt-2 text-[13px] font-medium text-warn">{msg}</p> : null}
+    </Sheet>
   );
 }
 

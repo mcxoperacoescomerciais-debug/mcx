@@ -70,6 +70,15 @@ describe("relatório da visita no WhatsApp", () => {
     assert.deepEqual(mergeSettings({ visitReport: { enabled: true, brandIds: ["b1"] } }).visitReport.brandIds, ["b1"]);
   });
 
+  test("ao finalizar a marca, leva só aquele atendimento", () => {
+    const v = visitWith({});
+    (v.attendances as Record<string, unknown>).a2 = { ...(v.attendances.a1 as object), id: "a2", brandId: "b2" };
+    const text = visitReportText(v, { agency: "AF", promoter: "Lucas", store, brandById: new Map([["b1", brand], ["b2", { id: "b2", name: "Outra Marca" } as BootstrapBrand]]), productById: products, attendanceId: "a2" });
+    assert.match(text, /Relatório do atendimento – AF/);
+    assert.match(text, /Outra Marca/);
+    assert.doesNotMatch(text, /Bravo Café/);
+  });
+
   test("com número abre a conversa; sem número o promotor escolhe o contato", () => {
     assert.ok(whatsappLink("oi", "(31) 99999-8888").startsWith("https://wa.me/31999998888?text="));
     assert.ok(whatsappLink("oi", "").startsWith("https://wa.me/?text="));
