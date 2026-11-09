@@ -205,7 +205,8 @@ export function LiveMap({ stores }: { stores: MapStore[] }) {
       {data?.events.length ? (
         <section className="mt-4 bg-surface border border-line rounded-[var(--radius-card)]">
           <h2 className="px-4 pt-3 pb-2 text-[15px] font-semibold">Acontecendo hoje</h2>
-          <ul className="px-4 pb-3 grid sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1.5 max-h-56 overflow-y-auto" data-export-live data-export-list data-export-title="Acontecendo hoje" data-export-columns="Hora|Promotor|O que aconteceu">
+          {/* Uma coluna só, do mais recente para o mais antigo (em grade a ordem ficava lado a lado e parecia embaralhada). */}
+          <ul className="px-4 pb-3 flex flex-col gap-y-1.5 max-h-72 overflow-y-auto" data-export-live data-export-list data-export-title="Acontecendo hoje" data-export-columns="Hora|Promotor|O que aconteceu">
             {data.events.slice(0, 30).map((e) => {
               const Icon = EVENT_ICON[e.kind];
               return (
