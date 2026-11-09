@@ -57,6 +57,19 @@ describe("relatório da visita no WhatsApp", () => {
     assert.match(text, /Nenhum produto em ruptura/);
   });
 
+  test("só entram as marcas marcadas em Configurações (null = todas)", async () => {
+    const { reportAttendances } = await import("../src/app/app/_lib/visit-report");
+    const v = visitWith({});
+    assert.equal(reportAttendances(v, null).length, 1);
+    assert.equal(reportAttendances(v, ["b1"]).length, 1);
+    assert.equal(reportAttendances(v, ["outra"]).length, 0);
+    const text = visitReportText(v, { agency: "AF", promoter: "Lucas", store, brandById: new Map([["b1", brand]]), productById: products, brandIds: [] });
+    assert.doesNotMatch(text, /Bravo Café/);
+    const { mergeSettings } = await import("../src/lib/settings");
+    assert.equal(mergeSettings({ visitReport: { enabled: true, phone: "" } }).visitReport.brandIds, null);
+    assert.deepEqual(mergeSettings({ visitReport: { enabled: true, brandIds: ["b1"] } }).visitReport.brandIds, ["b1"]);
+  });
+
   test("com número abre a conversa; sem número o promotor escolhe o contato", () => {
     assert.ok(whatsappLink("oi", "(31) 99999-8888").startsWith("https://wa.me/31999998888?text="));
     assert.ok(whatsappLink("oi", "").startsWith("https://wa.me/?text="));

@@ -16,7 +16,7 @@
  *   foi salva (modo consulta). As cópias são apagadas ao sair da conta ou
  *   trocar de agência, e a cada nova versão do sistema.
  */
-const VERSION = "campo-v16";
+const VERSION = "campo-v17";
 const SHELL_CACHE = `shell-${VERSION}`;
 const STATIC_CACHE = `static-${VERSION}`;
 const MEDIA_CACHE = "media-v1";

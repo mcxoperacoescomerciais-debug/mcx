@@ -13,6 +13,7 @@ import { fmtDate } from "@/lib/dates";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema as s } from "@/server/db";
 import { GALLERY_POLICY_LABEL, type GalleryPolicy } from "@/lib/settings";
+import { BrandChecklist } from "./brand-checklist";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -21,14 +22,16 @@ export default async function SettingsPage() {
   const scope = await getScope();
   const st = scope.settings;
   const db = await getDb();
-  const [log, promoters] = await Promise.all([
+  const [log, promoters, agencyBrands] = await Promise.all([
     alertLog(scope, 30),
     db
       .select({ id: s.users.id, name: s.users.name, username: s.users.username, galleryAllowed: s.users.galleryAllowed })
       .from(s.users)
       .where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active")))
       .orderBy(asc(s.users.name)),
+    db.select({ id: s.brands.id, name: s.brands.name }).from(s.brands).where(and(eq(s.brands.agencyId, scope.agencyId), eq(s.brands.status, "active"))).orderBy(asc(s.brands.name)),
   ]);
+  const reportBrands = st.visitReport.brandIds;
   const demo = await operationDemoStatus(scope);
   const near = Math.max(st.validityBands.critical, st.alerts.nearDays);
   return (
@@ -200,9 +203,11 @@ export default async function SettingsPage() {
                 <span className="block text-[12px] text-muted">Vale só para esta agência. Funciona sem internet: o WhatsApp envia quando houver sinal.</span>
               </span>
             </label>
-            <Row label="WhatsApp que recebe (com DDD; vazio = o promotor escolhe o contato ou grupo)">
-              <input name="visitReport_phone" defaultValue={st.visitReport.phone} placeholder="31 99999-8888" className={inputClass} />
-            </Row>
+            <div>
+              <p className="text-[12.5px] font-semibold text-ink-2 mb-1.5">Marcas que entram no relatório</p>
+              <BrandChecklist brands={agencyBrands} selected={reportBrands ?? agencyBrands.map((b) => b.id)} />
+              <p className="text-[12px] text-muted mt-1.5">Marca nova cadastrada aparece aqui desmarcada. Visita sem nenhuma marca marcada não pergunta. No Sim, o WhatsApp abre para escolher o contato ou grupo.</p>
+            </div>
           </SectionCard>
           <SectionCard title="Prioridade das pendências" subtitle="1 = mais urgente. Define a ordem da Central de pendências." bodyClass="px-5 pb-5">
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2">

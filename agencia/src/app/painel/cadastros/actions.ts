@@ -147,7 +147,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         // Editados na tela Sistemática.
         holidays: scope.settings.holidays,
         visitValue: scope.settings.visitValue,
-        visitReport: { enabled: fd.get("visitReport_enabled") === "on", phone: normalizePhones(str(fd, "visitReport_phone")).split(",")[0] ?? "" },
+        visitReport: { enabled: fd.get("visitReport_enabled") === "on", phone: "", brandIds: fd.getAll("visitReport_brand").map(String).filter(Boolean) },
         lateToleranceMin: Number(str(fd, "lateToleranceMin")),
         dayEndsAt: str(fd, "dayEndsAt"),
         stockDivergencePct: Number(str(fd, "stockDivergencePct")),

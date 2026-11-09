@@ -76,7 +76,13 @@ export interface AgencySettings {
   /** Valor pago por visita válida (relatório mensal e sistemática); null = não informado. */
   visitValue: number | null;
   /** Ao encerrar a visita, o app pergunta se o promotor quer enviar o relatório (vencimentos e rupturas) no WhatsApp. phone vazio = o promotor escolhe o contato. */
-  visitReport: { enabled: boolean; phone: string };
+  visitReport: {
+    enabled: boolean;
+    /** Legado (não usado): o WhatsApp abre para o promotor escolher o contato ou grupo. */
+    phone: string;
+    /** Marcas que entram no relatório; null = todas (antes de escolher). Marca nova entra desmarcada. */
+    brandIds: string[] | null;
+  };
 }
 
 export interface AgencyModules {
@@ -136,7 +142,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   overviewStyle: "standard",
   holidays: [],
   visitValue: null,
-  visitReport: { enabled: false, phone: "" },
+  visitReport: { enabled: false, phone: "", brandIds: null },
 };
 
 export function mergeSettings(raw: unknown): AgencySettings {
@@ -150,7 +156,11 @@ export function mergeSettings(raw: unknown): AgencySettings {
     modules: { tastings: bool(r.modules?.tastings, true), finance: bool(r.modules?.finance, true), sistematica: bool(r.modules?.sistematica, false) },
     holidays: Array.isArray(r.holidays) ? [...new Set(r.holidays.filter((d): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort().slice(-200) : [],
     visitValue: money(r.visitValue),
-    visitReport: { enabled: bool(r.visitReport?.enabled, false), phone: typeof r.visitReport?.phone === "string" ? r.visitReport.phone : "" },
+    visitReport: {
+      enabled: bool(r.visitReport?.enabled, false),
+      phone: typeof r.visitReport?.phone === "string" ? r.visitReport.phone : "",
+      brandIds: Array.isArray(r.visitReport?.brandIds) ? (r.visitReport.brandIds as unknown[]).filter((x): x is string => typeof x === "string") : null,
+    },
     overviewStyle: r.overviewStyle === "executive" ? "executive" : "standard",
     checkinRadiusM: num(r.checkinRadiusM, DEFAULT_SETTINGS.checkinRadiusM, 50, 5000),
     galleryPolicy: r.galleryPolicy === "none" || r.galleryPolicy === "authorized" ? r.galleryPolicy : DEFAULT_SETTINGS.galleryPolicy,

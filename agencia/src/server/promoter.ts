@@ -210,7 +210,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
       allowExceptions: scope.settings.allowExceptions,
       validityBands: scope.settings.validityBands,
       support: supportContact(scope.settings),
-      visitReport: scope.settings.visitReport.enabled ? { phone: scope.settings.visitReport.phone } : null,
+      visitReport: scope.settings.visitReport.enabled ? { phone: "", brandIds: scope.settings.visitReport.brandIds } : null,
     },
     today,
     brands: brandRows

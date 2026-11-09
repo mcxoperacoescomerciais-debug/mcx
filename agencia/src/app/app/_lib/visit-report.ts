@@ -15,7 +15,7 @@ const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", curren
 
 export function visitReportText(
   visit: LocalVisit,
-  ctx: { agency: string; promoter: string; store: BootstrapStore | undefined; brandById: Map<string, BootstrapBrand>; productById: Map<string, BootstrapProduct> },
+  ctx: { agency: string; promoter: string; store: BootstrapStore | undefined; brandById: Map<string, BootstrapBrand>; productById: Map<string, BootstrapProduct>; brandIds?: string[] | null },
 ): string {
   const product = (id: string) => ctx.productById.get(id)?.name ?? "Produto";
   const lines = [
@@ -24,7 +24,7 @@ export function visitReportText(
     `*Promotor:* ${ctx.promoter}`,
     `*Data:* ${fmtDate(visit.visitDate)}`,
   ];
-  const atts = Object.values(visit.attendances).filter((a) => a.status !== "cancelled");
+  const atts = reportAttendances(visit, ctx.brandIds);
   for (const a of atts) {
     const validities = Object.values(a.validities ?? {}).sort((x, y) => x.expiryDate.localeCompare(y.expiryDate));
     const ruptures = Object.values(a.ruptures);
@@ -45,6 +45,11 @@ export function visitReportText(
   if (!atts.length) lines.push("", "Nenhuma marca atendida nesta visita.");
   if (visit.notes) lines.push("", `📝 ${visit.notes}`);
   return lines.join("\n");
+}
+
+/** Atendimentos que entram no relatório (marcas escolhidas em Configurações; null = todas). */
+export function reportAttendances(visit: LocalVisit, brandIds: string[] | null | undefined) {
+  return Object.values(visit.attendances).filter((a) => a.status !== "cancelled" && (!brandIds || brandIds.includes(a.brandId)));
 }
 
 /** Link do WhatsApp: com número, abre a conversa dele; sem número, o promotor escolhe o contato. */
