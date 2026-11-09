@@ -7,12 +7,12 @@
  * outro dia muda o roteiro do promotor; tocar na loja mostra as marcas e as vezes.
  */
 import { useMemo, useState, useTransition } from "react";
-import { CalendarDays, GripVertical, Loader2, MapPin, Pencil, Plus, Search, Store, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, CalendarDays, GripVertical, Loader2, MapPin, Pencil, Plus, Search, Store, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import { buttonClass, inputClass, selectClass } from "@/components/ui";
 import { frequencyLabel, weekdaysLabel, type TargetPeriod } from "@/lib/portfolio";
 import { matchesQuery } from "@/lib/rules";
-import { moveStoreDayAction, saveAssignmentAction } from "../../actions";
+import { moveStoreDayAction, saveAssignmentAction, transferAssignmentAction } from "../../actions";
 
 export interface StoreOption {
   id: string;
@@ -45,7 +45,7 @@ const DAYS = [
 const COLUMNS = [...DAYS, { d: -1, label: "Sem dia fixo" }];
 const DRAG_TYPE = "application/x-mcx-loja";
 
-export function PromoterAssignments({ promoterId, stores, assignments, allBrands }: { promoterId: string; stores: StoreOption[]; assignments: StoreAssignment[]; allBrands: { id: string; name: string }[] }) {
+export function PromoterAssignments({ promoterId, promoters, stores, assignments, allBrands }: { promoterId: string; promoters: { id: string; name: string }[]; stores: StoreOption[]; assignments: StoreAssignment[]; allBrands: { id: string; name: string }[] }) {
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("");
   const [editing, setEditing] = useState<{ store: StoreOption; presetDay: number | null } | null>(null);
@@ -53,6 +53,8 @@ export function PromoterAssignments({ promoterId, stores, assignments, allBrands
   const [peek, setPeek] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [transfer, setTransfer] = useState<{ store: StoreOption; assignment: StoreAssignment } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [moving, startMove] = useTransition();
   const byId = useMemo(() => new Map(stores.map((s) => [s.id, s])), [stores]);
   const assigned = useMemo(() => new Map(assignments.map((a) => [a.storeId, a])), [assignments]);
@@ -111,6 +113,7 @@ export function PromoterAssignments({ promoterId, stores, assignments, allBrands
         </div>
         <p className="text-[12px] text-muted mb-2">Arraste a loja para outro dia para mudar o roteiro. No celular, toque na loja e use “Mover para”.</p>
         {moveError ? <p className="text-[13px] text-bad font-medium mb-2">{moveError}</p> : null}
+        {notice ? <p className="text-[13px] text-ok font-medium mb-2">{notice}</p> : null}
         <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2">
           {COLUMNS.map((col) => {
             const items = assignments
@@ -201,6 +204,11 @@ export function PromoterAssignments({ promoterId, stores, assignments, allBrands
                                 <button type="button" onClick={() => setEditing({ store: st, presetDay: col.d === -1 ? null : col.d })} className="text-[11px] font-semibold text-brand-700 inline-flex items-center gap-1">
                                   <Plus className="size-3" /> Adicionar marcas
                                 </button>
+                                {promoters.length ? (
+                                  <button type="button" onClick={() => setTransfer({ store: st, assignment: a })} className="text-[11px] font-semibold text-brand-700 inline-flex items-center gap-1">
+                                    <ArrowRightLeft className="size-3" /> Transferir
+                                  </button>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>
@@ -224,6 +232,19 @@ export function PromoterAssignments({ promoterId, stores, assignments, allBrands
           onPick={(s) => {
             setEditing({ store: s, presetDay: picking === null || picking === -1 ? null : picking });
             setPicking(undefined);
+          }}
+        />
+      ) : null}
+      {transfer ? (
+        <TransferDialog
+          promoterId={promoterId}
+          promoters={promoters}
+          store={transfer.store}
+          assignment={transfer.assignment}
+          onClose={(msg) => {
+            setTransfer(null);
+            setPeek(null);
+            if (msg) setNotice(msg);
           }}
         />
       ) : null}
@@ -322,6 +343,104 @@ interface Draft {
 }
 
 /** Passo 2 e 3: marcas da loja → dias e vezes de cada marca (e marcas novas para a loja). */
+/** Passa marcas desta loja para outro promotor (as não marcadas ficam com este). */
+function TransferDialog({
+  promoterId,
+  promoters,
+  store,
+  assignment,
+  onClose,
+}: {
+  promoterId: string;
+  promoters: { id: string; name: string }[];
+  store: StoreOption;
+  assignment: StoreAssignment;
+  onClose: (message?: string) => void;
+}) {
+  const [picked, setPicked] = useState<string[]>(assignment.brands.length === 1 ? [assignment.brands[0].brandId] : []);
+  const [to, setTo] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const all = picked.length === assignment.brands.length;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4" role="dialog" aria-modal="true">
+      <div className="bg-surface rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl">
+        <header className="flex items-start gap-3 px-5 py-4 border-b border-line">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11.5px] uppercase tracking-wide font-semibold text-muted">Transferir para outro promotor</p>
+            <h2 className="text-[17px] font-semibold leading-snug">{store.name}</h2>
+            <p className="text-[12.5px] text-muted">{[store.chain, store.city, store.code].filter(Boolean).join(" · ")}</p>
+          </div>
+          <button type="button" onClick={() => onClose()} aria-label="Fechar" className="size-9 grid place-items-center rounded-lg hover:bg-subtle">
+            <X className="size-5" />
+          </button>
+        </header>
+        <div className="overflow-y-auto px-5 py-4 space-y-4">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-[12.5px] font-semibold text-ink-2">Quais marcas passam para o outro promotor?</p>
+              <button type="button" onClick={() => setPicked(all ? [] : assignment.brands.map((b) => b.brandId))} className="text-[12px] font-semibold text-brand-700 hover:underline">
+                {all ? "Desmarcar todas" : "Marcar todas"}
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {assignment.brands.map((b) => (
+                <label key={b.brandId} className={clsx("flex items-start gap-2.5 rounded-lg border px-3 py-2 cursor-pointer", picked.includes(b.brandId) ? "border-brand-600 bg-brand-50/40" : "border-line")}>
+                  <input type="checkbox" checked={picked.includes(b.brandId)} onChange={() => toggle(b.brandId)} className="size-4 mt-0.5" />
+                  <span className="text-[13.5px]">
+                    <strong>{b.brandName}</strong>
+                    <span className="block text-[12px] text-muted">
+                      {frequencyLabel(b.perWeek, b.period)} · {weekdaysLabel(b.weekdays)}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[12px] text-muted mt-1.5">As marcas não marcadas continuam com este promotor. Dias e vezes vão iguais; dá para ajustar depois no cadastro do outro promotor.</p>
+          </div>
+          <label className="block text-[12.5px] font-semibold text-ink-2">
+            Para qual promotor?
+            <select value={to} onChange={(e) => setTo(e.target.value)} className={selectClass + " mt-1"}>
+              <option value="">Escolha o promotor…</option>
+              {promoters.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <footer className="px-5 py-4 border-t border-line space-y-2">
+          {error ? <p className="text-[13px] text-bad font-medium">{error}</p> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={pending || !picked.length || !to}
+              onClick={() => {
+                setError(null);
+                start(async () => {
+                  const r = await transferAssignmentAction(promoterId, store.id, picked, to);
+                  if (r.ok) onClose(r.message);
+                  else setError(r.error);
+                });
+              }}
+              className={buttonClass("primary")}
+            >
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <ArrowRightLeft className="size-4" />}
+              Transferir {picked.length ? `(${picked.length} marca${picked.length > 1 ? "s" : ""})` : ""}
+            </button>
+            <button type="button" onClick={() => onClose()} className={buttonClass("secondary")}>
+              Cancelar
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function AssignmentDialog({
   promoterId,
   store,

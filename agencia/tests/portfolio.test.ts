@@ -210,4 +210,26 @@ describe("carteira com meta semanal", () => {
     const back = await promoter.buildBootstrap(await scopeOf("lucas"));
     assert.ok(back.schedules.some((x) => x.date === today && x.storeId === store.id), "voltou ao Hoje");
   });
+  test("transferir uma marca da loja para outro promotor: a outra marca fica com quem já atende", async () => {
+    const admin = await scopeOf("admin");
+    const [lucas] = await db.select().from(s.users).where(eq(s.users.username, "lucas"));
+    const [joao] = await db.select().from(s.users).where(eq(s.users.username, "joao"));
+    const boot0 = await promoter.buildBootstrap(await scopeOf("lucas"));
+    const store = boot0.stores.find((x) => x.brandIds.length >= 2)!;
+    const [b1, b2] = store.brandIds;
+    assert.ok((await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: b1, perWeek: 1, weekdays: [2] }, { brandId: b2, perWeek: 2, period: "week", weekdays: [] }])).ok);
+    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id)).ok, false, "mesmo promotor");
+    const r = await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], joao.id);
+    assert.ok(r.ok, JSON.stringify(r));
+    const mine = (await portfolio.listAssignments(admin, lucas.id)).find((x) => x.storeId === store.id)!;
+    assert.deepEqual(mine.brands.map((b) => b.brandId), [b2], "a outra marca continua com o Lucas");
+    const his = (await portfolio.listAssignments(admin, joao.id)).find((x) => x.storeId === store.id)!;
+    const moved = his.brands.find((b) => b.brandId === b1)!;
+    assert.deepEqual([moved.perWeek, moved.weekdays], [1, [2]], "vai com os mesmos dias e vezes");
+    // Transferir a última marca tira a loja do Lucas.
+    assert.ok((await portfolio.transferAssignment(admin, lucas.id, store.id, [b2], joao.id)).ok);
+    assert.equal((await portfolio.listAssignments(admin, lucas.id)).some((x) => x.storeId === store.id), false);
+    const us = await db.select().from(s.userStores).where(eq(s.userStores.userId, lucas.id));
+    assert.equal(us.some((x) => x.storeId === store.id), false);
+  });
 });

@@ -359,6 +359,41 @@ export async function moveStoreDay(scope: Scope, promoterId: string, storeId: st
   return { ok: true, message: "Loja movida de dia." };
 }
 
+/**
+ * Quadro do promotor › "Transferir": passa marcas de uma loja para outro
+ * promotor com os mesmos dias e vezes (as outras marcas da loja ficam com
+ * quem já atende). Se o outro já atendia a marca na loja, fica com os dias e
+ * vezes de quem transferiu. A programação dos dois é refeita.
+ */
+export async function transferAssignment(scope: Scope, fromPromoterId: string, storeId: string, brandIds: string[], toPromoterId: string): Promise<ActionResult> {
+  if (!canManage(scope)) return fail("Sem permissão.");
+  if (fromPromoterId === toPromoterId) return fail("Escolha outro promotor.");
+  if (!brandIds.length) return fail("Marque ao menos uma marca.");
+  const bad = (await checkPromoterStore(scope, fromPromoterId, storeId)) ?? (await checkPromoterStore(scope, toPromoterId, storeId));
+  if (bad) return fail(bad);
+  const db = await getDb();
+  const rows = (await db.select().from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, fromPromoterId), eq(s.visitTargets.storeId, storeId), eq(s.visitTargets.agencyId, scope.agencyId)))).filter((r) => brandIds.includes(r.brandId));
+  if (!rows.length) return fail("Nada para transferir nesta loja.");
+  const [to] = await db.select({ name: s.users.name, status: s.users.status }).from(s.users).where(eq(s.users.id, toPromoterId));
+  if (to?.status !== "active") return fail("O promotor escolhido está inativo.");
+  await db.transaction(async (tx) => {
+    await tx.insert(s.userStores).values({ userId: toPromoterId, storeId }).onConflictDoNothing();
+    for (const r of rows) {
+      await tx.insert(s.userBrands).values({ userId: toPromoterId, brandId: r.brandId }).onConflictDoNothing();
+      await tx
+        .insert(s.visitTargets)
+        .values({ agencyId: scope.agencyId, promoterId: toPromoterId, storeId, brandId: r.brandId, perWeek: r.perWeek, period: r.period, weekdays: r.weekdays, payValue: r.payValue, createdBy: scope.userId, updatedBy: scope.userId })
+        .onConflictDoUpdate({ target: [s.visitTargets.promoterId, s.visitTargets.storeId, s.visitTargets.brandId], set: { perWeek: r.perWeek, period: r.period, weekdays: r.weekdays, payValue: r.payValue, updatedAt: new Date(), updatedBy: scope.userId } });
+    }
+    await tx.delete(s.visitTargets).where(inArray(s.visitTargets.id, rows.map((r) => r.id)));
+    const [left] = await tx.select({ id: s.visitTargets.id }).from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, fromPromoterId), eq(s.visitTargets.storeId, storeId))).limit(1);
+    if (!left) await tx.delete(s.userStores).where(and(eq(s.userStores.userId, fromPromoterId), eq(s.userStores.storeId, storeId)));
+    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", fromPromoterId, "assignment_transferred", { after: { storeId, toPromoterId, brands: rows.map((r) => r.brandId) } }, tx);
+  });
+  await syncPromoterSchedules(scope.agencyId, scope.userId, [fromPromoterId, toPromoterId], storeId);
+  return { ok: true, message: `${rows.length} marca(s) transferida(s) para ${to.name}.` };
+}
+
 export interface AssignmentView {
   storeId: string;
   storeName: string;

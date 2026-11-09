@@ -271,6 +271,16 @@ export async function moveStoreDayAction(promoterId: string, storeId: string, fr
   return r;
 }
 
+export async function transferAssignmentAction(promoterId: string, storeId: string, brandIds: string[], toPromoterId: string) {
+  const { transferAssignment } = await import("@/server/portfolio");
+  const r = await transferAssignment(await getScope(), promoterId, storeId, brandIds, toPromoterId);
+  if (r.ok) {
+    revalidatePath(`/painel/cadastros/usuarios/${promoterId}`);
+    revalidatePath(`/painel/cadastros/usuarios/${toPromoterId}`);
+  }
+  return r;
+}
+
 export async function saveAssignmentAction(promoterId: string, storeId: string, rows: { brandId: string; perWeek: number; period: "week" | "fortnight" | "month"; weekdays: number[] }[]) {
   const { saveStoreAssignment } = await import("@/server/portfolio");
   const r = await saveStoreAssignment(await getScope(), promoterId, storeId, rows);

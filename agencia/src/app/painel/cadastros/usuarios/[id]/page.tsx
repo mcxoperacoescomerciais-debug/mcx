@@ -26,7 +26,7 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
   if (!isNew && !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const [user] = isNew ? [null] : await db.select().from(s.users).where(and(eq(s.users.id, id), eq(s.users.agencyId, scope.agencyId)));
   if (!isNew && !user) notFound();
-  const [brands, stores, managers, ub, us] = await Promise.all([
+  const [brands, stores, managers, ub, us, promoterList] = await Promise.all([
     db.select({ id: s.brands.id, name: s.brands.name, status: s.brands.status }).from(s.brands).where(eq(s.brands.agencyId, scope.agencyId)).orderBy(asc(s.brands.name)),
     db
       .select({ id: s.stores.id, name: s.stores.name, code: s.stores.code, city: s.stores.city, chain: s.chains.name })
@@ -37,6 +37,7 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
     db.select({ id: s.users.id, name: s.users.name }).from(s.users).where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "manager"), eq(s.users.status, "active"))).orderBy(asc(s.users.name)),
     user ? db.select().from(s.userBrands).where(eq(s.userBrands.userId, user.id)) : Promise.resolve([]),
     user ? db.select().from(s.userStores).where(eq(s.userStores.userId, user.id)) : Promise.resolve([]),
+    db.select({ id: s.users.id, name: s.users.name }).from(s.users).where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"))).orderBy(asc(s.users.name)),
   ]);
   const brandIds = ub.map((x) => x.brandId);
   const [storeBrandRows, assignments] = user?.role === "promoter"
@@ -127,7 +128,7 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
           subtitle="Selecione a loja, escolha as marcas que ele atende nela e, para cada marca, os dias e quantas vezes. É isso que gera a programação, a carteira e as metas dele."
           bodyClass="px-5 pb-5"
         >
-          <PromoterAssignments promoterId={user.id} stores={storeOptions} allBrands={activeBrands} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
+          <PromoterAssignments promoterId={user.id} promoters={promoterList.filter((p) => p.id !== user.id)} stores={storeOptions} allBrands={activeBrands} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
         </SectionCard>
       ) : null}
       {user?.role === "promoter" && scope.role === "admin" && scope.brandIds === null ? (
