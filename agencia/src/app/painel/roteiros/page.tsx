@@ -68,8 +68,8 @@ export default async function RoutesPage({ searchParams }: PageProps<"/painel/ro
                       </span>
                     </span>
                     {scope.role === "admin" ? (
-                      <Link href={`/painel/cadastros/usuarios/${p.id}`} className="hidden sm:inline text-[12.5px] font-semibold text-brand-700 hover:underline shrink-0">
-                        Ajustar no cadastro →
+                      <Link href={`/painel/cadastros/rota/${p.id}`} className="hidden sm:inline text-[12.5px] font-semibold text-brand-700 hover:underline shrink-0">
+                        Ajustar na Rota Promotor →
                       </Link>
                     ) : null}
                   </summary>

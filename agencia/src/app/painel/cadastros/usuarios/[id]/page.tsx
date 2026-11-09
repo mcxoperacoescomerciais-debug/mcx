@@ -10,8 +10,6 @@ import { SectionCard } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
 import { CheckList } from "../../../_components/check-list";
 import { saveUserAction } from "../../actions";
-import { listAssignments } from "@/server/portfolio";
-import { PromoterAssignments } from "./promoter-assignments";
 import { RolePicker } from "./role-picker";
 import { PromoterCostForm } from "./promoter-cost-form";
 
@@ -26,28 +24,13 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
   if (!isNew && !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const [user] = isNew ? [null] : await db.select().from(s.users).where(and(eq(s.users.id, id), eq(s.users.agencyId, scope.agencyId)));
   if (!isNew && !user) notFound();
-  const [brands, stores, managers, ub, us, promoterList] = await Promise.all([
+  const [brands, managers, ub, us] = await Promise.all([
     db.select({ id: s.brands.id, name: s.brands.name, status: s.brands.status }).from(s.brands).where(eq(s.brands.agencyId, scope.agencyId)).orderBy(asc(s.brands.name)),
-    db
-      .select({ id: s.stores.id, name: s.stores.name, code: s.stores.code, city: s.stores.city, chain: s.chains.name })
-      .from(s.stores)
-      .leftJoin(s.chains, eq(s.chains.id, s.stores.chainId))
-      .where(and(eq(s.stores.agencyId, scope.agencyId), eq(s.stores.status, "active")))
-      .orderBy(asc(s.stores.name)),
     db.select({ id: s.users.id, name: s.users.name }).from(s.users).where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "manager"), eq(s.users.status, "active"))).orderBy(asc(s.users.name)),
     user ? db.select().from(s.userBrands).where(eq(s.userBrands.userId, user.id)) : Promise.resolve([]),
     user ? db.select().from(s.userStores).where(eq(s.userStores.userId, user.id)) : Promise.resolve([]),
-    db.select({ id: s.users.id, name: s.users.name }).from(s.users).where(and(eq(s.users.agencyId, scope.agencyId), eq(s.users.role, "promoter"), eq(s.users.status, "active"))).orderBy(asc(s.users.name)),
   ]);
   const brandIds = ub.map((x) => x.brandId);
-  const [storeBrandRows, assignments] = user?.role === "promoter"
-    ? await Promise.all([
-        db.select({ storeId: s.storeBrands.storeId, brandId: s.brands.id, brandName: s.brands.name }).from(s.storeBrands).innerJoin(s.brands, and(eq(s.brands.id, s.storeBrands.brandId), eq(s.brands.status, "active"))).where(eq(s.brands.agencyId, scope.agencyId)),
-        listAssignments(scope, user.id),
-      ])
-    : [[], []];
-  const activeBrands = brands.filter((b) => b.status === "active").map((b) => ({ id: b.id, name: b.name }));
-  const storeOptions = stores.map((st) => ({ id: st.id, name: st.name, code: st.code, chain: st.chain, city: st.city, brands: storeBrandRows.filter((r) => r.storeId === st.id).map((r) => ({ id: r.brandId, name: r.brandName })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")) }));
 
   return (
     <>
@@ -122,13 +105,10 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
         </ActionForm>
       </SectionCard>
       {user?.role === "promoter" ? (
-        <SectionCard
-          className="mt-6"
-          title="Lojas, marcas, dias e vezes"
-          subtitle="Selecione a loja, escolha as marcas que ele atende nela e, para cada marca, os dias e quantas vezes. É isso que gera a programação, a carteira e as metas dele."
-          bodyClass="px-5 pb-5"
-        >
-          <PromoterAssignments promoterId={user.id} promoters={promoterList.filter((p) => p.id !== user.id)} stores={storeOptions} allBrands={activeBrands} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
+        <SectionCard className="mt-6" title="Rota do promotor" subtitle="Lojas, marcas, dias e vezes (rota fixa) e visitas de um dia só (rota avulsa) ficam em Cadastros e configurações › Rota Promotor." bodyClass="px-5 pb-5">
+          <Link href={`/painel/cadastros/rota/${user.id}`} className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-800 text-white text-[13.5px] font-semibold hover:bg-brand-900">
+            Abrir a Rota Promotor de {user.name} →
+          </Link>
         </SectionCard>
       ) : null}
       {user?.role === "promoter" && scope.role === "admin" && scope.brandIds === null ? (

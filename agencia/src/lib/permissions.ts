@@ -35,7 +35,7 @@ export const PANELS: Panel[] = [
   { key: "cad_marcas", label: "Marcas", group: "Cadastros", paths: ["/painel/cadastros/marcas"], adminOnly: true },
   { key: "cad_lojas", label: "Redes e lojas", group: "Cadastros", paths: ["/painel/cadastros/lojas"], adminOnly: true },
   { key: "cad_produtos", label: "Produtos", group: "Cadastros", paths: ["/painel/cadastros/produtos"], adminOnly: true },
-  { key: "usuarios", label: "Usuários e perfis", group: "Cadastros", paths: ["/painel/cadastros/usuarios"], adminOnly: true },
+  { key: "usuarios", label: "Usuários, perfis e Rota Promotor", group: "Cadastros", paths: ["/painel/cadastros/usuarios", "/painel/cadastros/rota"], adminOnly: true },
   { key: "importar", label: "Importar planilha", group: "Cadastros", paths: ["/painel/cadastros/importar"], adminOnly: true },
   { key: "configuracoes", label: "Configurações", group: "Administração", paths: ["/painel/configuracoes"], adminOnly: true },
   { key: "auditoria", label: "Auditoria", group: "Administração", paths: ["/painel/auditoria"], adminOnly: true },

@@ -158,11 +158,11 @@ export default async function TargetsPage({ searchParams }: PageProps<"/painel/m
             </SectionCard>
           ))}
           {idle.length && !f.brand && !f.store && !f.city ? (
-            <SectionCard title={`Sem atribuição nem loja programada nesta semana (${idle.length})`} subtitle="Faça as atribuições no cadastro de cada promotor" bodyClass="px-5 pb-4">
+            <SectionCard title={`Sem atribuição nem loja programada nesta semana (${idle.length})`} subtitle="Faça as atribuições na Rota Promotor de cada um" bodyClass="px-5 pb-4">
               <ul className="flex flex-wrap gap-2">
                 {idle.map((u) => (
                   <li key={u.id}>
-                    <Link href={`/painel/cadastros/usuarios/${u.id}`} target="_blank" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line-strong text-[13px] font-medium hover:bg-subtle">
+                    <Link href={`/painel/cadastros/rota/${u.id}`} target="_blank" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line-strong text-[13px] font-medium hover:bg-subtle">
                       {u.name}
                       {modeOf.get(u.id) ? <span className="text-muted text-[11.5px]">· {MODE[modeOf.get(u.id)!]}</span> : null}
                     </Link>

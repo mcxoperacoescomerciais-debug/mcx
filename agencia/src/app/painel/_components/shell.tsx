@@ -42,6 +42,7 @@ import {
   X,
   type LucideIcon,
   RefreshCw,
+  MapPinned,
 } from "lucide-react";
 import clsx from "clsx";
 import { BrandMark, McxFooter } from "@/components/ui";
@@ -82,6 +83,7 @@ const SETTINGS: NavItem[] = [
   { href: "/painel/cadastros/produtos", label: "Produtos", icon: Boxes, roles: ["admin"] },
   { href: "/painel/cadastros/parceiros", label: "Parceiros", icon: Handshake, roles: ["admin"] },
   { href: "/painel/cadastros/usuarios", label: "Usuários", icon: Users, roles: ["admin"] },
+  { href: "/painel/cadastros/rota", label: "Rota Promotor", icon: MapPinned, roles: ["admin"] },
   { href: "/painel/cadastros/importar", label: "Importar planilha", icon: Upload, roles: ["admin"] },
   { href: "/painel/relatorios", label: "Exportações", icon: FileText },
   { href: "/painel/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },

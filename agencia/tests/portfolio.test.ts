@@ -253,4 +253,44 @@ describe("carteira com meta semanal", () => {
     assert.ok((await portfolio.transferAssignment(admin, lucas.id, store.id, [b2], joao.id, { date: thursday, mode: "fixed" })).ok);
     assert.equal((await portfolio.listAssignments(admin, lucas.id)).some((x) => x.storeId === store.id), false);
   });
+  test("avulsa transferida: aparece na carteira de quem fez e cumpre a meta de quem atende a loja × marca", async () => {
+    const admin = await scopeOf("admin");
+    const [lucas] = await db.select().from(s.users).where(eq(s.users.username, "lucas"));
+    const [patricia] = await db.select().from(s.users).where(eq(s.users.username, "patricia"));
+    const today = todayIso();
+    const wd = new Date(`${today}T12:00:00Z`).getUTCDay();
+    // Loja da agência sem programação hoje para nenhum dos dois.
+    const busy = new Set((await db.select().from(s.schedules)).filter((x) => x.date === today && x.status === "active" && (x.promoterId === lucas.id || x.promoterId === patricia.id)).map((x) => x.storeId));
+    const sbs = await db.select({ storeId: s.storeBrands.storeId, brandId: s.storeBrands.brandId, agencyId: s.stores.agencyId }).from(s.storeBrands).innerJoin(s.stores, eq(s.stores.id, s.storeBrands.storeId));
+    const pick = sbs.find((x) => x.agencyId === lucas.agencyId && !busy.has(x.storeId))!;
+    assert.ok(pick, "loja livre");
+    const store = { id: pick.storeId };
+    const b1 = pick.brandId;
+    assert.ok((await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: b1, perWeek: 1, weekdays: [wd] }])).ok);
+    const r = await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], patricia.id, { date: today, mode: "once" });
+    assert.ok(r.ok, JSON.stringify(r));
+    const pat = await scopeOf("patricia");
+    const pboot = await promoter.buildBootstrap(pat);
+    const sch = pboot.schedules.find((x) => x.date === today && x.storeId === store.id)!;
+    assert.ok(sch, "a avulsa está no Hoje da Patrícia");
+    const now = new Date().toISOString();
+    const products = pboot.products.filter((p) => p.brandId === b1);
+    const att: AttendanceInput = {
+      id: randomUUID(), brandId: b1, status: "completed", startedAt: now, finishedAt: now, activitiesDone: [], answers: [], notes: null,
+      exceptionItems: [], exceptionReason: null, exceptionNote: null, cancelReason: null, photos: [photo("before"), photo("after")], deletedPhotoIds: [],
+      stock: products.map((p) => ({ productId: p.id, state: "quantity" as const, quantity: 4, unit: "un" as const, note: null, recordedAt: now })), clearedStockProductIds: [],
+      unregistered: [], deletedUnregisteredIds: [], ruptures: [], deletedRuptureIds: [], validities: [], deletedValidityIds: [], damages: [], deletedDamageIds: [], occurrences: [], deletedOccurrenceIds: [],
+    };
+    const [res] = await promoter.applySync(pat, [visit(store.id, [att], { scheduleId: sch.id, origin: "scheduled" })]);
+    assert.ok(res.ok, JSON.stringify(res));
+    const week = await portfolio.portfolioWeek(admin, { date: today, promoter: null, brand: null, store: null, city: null });
+    const rows = week.promoters.flatMap((p) => p.rows).filter((x) => x.storeId === store.id && x.brandId === b1);
+    assert.equal(rows.find((x) => x.promoterId === patricia.id)?.done, 1, "cumprimento na Patrícia");
+    assert.equal(rows.find((x) => x.promoterId === lucas.id)?.done, 1, "meta do Lucas não fica atrasada");
+    // Relatório mensal (sistemática da indústria): a visita do dia é prevista e realizada pela Patrícia.
+    const mr = await import("../src/server/monthly-report");
+    const rep = (await mr.monthlyReport(admin, { brandId: b1, month: today.slice(0, 7), chain: null, promoter: null }))!;
+    const day = rep.weeks.flatMap((w) => w.rows).filter((x) => x.store.id === store.id && x.agenda === `${today.slice(8, 10)}/${today.slice(5, 7)}/${today.slice(2, 4)}`);
+    assert.deepEqual(day.filter((x) => x.promoter === patricia.name || x.promoter === lucas.name).map((x) => [x.promoter, x.status]), [[patricia.name, "Realizada"]], "prevista e realizada na Patrícia; nada previsto para o Lucas");
+  });
 });

@@ -155,9 +155,30 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
     : [];
   const key = (x: { promoterId: string; storeId: string; brandId: string }) => `${x.promoterId}:${x.storeId}:${x.brandId}`;
   const lastBy = new Map(last.map((d) => [key(d), d.d]));
+  // Visita avulsa transferida: feita por outro promotor, conta na meta de quem atende a loja × marca.
+  const handedOff = targets.length
+    ? await db
+        .select({ promoterId: s.visits.promoterId, storeId: s.visits.storeId, brandId: s.attendances.brandId, date: sql<string>`${s.visits.visitDate}::text` })
+        .from(s.attendances)
+        .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
+        .innerJoin(s.schedules, eq(s.schedules.id, s.visits.scheduleId))
+        .where(
+          and(
+            eq(s.visits.agencyId, scope.agencyId),
+            inArray(s.visits.storeId, [...new Set(targets.map((x) => x.storeId))]),
+            gte(s.visits.visitDate, minFrom),
+            lte(s.visits.visitDate, maxTo),
+            inArray(s.attendances.status, ["completed", "correction_requested"]),
+            sql`${s.schedules.notes} like ${"%" + ONCE_TRANSFER_NOTE + "%"}`,
+          ),
+        )
+    : [];
+  const doneIn = (t: { promoterId: string; storeId: string; brandId: string }, a: string, b: string) =>
+    visits.filter((v) => key(v) === key(t) && v.date >= a && v.date <= b).length +
+    handedOff.filter((v) => v.promoterId !== t.promoterId && v.storeId === t.storeId && v.brandId === t.brandId && v.date >= a && v.date <= b).length;
   const rows: PortfolioRow[] = targets.map((t) => {
     if (range) {
-      const n = visits.filter((v) => key(v) === key(t) && v.date >= from && v.date <= to).length;
+      const n = doneIn(t, from, to);
       const goal = Math.max(1, Math.round(expectedInRange(t.perWeek, t.period, from, to)));
       const expected = Math.min(goal, Math.floor(expectedInRange(t.perWeek, t.period, from, ref)));
       const status = n >= goal ? "done" : n >= expected ? "on_track" : "behind";
@@ -165,7 +186,7 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
     }
     const w = periodWindow(f.date, t.period);
     const tRef = today < w.from ? w.from : today > w.to ? w.to : today;
-    const n = visits.filter((v) => key(v) === key(t) && v.date >= w.from && v.date <= w.to).length;
+    const n = doneIn(t, w.from, w.to);
     return { ...t, source: "assignment" as const, done: n, expected: expectedByToday(t.perWeek, tRef, t.period), status: targetStatus(t.perWeek, n, tRef, t.period), lastVisit: lastBy.get(key(t)) ?? null, windowFrom: w.from, windowTo: w.to };
   });
   for (const e of extra.values()) {

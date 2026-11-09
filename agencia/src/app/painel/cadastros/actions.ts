@@ -267,7 +267,7 @@ export async function savePromoterCostAction(_: FormState, fd: FormData): Promis
 export async function moveStoreDayAction(promoterId: string, storeId: string, fromDay: number, toDay: number) {
   const { moveStoreDay } = await import("@/server/portfolio");
   const r = await moveStoreDay(await getScope(), promoterId, storeId, fromDay, toDay);
-  if (r.ok) revalidatePath(`/painel/cadastros/usuarios/${promoterId}`);
+  if (r.ok) revalidatePath(`/painel/cadastros/rota/${promoterId}`);
   return r;
 }
 
@@ -275,16 +275,24 @@ export async function transferAssignmentAction(promoterId: string, storeId: stri
   const { transferAssignment } = await import("@/server/portfolio");
   const r = await transferAssignment(await getScope(), promoterId, storeId, brandIds, toPromoterId, opts);
   if (r.ok) {
-    revalidatePath(`/painel/cadastros/usuarios/${promoterId}`);
-    revalidatePath(`/painel/cadastros/usuarios/${toPromoterId}`);
+    revalidatePath(`/painel/cadastros/rota/${promoterId}`);
+    revalidatePath(`/painel/cadastros/rota/${toPromoterId}`);
   }
+  return r;
+}
+
+/** Rota Promotor › Rota avulsa: cancelar uma visita de um dia só. */
+export async function cancelOnceVisitAction(scheduleId: string, promoterId: string) {
+  const { cancelSchedule } = await import("@/server/schedules");
+  const r = await cancelSchedule(await getScope(), scheduleId, "Cancelada na Rota Promotor (visita avulsa).");
+  if (r.ok) revalidatePath(`/painel/cadastros/rota/${promoterId}`);
   return r;
 }
 
 export async function saveAssignmentAction(promoterId: string, storeId: string, rows: { brandId: string; perWeek: number; period: "week" | "fortnight" | "month"; weekdays: number[] }[]) {
   const { saveStoreAssignment } = await import("@/server/portfolio");
   const r = await saveStoreAssignment(await getScope(), promoterId, storeId, rows);
-  if (r.ok) revalidatePath(`/painel/cadastros/usuarios/${promoterId}`);
+  if (r.ok) revalidatePath(`/painel/cadastros/rota/${promoterId}`);
   return r;
 }
 
