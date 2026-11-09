@@ -6,7 +6,7 @@ process.env.UPLOADS_DIR ??= ".data/test-uploads";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { memDb } from "../scripts/_memdb";
 import * as s from "../src/server/db/schema";
 import type { DB } from "../src/server/db";
@@ -210,7 +210,7 @@ describe("carteira com meta semanal", () => {
     const back = await promoter.buildBootstrap(await scopeOf("lucas"));
     assert.ok(back.schedules.some((x) => x.date === today && x.storeId === store.id), "voltou ao Hoje");
   });
-  test("transferir uma marca da loja para outro promotor: a outra marca fica com quem já atende", async () => {
+  test("transferir marca da loja para outro promotor: avulsa (só no dia) e fixa (a partir do dia, no dia da semana escolhido)", async () => {
     const admin = await scopeOf("admin");
     const [lucas] = await db.select().from(s.users).where(eq(s.users.username, "lucas"));
     const [joao] = await db.select().from(s.users).where(eq(s.users.username, "joao"));
@@ -218,18 +218,39 @@ describe("carteira com meta semanal", () => {
     const store = boot0.stores.find((x) => x.brandIds.length >= 2)!;
     const [b1, b2] = store.brandIds;
     assert.ok((await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: b1, perWeek: 1, weekdays: [2] }, { brandId: b2, perWeek: 2, period: "week", weekdays: [] }])).ok);
-    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id)).ok, false, "mesmo promotor");
-    const r = await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], joao.id);
+    const tuesday = addDaysIso(weekStartIso(todayIso()), 8);
+    const thursday = addDaysIso(weekStartIso(todayIso()), 10);
+    const active = async (promoterId: string, date: string) => {
+      const [x] = await db.select().from(s.schedules).where(and(eq(s.schedules.promoterId, promoterId), eq(s.schedules.storeId, store.id), eq(s.schedules.date, date), eq(s.schedules.status, "active")));
+      return x ? (await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, x.id))).map((y) => y.brandId) : null;
+    };
+    assert.deepEqual(await active(lucas.id, tuesday), [b1]);
+    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id, { date: tuesday, mode: "once" })).ok, false, "mesmo promotor");
+    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], joao.id, { date: "2020-01-01", mode: "once" })).ok, false, "dia passado");
+
+    // Avulsa: só na terça o João faz; o Lucas continua com a marca.
+    const once = await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], joao.id, { date: tuesday, mode: "once" });
+    assert.ok(once.ok, JSON.stringify(once));
+    assert.equal(await active(lucas.id, tuesday), null, "a terça do Lucas sai");
+    assert.deepEqual(await active(joao.id, tuesday), [b1], "o João faz na terça");
+    assert.ok((await portfolio.listAssignments(admin, lucas.id)).find((x) => x.storeId === store.id)!.brands.some((b) => b.brandId === b1), "atribuição não muda");
+    const joaoBoot = await promoter.buildBootstrap(await scopeOf("joao"));
+    assert.ok(joaoBoot.stores.find((x) => x.id === store.id)?.brandIds.includes(b1), "o João enxerga a loja × marca no app");
+
+    // Fixa a partir da quinta: vira do João toda quinta; antes da data nada muda para ele.
+    const r = await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], joao.id, { date: thursday, mode: "fixed" });
     assert.ok(r.ok, JSON.stringify(r));
     const mine = (await portfolio.listAssignments(admin, lucas.id)).find((x) => x.storeId === store.id)!;
     assert.deepEqual(mine.brands.map((b) => b.brandId), [b2], "a outra marca continua com o Lucas");
-    const his = (await portfolio.listAssignments(admin, joao.id)).find((x) => x.storeId === store.id)!;
-    const moved = his.brands.find((b) => b.brandId === b1)!;
-    assert.deepEqual([moved.perWeek, moved.weekdays], [1, [2]], "vai com os mesmos dias e vezes");
+    const moved = (await portfolio.listAssignments(admin, joao.id)).find((x) => x.storeId === store.id)!.brands.find((b) => b.brandId === b1)!;
+    assert.deepEqual([moved.perWeek, moved.weekdays], [1, [4]], "toda quinta");
+    assert.deepEqual(await active(joao.id, thursday), [b1]);
+    const before = await db.select().from(s.schedules).where(and(eq(s.schedules.promoterId, joao.id), eq(s.schedules.storeId, store.id), eq(s.schedules.status, "active"), eq(s.schedules.origin, "assignment")));
+    assert.ok(before.every((x) => x.date >= thursday), "nenhuma quinta antes da data");
+    assert.deepEqual(await active(joao.id, tuesday), [b1], "a avulsa continua");
+
     // Transferir a última marca tira a loja do Lucas.
-    assert.ok((await portfolio.transferAssignment(admin, lucas.id, store.id, [b2], joao.id)).ok);
+    assert.ok((await portfolio.transferAssignment(admin, lucas.id, store.id, [b2], joao.id, { date: thursday, mode: "fixed" })).ok);
     assert.equal((await portfolio.listAssignments(admin, lucas.id)).some((x) => x.storeId === store.id), false);
-    const us = await db.select().from(s.userStores).where(eq(s.userStores.userId, lucas.id));
-    assert.equal(us.some((x) => x.storeId === store.id), false);
   });
 });

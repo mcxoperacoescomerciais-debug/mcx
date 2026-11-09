@@ -271,9 +271,9 @@ export async function moveStoreDayAction(promoterId: string, storeId: string, fr
   return r;
 }
 
-export async function transferAssignmentAction(promoterId: string, storeId: string, brandIds: string[], toPromoterId: string) {
+export async function transferAssignmentAction(promoterId: string, storeId: string, brandIds: string[], toPromoterId: string, opts: { date: string; mode: "fixed" | "once" }) {
   const { transferAssignment } = await import("@/server/portfolio");
-  const r = await transferAssignment(await getScope(), promoterId, storeId, brandIds, toPromoterId);
+  const r = await transferAssignment(await getScope(), promoterId, storeId, brandIds, toPromoterId, opts);
   if (r.ok) {
     revalidatePath(`/painel/cadastros/usuarios/${promoterId}`);
     revalidatePath(`/painel/cadastros/usuarios/${toPromoterId}`);

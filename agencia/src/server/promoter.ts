@@ -67,6 +67,15 @@ export async function promoterAccess(db: DB | Tx, promoterId: string, agencyId: 
     const assigned = byStore.get(storeId);
     if (assigned) for (const b of [...set]) if (!assigned.has(b)) set.delete(b);
   }
+  // Visita avulsa transferida de outro promotor: libera a loja × marca programada.
+  const scheduled = await db
+    .select({ storeId: s.schedules.storeId, brandId: s.scheduleBrands.brandId })
+    .from(s.schedules)
+    .innerJoin(s.scheduleBrands, eq(s.scheduleBrands.scheduleId, s.schedules.id))
+    .innerJoin(s.stores, and(eq(s.stores.id, s.schedules.storeId), eq(s.stores.status, "active"), eq(s.stores.agencyId, agencyId)))
+    .innerJoin(s.brands, and(eq(s.brands.id, s.scheduleBrands.brandId), eq(s.brands.status, "active")))
+    .where(and(eq(s.schedules.promoterId, promoterId), eq(s.schedules.status, "active"), gte(s.schedules.date, addDays(todayIso(), -7)), sql`${s.schedules.notes} like ${"%Visita avulsa (transferida)%"}`));
+  for (const r of scheduled) map.set(r.storeId, (map.get(r.storeId) ?? new Set<string>()).add(r.brandId));
   return map;
 }
 

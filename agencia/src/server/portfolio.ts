@@ -3,7 +3,7 @@
  * por semana) e o realizado da semana, com o ritmo esperado até hoje.
  */
 import "server-only";
-import { and, asc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, lte, ne, sql } from "drizzle-orm";
 import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { audit } from "./audit";
@@ -359,40 +359,152 @@ export async function moveStoreDay(scope: Scope, promoterId: string, storeId: st
   return { ok: true, message: "Loja movida de dia." };
 }
 
+export type TransferMode = "fixed" | "once";
+/** Marca a programação da visita avulsa transferida (libera a loja × marca no app de quem recebe). */
+export const ONCE_TRANSFER_NOTE = "Visita avulsa (transferida)";
+
 /**
- * Quadro do promotor › "Transferir": passa marcas de uma loja para outro
- * promotor com os mesmos dias e vezes (as outras marcas da loja ficam com
- * quem já atende). Se o outro já atendia a marca na loja, fica com os dias e
- * vezes de quem transferiu. A programação dos dois é refeita.
+ * Quadro do promotor › "Transferir": passa marcas de uma loja para outro promotor
+ * a partir do dia escolhido no calendário.
+ *
+ * - Fixa: a loja × marca passa a ser do outro promotor, toda semana no dia da
+ *   semana escolhido (as não marcadas ficam com quem já atende). Até a véspera
+ *   da data, quem transferiu continua com a programação que já tinha.
+ * - Avulsa: só naquele dia o outro promotor faz a loja × marca; depois volta
+ *   tudo como estava (a atribuição não muda).
  */
-export async function transferAssignment(scope: Scope, fromPromoterId: string, storeId: string, brandIds: string[], toPromoterId: string): Promise<ActionResult> {
+export async function transferAssignment(
+  scope: Scope,
+  fromPromoterId: string,
+  storeId: string,
+  brandIds: string[],
+  toPromoterId: string,
+  opts: { date?: string; mode?: TransferMode } = {},
+): Promise<ActionResult> {
   if (!canManage(scope)) return fail("Sem permissão.");
   if (fromPromoterId === toPromoterId) return fail("Escolha outro promotor.");
   if (!brandIds.length) return fail("Marque ao menos uma marca.");
+  const today = todayIso();
+  const date = opts.date ?? today;
+  const mode: TransferMode = opts.mode ?? "fixed";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today) return fail("Escolha no calendário um dia de hoje em diante.");
+  if (mode !== "fixed" && mode !== "once") return fail("Escolha se a visita é fixa ou avulsa.");
   const bad = (await checkPromoterStore(scope, fromPromoterId, storeId)) ?? (await checkPromoterStore(scope, toPromoterId, storeId));
   if (bad) return fail(bad);
   const db = await getDb();
   const rows = (await db.select().from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, fromPromoterId), eq(s.visitTargets.storeId, storeId), eq(s.visitTargets.agencyId, scope.agencyId)))).filter((r) => brandIds.includes(r.brandId));
   if (!rows.length) return fail("Nada para transferir nesta loja.");
+  const moving = new Set(rows.map((r) => r.brandId));
   const [to] = await db.select({ name: s.users.name, status: s.users.status }).from(s.users).where(eq(s.users.id, toPromoterId));
   if (to?.status !== "active") return fail("O promotor escolhido está inativo.");
+  const ddmm = `${date.slice(8, 10)}/${date.slice(5, 7)}`;
+
+  // Programações ativas da loja nos dias que interessam (dos dois promotores).
+  const until = mode === "once" ? date : addDays(date, -1);
+  const scheds =
+    until >= today
+      ? await db
+          .select({ id: s.schedules.id, promoterId: s.schedules.promoterId, date: s.schedules.date, origin: s.schedules.origin })
+          .from(s.schedules)
+          .where(and(eq(s.schedules.agencyId, scope.agencyId), eq(s.schedules.storeId, storeId), eq(s.schedules.status, "active"), gte(s.schedules.date, mode === "once" ? date : today), lte(s.schedules.date, until), inArray(s.schedules.promoterId, [fromPromoterId, toPromoterId])))
+      : [];
+  const ids = scheds.map((x) => x.id);
+  const [brandRows, startedRows] = ids.length
+    ? await Promise.all([
+        db.select().from(s.scheduleBrands).where(inArray(s.scheduleBrands.scheduleId, ids)),
+        db.select({ scheduleId: s.visits.scheduleId }).from(s.visits).where(and(inArray(s.visits.scheduleId, ids), ne(s.visits.status, "cancelled"))),
+      ])
+    : [[], []];
+  const brandsOf = (id: string) => brandRows.filter((b) => b.scheduleId === id).map((b) => b.brandId);
+  const started = new Set(startedRows.map((r) => r.scheduleId));
+  const fromOnDay = scheds.find((x) => x.promoterId === fromPromoterId && x.date === date);
+  if (mode === "once" && fromOnDay && started.has(fromOnDay.id)) return fail(`A visita de ${ddmm} já foi iniciada por quem atende hoje.`);
+
+  type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+  /** Tira as marcas de uma programação (sem marca nenhuma, ela é cancelada) e a solta da atribuição. */
+  const strip = async (tx: Tx, id: string, reason: string) => {
+    const left = brandsOf(id).filter((b) => !moving.has(b));
+    if (!left.length) {
+      await tx.update(s.schedules).set({ status: "cancelled", cancelReason: reason, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.schedules.id, id));
+      return;
+    }
+    await tx.delete(s.scheduleBrands).where(and(eq(s.scheduleBrands.scheduleId, id), inArray(s.scheduleBrands.brandId, [...moving])));
+    await tx.update(s.schedules).set({ origin: "manual", updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.schedules.id, id));
+  };
+
+  if (mode === "once") {
+    await db.transaction(async (tx) => {
+      if (fromOnDay && brandsOf(fromOnDay.id).some((b) => moving.has(b))) await strip(tx, fromOnDay.id, `Feita por ${to.name} (transferência avulsa).`);
+      const toOnDay = scheds.find((x) => x.promoterId === toPromoterId && x.date === date);
+      if (toOnDay) {
+        await tx.insert(s.scheduleBrands).values([...moving].map((brandId) => ({ scheduleId: toOnDay.id, brandId }))).onConflictDoNothing();
+        // Solta da atribuição para a sincronização não tirar as marcas avulsas.
+        await tx
+          .update(s.schedules)
+          .set({ origin: "manual", notes: sql`case when coalesce(${s.schedules.notes}, '') = '' then ${ONCE_TRANSFER_NOTE} else ${s.schedules.notes} || ' · ' || ${ONCE_TRANSFER_NOTE} end`, updatedAt: new Date(), updatedBy: scope.userId })
+          .where(eq(s.schedules.id, toOnDay.id));
+      } else {
+        const [seq] = await tx
+          .select({ next: sql<number>`coalesce(max(${s.schedules.seq}), -1)::int + 1` })
+          .from(s.schedules)
+          .where(and(eq(s.schedules.promoterId, toPromoterId), eq(s.schedules.date, date)));
+        const [row] = await tx
+          .insert(s.schedules)
+          .values({ agencyId: scope.agencyId, promoterId: toPromoterId, storeId, date, seq: Number(seq?.next ?? 0), origin: "manual", notes: ONCE_TRANSFER_NOTE, createdBy: scope.userId, updatedBy: scope.userId })
+          .returning({ id: s.schedules.id });
+        await tx.insert(s.scheduleBrands).values([...moving].map((brandId) => ({ scheduleId: row.id, brandId })));
+      }
+      await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", fromPromoterId, "assignment_transferred", { after: { storeId, toPromoterId, brands: [...moving], date, mode } }, tx);
+    });
+    return { ok: true, message: `Visita avulsa: ${to.name} faz ${rows.length} marca(s) em ${ddmm}. Depois continua como estava.` };
+  }
+
+  const wd = weekdayOf(date);
   await db.transaction(async (tx) => {
+    // Até a véspera: quem transferiu segue com o que já estava programado.
+    for (const x of scheds.filter((x) => x.promoterId === fromPromoterId && x.origin === "assignment" && !started.has(x.id))) {
+      if (brandsOf(x.id).some((b) => moving.has(b))) await tx.update(s.schedules).set({ origin: "manual", updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.schedules.id, x.id));
+    }
     await tx.insert(s.userStores).values({ userId: toPromoterId, storeId }).onConflictDoNothing();
     for (const r of rows) {
       await tx.insert(s.userBrands).values({ userId: toPromoterId, brandId: r.brandId }).onConflictDoNothing();
+      const set = { perWeek: r.period === "week" ? 1 : r.perWeek, period: r.period, weekdays: [wd], payValue: r.payValue };
       await tx
         .insert(s.visitTargets)
-        .values({ agencyId: scope.agencyId, promoterId: toPromoterId, storeId, brandId: r.brandId, perWeek: r.perWeek, period: r.period, weekdays: r.weekdays, payValue: r.payValue, createdBy: scope.userId, updatedBy: scope.userId })
-        .onConflictDoUpdate({ target: [s.visitTargets.promoterId, s.visitTargets.storeId, s.visitTargets.brandId], set: { perWeek: r.perWeek, period: r.period, weekdays: r.weekdays, payValue: r.payValue, updatedAt: new Date(), updatedBy: scope.userId } });
+        .values({ agencyId: scope.agencyId, promoterId: toPromoterId, storeId, brandId: r.brandId, ...set, createdBy: scope.userId, updatedBy: scope.userId })
+        .onConflictDoUpdate({ target: [s.visitTargets.promoterId, s.visitTargets.storeId, s.visitTargets.brandId], set: { ...set, updatedAt: new Date(), updatedBy: scope.userId } });
     }
     await tx.delete(s.visitTargets).where(inArray(s.visitTargets.id, rows.map((r) => r.id)));
     const [left] = await tx.select({ id: s.visitTargets.id }).from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, fromPromoterId), eq(s.visitTargets.storeId, storeId))).limit(1);
     if (!left) await tx.delete(s.userStores).where(and(eq(s.userStores.userId, fromPromoterId), eq(s.userStores.storeId, storeId)));
-    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", fromPromoterId, "assignment_transferred", { after: { storeId, toPromoterId, brands: rows.map((r) => r.brandId) } }, tx);
+    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", fromPromoterId, "assignment_transferred", { after: { storeId, toPromoterId, brands: [...moving], date, mode, weekday: wd } }, tx);
   });
   await syncPromoterSchedules(scope.agencyId, scope.userId, [fromPromoterId, toPromoterId], storeId);
-  return { ok: true, message: `${rows.length} marca(s) transferida(s) para ${to.name}.` };
+  // O novo promotor começa na data escolhida: o que a sincronização programou antes dela sai.
+  if (date > today) {
+    const early = await db
+      .select({ id: s.schedules.id })
+      .from(s.schedules)
+      .where(and(eq(s.schedules.promoterId, toPromoterId), eq(s.schedules.storeId, storeId), eq(s.schedules.status, "active"), eq(s.schedules.origin, "assignment"), gte(s.schedules.date, today), lt(s.schedules.date, date)));
+    if (early.length) {
+      const eb = await db.select().from(s.scheduleBrands).where(inArray(s.scheduleBrands.scheduleId, early.map((e) => e.id)));
+      await db.transaction(async (tx) => {
+        for (const e of early) {
+          const left = eb.filter((b) => b.scheduleId === e.id && !moving.has(b.brandId));
+          if (left.length === eb.filter((b) => b.scheduleId === e.id).length) continue;
+          if (!left.length) await tx.update(s.schedules).set({ status: "cancelled", cancelReason: `Transferência começa em ${ddmm}.`, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.schedules.id, e.id));
+          else {
+            await tx.delete(s.scheduleBrands).where(and(eq(s.scheduleBrands.scheduleId, e.id), inArray(s.scheduleBrands.brandId, [...moving])));
+            await tx.update(s.schedules).set({ origin: "manual", updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.schedules.id, e.id));
+          }
+        }
+      });
+    }
+  }
+  return { ok: true, message: `${rows.length} marca(s) transferida(s) para ${to.name}: toda ${WEEKDAY_NAME[wd]}, a partir de ${ddmm}.` };
 }
+
+const WEEKDAY_NAME = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
 export interface AssignmentView {
   storeId: string;

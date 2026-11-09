@@ -12,6 +12,7 @@ import clsx from "clsx";
 import { buttonClass, inputClass, selectClass } from "@/components/ui";
 import { frequencyLabel, weekdaysLabel, type TargetPeriod } from "@/lib/portfolio";
 import { matchesQuery } from "@/lib/rules";
+import { todayIso } from "@/lib/dates";
 import { moveStoreDayAction, saveAssignmentAction, transferAssignmentAction } from "../../actions";
 
 export interface StoreOption {
@@ -44,6 +45,7 @@ const DAYS = [
 ];
 const COLUMNS = [...DAYS, { d: -1, label: "Sem dia fixo" }];
 const DRAG_TYPE = "application/x-mcx-loja";
+const WEEKDAY_NAME = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
 export function PromoterAssignments({ promoterId, promoters, stores, assignments, allBrands }: { promoterId: string; promoters: { id: string; name: string }[]; stores: StoreOption[]; assignments: StoreAssignment[]; allBrands: { id: string; name: string }[] }) {
   const [query, setQuery] = useState("");
@@ -359,6 +361,11 @@ function TransferDialog({
 }) {
   const [picked, setPicked] = useState<string[]>(assignment.brands.length === 1 ? [assignment.brands[0].brandId] : []);
   const [to, setTo] = useState("");
+  const today = todayIso();
+  const [date, setDate] = useState(today);
+  const [mode, setMode] = useState<"fixed" | "once" | null>(null);
+  const wdName = date ? WEEKDAY_NAME[new Date(`${date}T12:00:00Z`).getUTCDay()] : "";
+  const ddmm = date ? `${date.slice(8, 10)}/${date.slice(5, 7)}` : "";
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -398,7 +405,7 @@ function TransferDialog({
                 </label>
               ))}
             </div>
-            <p className="text-[12px] text-muted mt-1.5">As marcas não marcadas continuam com este promotor. Dias e vezes vão iguais; dá para ajustar depois no cadastro do outro promotor.</p>
+            <p className="text-[12px] text-muted mt-1.5">As marcas não marcadas continuam com este promotor.</p>
           </div>
           <label className="block text-[12.5px] font-semibold text-ink-2">
             Para qual promotor?
@@ -411,17 +418,40 @@ function TransferDialog({
               ))}
             </select>
           </label>
+          <label className="block text-[12.5px] font-semibold text-ink-2">
+            A partir de qual dia?
+            <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className={inputClass + " mt-1"} />
+          </label>
+          <div>
+            <p className="text-[12.5px] font-semibold text-ink-2 mb-1.5">A visita será fixa ou avulsa?</p>
+            <div className="grid gap-1.5">
+              {(
+                [
+                  { v: "fixed", t: "Fixa", d: date ? `A loja e a marca passam a ser do outro promotor, toda ${wdName}, a partir de ${ddmm}.` : "Escolha o dia acima." },
+                  { v: "once", t: "Avulsa", d: date ? `O outro promotor faz só uma vez, em ${ddmm}. Depois continua com este promotor.` : "Escolha o dia acima." },
+                ] as const
+              ).map((o) => (
+                <label key={o.v} className={clsx("flex items-start gap-2.5 rounded-lg border px-3 py-2 cursor-pointer", mode === o.v ? "border-brand-600 bg-brand-50/40" : "border-line")}>
+                  <input type="radio" name="transfer-mode" checked={mode === o.v} onChange={() => setMode(o.v)} className="size-4 mt-0.5" />
+                  <span className="text-[13.5px]">
+                    <strong>{o.t}</strong>
+                    <span className="block text-[12px] text-muted">{o.d}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
         <footer className="px-5 py-4 border-t border-line space-y-2">
           {error ? <p className="text-[13px] text-bad font-medium">{error}</p> : null}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={pending || !picked.length || !to}
+              disabled={pending || !picked.length || !to || !date || !mode}
               onClick={() => {
                 setError(null);
                 start(async () => {
-                  const r = await transferAssignmentAction(promoterId, store.id, picked, to);
+                  const r = await transferAssignmentAction(promoterId, store.id, picked, to, { date, mode: mode! });
                   if (r.ok) onClose(r.message);
                   else setError(r.error);
                 });
