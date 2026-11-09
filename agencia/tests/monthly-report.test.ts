@@ -75,6 +75,26 @@ describe("relatório mensal e sistemática", () => {
     assert.equal(acc.getRow(4).getCell(1).value, "PDV");
   });
 
+  test("várias marcas numa planilha só, com a marca em cada linha", async () => {
+    const month = todayIso().slice(0, 7);
+    const brands = await db.select().from(s.brands).where(eq(s.brands.agencyId, gestor.agencyId));
+    const list = (await Promise.all(brands.slice(0, 2).map((b) => mr.monthlyReport(gestor, { brandId: b.id, month, chain: null, promoter: null })))).filter((x) => x !== null);
+    assert.equal(list.length, 2);
+    const r = mr.combineReports(list)!;
+    assert.equal(r.brandCount, 2);
+    assert.equal(r.accumulated.length, list[0].accumulated.length + list[1].accumulated.length);
+    assert.equal(new Set(r.accumulated.map((a) => a.store.id)).size, r.accumulated.length);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await mr.monthlyWorkbook(r, "AF")) as never);
+    const est = wb.getWorksheet("Por estab.")!;
+    const clients = new Set<string>();
+    est.eachRow((row, n) => {
+      if (n > 1 && row.getCell(2).value) clients.add(String(row.getCell(1).value));
+    });
+    for (const b of list) if (b.accumulated.length) assert.ok(clients.has(b.brand.name));
+    assert.equal(mr.combineReports([list[0]]), list[0]);
+  });
+
   test("sistemática lista atribuições e lojas sem promotor (OPEN)", async () => {
     const rows = await mr.systematicList(gestor, { brand: brandId, chain: null, promoter: null, city: null }, todayIso().slice(0, 7));
     assert.ok(rows.length > 0);

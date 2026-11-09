@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { FileSpreadsheet } from "lucide-react";
 import { getScope } from "@/server/auth";
 import { filterOptions } from "@/server/operations";
 import { systematicList } from "@/server/monthly-report";
@@ -10,6 +9,7 @@ import { FilterBar } from "../_components/filter-bar";
 import { SectionCard, Table, Td, Th } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
 import { saveMonthlyParamsAction } from "./actions";
+import { MonthlyReportForm } from "./monthly-form";
 
 export const metadata: Metadata = { title: "Sistemática" };
 
@@ -40,54 +40,11 @@ export default async function SystematicPage({ searchParams }: PageProps<"/paine
 
       <SectionCard
         title="Relatório mensal de atendimentos"
-        subtitle="Planilha por marca no formato entregue à indústria: uma aba por semana (visitas previstas, realizadas e feriados por PDV), acumulado do mês com % e valor, sistemática e resumo por estabelecimento."
+        subtitle="Planilha no formato entregue à indústria (uma marca, várias ou todas — nenhuma marcada = todas): uma aba por semana (visitas previstas, realizadas e feriados por PDV), acumulado do mês com % e valor, sistemática e resumo por estabelecimento."
         bodyClass="px-5 pb-5"
         className="mb-6"
       >
-        <form action="/api/reports/monthly" method="get" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1.5fr_1.5fr_auto] items-end">
-          <label className="text-[12.5px] font-semibold text-ink-2">
-            Marca (indústria)
-            <select name="brand" required className={inputClass + " mt-1"} defaultValue={typeof f.brand === "string" && !f.brand.includes(",") ? f.brand : ""}>
-              <option value="" disabled>
-                Escolha a marca
-              </option>
-              {options.brands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-[12.5px] font-semibold text-ink-2">
-            Mês
-            <input type="month" name="month" required defaultValue={month} className={inputClass + " mt-1"} />
-          </label>
-          <label className="text-[12.5px] font-semibold text-ink-2">
-            Rede (opcional)
-            <select name="chain" className={inputClass + " mt-1"} defaultValue="">
-              <option value="">Todas as redes</option>
-              {options.chains.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-[12.5px] font-semibold text-ink-2">
-            Promotor (opcional)
-            <select name="promoter" className={inputClass + " mt-1"} defaultValue="">
-              <option value="">Todos os promotores</option>
-              {options.promoters.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="h-10 px-4 rounded-lg bg-brand-800 text-white text-[13.5px] font-semibold inline-flex items-center gap-2 hover:bg-brand-900">
-            <FileSpreadsheet className="size-4" /> Baixar Excel
-          </button>
-        </form>
+        <MonthlyReportForm brands={options.brands} chains={options.chains} promoters={options.promoters} month={month} brand={typeof f.brand === "string" ? f.brand : ""} />
         <p className="mt-3 text-[12px] text-muted">
           Valor por visita válida: <strong>{value === null ? "não informado (valores saem zerados)" : brl(value)}</strong> · Feriados cadastrados: <strong>{scope.settings.holidays.length}</strong>
           {scope.role === "admin" ? " — ajuste em “Parâmetros do relatório” no fim da página." : "."}

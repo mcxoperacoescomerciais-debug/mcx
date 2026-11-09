@@ -47,6 +47,8 @@ interface StoreInfo {
   city: string;
   sector: string;
   chain: string;
+  /** Marca (indústria) do relatório — aparece quando a planilha junta várias marcas. */
+  brand: string;
 }
 
 export interface VisitRow {
@@ -119,6 +121,7 @@ export async function monthlyReport(scope: Scope, f: MonthlyFilters) {
     city: r.city,
     sector: sectorOf(r.city, r.state) ?? "",
     chain: r.chain ?? "",
+    brand: brand.name,
   });
 
   // Programação (previstas) da marca no mês.
@@ -249,7 +252,32 @@ export async function monthlyReport(scope: Scope, f: MonthlyFilters) {
   return { brand, month: f.month, from, to, weeks: result, accumulated, systematic, visitValue };
 }
 
-export type MonthlyReport = NonNullable<Awaited<ReturnType<typeof monthlyReport>>>;
+export type MonthlyReport = NonNullable<Awaited<ReturnType<typeof monthlyReport>>> & { brandCount?: number };
+
+/**
+ * Junta os relatórios de várias marcas numa planilha só (Sistemática com
+ * "Todas as marcas" ou várias marcadas): mesmas abas, com a marca em cada linha.
+ */
+export function combineReports(list: MonthlyReport[]): MonthlyReport | null {
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  const key = (r: MonthlyReport, st: StoreInfo): StoreInfo => ({ ...st, id: `${r.brand.id}:${st.id}` });
+  const byPdv = (a: StoreInfo, b: StoreInfo) => a.pdv.localeCompare(b.pdv, "pt-BR", { numeric: true }) || a.brand.localeCompare(b.brand, "pt-BR");
+  const first = list[0];
+  return {
+    ...first,
+    brand: { id: "", name: `${list.length} marcas` },
+    brandCount: list.length,
+    weeks: first.weeks.map((w, i) => ({
+      ...w,
+      rows: list.flatMap((r) => (r.weeks[i]?.rows ?? []).map((x) => ({ ...x, store: key(r, x.store) }))).sort((a, b) => byPdv(a.store, b.store) || a.agenda.localeCompare(b.agenda)),
+    })),
+    accumulated: list.flatMap((r) => r.accumulated.map((a) => ({ ...a, store: key(r, a.store) }))).sort((a, b) => byPdv(a.store, b.store)),
+    systematic: list.flatMap((r) => r.systematic).sort(
+      (a, b) => (a.promoter === "OPEN" ? 1 : 0) - (b.promoter === "OPEN" ? 1 : 0) || a.promoter.localeCompare(b.promoter, "pt-BR") || byPdv(a.store, b.store),
+    ),
+  };
+}
 
 /**
  * Tela Sistemática: quem atende cada loja × marca, em que dias e quantas
@@ -368,19 +396,21 @@ export async function monthlyWorkbook(r: MonthlyReport, agency: string): Promise
   wb.creator = `${agency} · MCX`;
   wb.created = new Date();
   const monthLabel = `${MONTHS[Number(r.month.slice(5, 7)) - 1]}/${r.month.slice(2, 4)}`;
+  const multi = (r.brandCount ?? 1) > 1;
+  const pdvLabel = (st: StoreInfo) => (multi ? `${st.pdv} · ${st.brand}` : st.pdv);
 
   // Uma aba por semana.
-  const weekHeader = ["PDV", "Caixas abastecidas", "Estado contagem", "PDV CNPJ", "PDV. END.", "PDV. Estado", "PDV. Cidade", "SETOR", "COLIGADA", "SITUAÇÃO", "DATA AGENDA", "DATA CONCLUÍDO", "OBSERVAÇÃO", "OBS. RUPTURA O.S.", "PROMOTOR"];
+  const weekHeader = ["PDV", "Caixas abastecidas", "Estado contagem", "PDV CNPJ", "PDV. END.", "PDV. Estado", "PDV. Cidade", "SETOR", "COLIGADA", "SITUAÇÃO", "DATA AGENDA", "DATA CONCLUÍDO", "OBSERVAÇÃO", "OBS. RUPTURA O.S.", "PROMOTOR", ...(multi ? ["INDÚSTRIA"] : [])];
   for (const w of r.weeks) {
     const ws = wb.addWorksheet(`Semana ${w.index} (${w.from.slice(8, 10)} a ${w.to.slice(8, 10)})`, { views: [{ state: "frozen", ySplit: 1 }] });
-    ws.columns = weekHeader.map((h, i) => ({ header: h, width: [34, 10, 14, 17, 48, 14, 18, 32, 10, 14, 13, 17, 30, 30, 26][i] }));
+    ws.columns = weekHeader.map((h, i) => ({ header: h, width: [34, 10, 14, 17, 48, 14, 18, 32, 10, 14, 13, 17, 30, 30, 26, 30][i] }));
     styleRow(ws.getRow(1), HEAD, weekHeader.length);
     const totals = { previstas: 0, realizadas: 0, feriados: 0 };
     const groups = new Map<string, VisitRow[]>();
     for (const row of w.rows) groups.set(row.store.id, [...(groups.get(row.store.id) ?? []), row]);
     for (const rows of groups.values()) {
       for (const x of rows)
-        ws.addRow([x.store.pdv, null, "Não aplicável", x.store.cnpj, x.store.address, x.store.state, x.store.city, x.store.sector, null, x.status, x.agenda, x.done, x.note, x.ruptureNote, x.promoter]);
+        ws.addRow([x.store.pdv, null, "Não aplicável", x.store.cnpj, x.store.address, x.store.state, x.store.city, x.store.sector, null, x.status, x.agenda, x.done, x.note, x.ruptureNote, x.promoter, ...(multi ? [x.store.brand] : [])]);
       const previstas = rows.length;
       const realizadas = rows.filter((x) => x.status === "Realizada").length;
       const feriados = rows.filter((x) => x.holiday).length;
@@ -425,7 +455,7 @@ export async function monthlyWorkbook(r: MonthlyReport, agency: string): Promise
   acc.getColumn(3).width = 32;
   const sum = Array.from({ length: nW + 1 }, () => ({ previstas: 0, validas: 0 }));
   for (const a of r.accumulated) {
-    const vals: (string | number | null)[] = [a.store.pdv, a.store.city, a.store.sector];
+    const vals: (string | number | null)[] = [pdvLabel(a.store), a.store.city, a.store.sector];
     [...a.perWeek, a.month].forEach((x, i) => {
       vals.push(x.previstas, x.validas, x.previstas ? x.validas / x.previstas : null, x.validas * r.visitValue);
       sum[i].previstas += x.previstas;
@@ -452,7 +482,7 @@ export async function monthlyWorkbook(r: MonthlyReport, agency: string): Promise
   sys.columns = sysHead.map((h, i) => ({ header: h, width: [32, 30, 16, 34, 14, 18, 32, 6, 6, 6, 6, 6, 6, 10, 10, 12][i] }));
   styleRow(sys.getRow(1), HEAD, sysHead.length);
   for (const x of r.systematic) {
-    const row = sys.addRow([x.promoter, r.brand.name, x.store.chain, x.store.pdv, x.store.state, x.store.city, x.store.sector, ...x.days.map((d) => (d ? "X" : null)), x.weekly, x.monthly, r.visitValue]);
+    const row = sys.addRow([x.promoter, x.store.brand, x.store.chain, x.store.pdv, x.store.state, x.store.city, x.store.sector, ...x.days.map((d) => (d ? "X" : null)), x.weekly, x.monthly, r.visitValue]);
     row.getCell(16).numFmt = BRL;
   }
   if (r.systematic.length) sys.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: sysHead.length } };
@@ -463,7 +493,7 @@ export async function monthlyWorkbook(r: MonthlyReport, agency: string): Promise
   est.columns = estHead.map((h, i) => ({ header: h, width: [30, 34, 17, 48, 14, 18, 32, 12, 12, 12, 14][i] }));
   styleRow(est.getRow(1), HEAD, estHead.length);
   for (const a of r.accumulated) {
-    const row = est.addRow([r.brand.name, a.store.pdv, a.store.cnpj, a.store.address, a.store.state, a.store.city, a.store.sector, a.month.previstas, a.month.validas, a.month.previstas ? a.month.validas / a.month.previstas : null, a.month.validas * r.visitValue]);
+    const row = est.addRow([a.store.brand, a.store.pdv, a.store.cnpj, a.store.address, a.store.state, a.store.city, a.store.sector, a.month.previstas, a.month.validas, a.month.previstas ? a.month.validas / a.month.previstas : null, a.month.validas * r.visitValue]);
     row.getCell(10).numFmt = PCT;
     row.getCell(11).numFmt = BRL;
   }
