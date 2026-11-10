@@ -107,3 +107,65 @@ input[type="number"]::-webkit-outer-spin-button {
     display: none !important;
   }
 }
+
+/*
+ * Diagnóstico Operacional (/diagnostico) — identidade MCX Soluções Operacionais.
+ * Tons medidos na logo oficial: degradê de #14474D a #08262E e letras em
+ * branco perolado. As fontes (Cormorant Garamond e Inter) são definidas no
+ * layout da própria página.
+ */
+@theme {
+  --font-display: Georgia, "Times New Roman", serif;
+
+  --color-petroleo-950: #071f25;
+  --color-petroleo-900: #0b3033;
+  --color-petroleo-850: #0e373e;
+  --color-petroleo-800: #103f42;
+  --color-petroleo-700: #14474d;
+  --color-petroleo-600: #1f5a5f;
+  --color-petroleo-500: #3a7479;
+  --color-perola: #e6e7e2;
+  --color-perola-claro: #f4f4f0;
+  --color-prata-suave: #c5cbc9;
+  --color-cinza-mcx: #a8b0ae;
+  --color-grafite: #4a5654;
+
+  --animate-surgir: surgir 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  @keyframes surgir {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diag-raiz * {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Relatório do diagnóstico: mantém as cores ao salvar em PDF. */
+@media print {
+  .diag-raiz,
+  .diag-raiz * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .diag-sem-impressao {
+    display: none !important;
+  }
+  .diag-bloco {
+    break-inside: avoid;
+  }
+}
+
+.diag-raiz .font-display.italic {
+  font-family: var(--font-cormorant-italico), Georgia, serif;
+}
