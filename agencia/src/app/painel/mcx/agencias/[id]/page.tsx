@@ -11,8 +11,53 @@ import { fmtAgo } from "@/lib/dates";
 import { Badge, PageHeader, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
-import { agencyLogoAction, agencyModulesAction, deleteAgencyAction, enterAgencyAction, updateAgencyAction } from "../../actions";
+import { agencyLogoAction, agencyModulesAction, clearAgencyDataAction, deleteAgencyAction, enterAgencyAction, updateAgencyAction } from "../../actions";
 import { mergeSettings } from "@/lib/settings";
+import { agencyDataCounts } from "@/server/agency-delete";
+
+/** Nome das tabelas na tela de "Limpar dados" (as demais aparecem pelo nome técnico). */
+const TABLE_LABEL: Record<string, string> = {
+  users: "Usuários (promotores, supervisores e gestores)",
+  brands: "Marcas",
+  products: "Produtos",
+  stores: "Lojas",
+  chains: "Redes",
+  partners: "Parceiros",
+  store_brands: "Marcas por loja",
+  store_products: "Mix de produtos por loja",
+  product_mixes: "Mixes por rede",
+  store_mixes: "Mix escolhido por loja",
+  user_stores: "Lojas por promotor",
+  user_brands: "Marcas por usuário",
+  visit_targets: "Atribuições e metas",
+  routes: "Roteiros",
+  route_stops: "Paradas dos roteiros",
+  schedules: "Programação",
+  schedule_brands: "Marcas na programação",
+  visits: "Visitas",
+  attendances: "Atendimentos por marca",
+  photos: "Fotos",
+  stock_entries: "Estoque",
+  unregistered_products: "Produtos não cadastrados",
+  ruptures: "Rupturas",
+  rupture_events: "Histórico das rupturas",
+  occurrences: "Ocorrências",
+  validities: "Validades",
+  damages: "Avarias",
+  whatsapp_alerts: "Avisos no WhatsApp",
+  brand_alerts: "Avisos às marcas",
+  correction_requests: "Pedidos de correção",
+  issue_reviews: "Pendências revisadas",
+  tasters: "Degustadoras",
+  tastings: "Degustações",
+  tasting_batches: "Lotes de degustação",
+  tasting_invoices: "Notas de degustação",
+  tasting_contacts: "Contatos das degustações",
+  tasting_materials: "Materiais das degustações",
+  tasting_files: "Arquivos das degustações",
+  tasting_quotes: "Orçamentos de degustação",
+  improvement_requests: "Sugestões de melhoria",
+};
 
 export const metadata: Metadata = { title: "Agência" };
 
@@ -30,6 +75,8 @@ export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agen
     .orderBy(asc(s.users.role), asc(s.users.name));
   const logo = agencyLogoUrl(agency);
   const settings = mergeSettings(agency.settings);
+  const counts = await agencyDataCounts(id);
+  const totalRows = counts.reduce((sum, c) => sum + c.n, 0);
 
   return (
     <>
@@ -135,6 +182,37 @@ export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agen
               ) : null}
             </tbody>
           </Table>
+        </SectionCard>
+
+        <SectionCard
+          title="Limpar dados da agência"
+          subtitle="Apaga de vez usuários, marcas, produtos, mix, lojas, roteiros, programação, visitas, fotos e degustações. A agência continua cadastrada com nome, logo, configurações e financeiro. Não dá para desfazer."
+          bodyClass="px-5 pb-5"
+          className="border-bad/30 lg:col-span-2"
+        >
+          {counts.length ? (
+            <>
+              <p className="text-[13px] text-ink-2 mb-2">
+                Serão apagados <strong>{totalRows.toLocaleString("pt-BR")}</strong> registros:
+              </p>
+              <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1 text-[12.5px] text-ink-2 mb-4">
+                {counts.map((c) => (
+                  <li key={c.table} className="flex justify-between gap-3 border-b border-line py-1">
+                    <span>{TABLE_LABEL[c.table] ?? c.table}</span>
+                    <span className="font-semibold tabular-nums">{c.n.toLocaleString("pt-BR")}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[13px] text-ink-2 mb-3">
+                Para confirmar, digite o nome da agência (<strong>{agency.name}</strong>):
+              </p>
+              <ActionForm action={clearAgencyDataAction} hidden={{ id: agency.id }} submitLabel="Apagar os dados da agência" variant="danger">
+                <input name="confirm" required autoComplete="off" placeholder={agency.name} className={inputClass} aria-label="Nome da agência para confirmar a limpeza" />
+              </ActionForm>
+            </>
+          ) : (
+            <p className="text-[13px] text-muted">Nenhum dado cadastrado nesta agência.</p>
+          )}
         </SectionCard>
 
         <SectionCard title="Excluir agência" subtitle="Apaga de vez a agência e tudo o que é dela: usuários, lojas, produtos, visitas, fotos, degustações e financeiro. Não dá para desfazer." bodyClass="px-5 pb-5" className="border-bad/30">

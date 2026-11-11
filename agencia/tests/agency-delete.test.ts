@@ -6,7 +6,7 @@ import { memDb } from "../scripts/_memdb";
 import * as s from "../src/server/db/schema";
 import type { DB } from "../src/server/db";
 import type { SessionUser } from "../src/server/auth";
-import { deleteAgency } from "../src/server/agency-delete";
+import { agencyDataCounts, clearAgencyData, deleteAgency } from "../src/server/agency-delete";
 
 let db: DB;
 let mcx: SessionUser;
@@ -37,6 +37,33 @@ describe("excluir agência", () => {
     assert.equal(notPlatform.ok, false);
     const platformAgency = await deleteAgency(mcx, mcx.agencyId, "MCX");
     assert.equal(platformAgency.ok, false);
+  });
+
+  test("limpar dados mantém a agência, o financeiro e a auditoria", async () => {
+    const before = await countsByAgency();
+    const clients = await db.select().from(s.agencies).where(eq(s.agencies.kind, "client"));
+    // A segunda agência com mais dados (a maior fica para o teste de exclusão).
+    const target = clients.sort((a, b) => (before.get(b.id) ?? 0) - (before.get(a.id) ?? 0))[1];
+    const expenses = await db.select().from(s.fixedExpenses).where(eq(s.fixedExpenses.agencyId, target.id));
+    const counts = await agencyDataCounts(target.id);
+    assert.ok(counts.some((c) => c.table === "stores" && c.n > 0));
+    assert.ok(!counts.some((c) => c.table === "fixed_expenses" || c.table === "audit_logs"));
+
+    const wrong = await clearAgencyData(mcx, target.id, "outro nome");
+    assert.equal(wrong.ok, false);
+    const r = await clearAgencyData(mcx, target.id, target.name);
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+
+    const [kept] = await db.select().from(s.agencies).where(eq(s.agencies.id, target.id));
+    assert.equal(kept?.name, target.name);
+    assert.deepEqual(await agencyDataCounts(target.id), []);
+    for (const t of [s.users, s.brands, s.products, s.stores, s.visits, s.schedules] as const) {
+      const left = await db.select({ id: t.id }).from(t).where(eq(t.agencyId, target.id));
+      assert.equal(left.length, 0);
+    }
+    assert.equal((await db.select().from(s.fixedExpenses).where(eq(s.fixedExpenses.agencyId, target.id))).length, expenses.length);
+    const after = await countsByAgency();
+    for (const c of clients) if (c.id !== target.id) assert.equal(after.get(c.id), before.get(c.id), `agência ${c.name} não pode mudar`);
   });
 
   test("apaga tudo da agência e mantém as outras", async () => {

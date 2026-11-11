@@ -111,6 +111,15 @@ export async function storageReportNowAction(_: FormState, _fd: FormData): Promi
   return r.sent.length ? { ok: true, message: "Aviso enviado. Confira o WhatsApp." } : { ok: false, error: "Nada enviado: ligue o aviso, salve e confira o número e a chave." };
 }
 
+/** Apaga os dados da agência e mantém a agência (nome digitado para confirmar). */
+export async function clearAgencyDataAction(_: FormState, fd: FormData): Promise<FormState> {
+  const { clearAgencyData } = await import("@/server/agency-delete");
+  const r = await clearAgencyData(await requirePlatform(), str(fd, "id"), str(fd, "confirm"));
+  if (!r.ok) return r;
+  revalidatePath("/painel", "layout");
+  return { ok: true, message: r.message };
+}
+
 /** Exclui a agência e tudo o que é dela (nome digitado para confirmar). */
 export async function deleteAgencyAction(_: FormState, fd: FormData): Promise<FormState> {
   const { deleteAgency } = await import("@/server/agency-delete");
