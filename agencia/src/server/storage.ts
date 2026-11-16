@@ -1,7 +1,10 @@
 /**
  * Armazenamento das fotos (evidências).
  *
- * - Produção: Supabase Storage em bucket PRIVADO (`SUPABASE_URL` +
+ * - Produção: Cloudflare R2 (bucket PRIVADO, variáveis R2_*; ver src/server/r2.ts).
+ *   As fotos gravadas antes da troca continuam no Supabase: a leitura procura
+ *   no R2 e, se não achar, no Supabase — nada precisa ser copiado.
+ * - Antes do R2: Supabase Storage em bucket PRIVADO (`SUPABASE_URL` +
  *   `SUPABASE_SERVICE_KEY`, bucket `SUPABASE_BUCKET`). A chave de serviço fica
  *   só no servidor. Nenhuma URL pública: o arquivo só sai por /api/photos/:id,
  *   que confere a permissão de quem pede a cada acesso.
@@ -13,8 +16,9 @@
 import "server-only";
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { r2ConfigFromEnv, r2Request, type R2Config } from "./r2";
 
-interface StorageDriver {
+export interface StorageDriver {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
   /** Apaga os arquivos (os que não existem são ignorados). Devolve quantos foram pedidos. */
@@ -53,6 +57,44 @@ function supabaseDriver(baseUrl: string, serviceKey: string, bucket: string): St
   };
 }
 
+function r2Driver(cfg: R2Config): StorageDriver {
+  return {
+    async put(key, bytes, contentType) {
+      const res = await r2Request(cfg, "PUT", key, { body: bytes, contentType });
+      if (!res.ok) throw new Error(`Falha no upload R2 (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    },
+    async get(key) {
+      const res = await r2Request(cfg, "GET", key);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`Falha ao ler arquivo R2 (${res.status})`);
+      return new Uint8Array(await res.arrayBuffer());
+    },
+    async remove(keys) {
+      // Um por um, 10 de cada vez (apagar o que não existe também responde ok).
+      for (let i = 0; i < keys.length; i += 10) {
+        const res = await Promise.all(keys.slice(i, i + 10).map((k) => r2Request(cfg, "DELETE", k)));
+        const bad = res.find((r) => !r.ok && r.status !== 404);
+        if (bad) throw new Error(`Falha ao apagar arquivos R2 (${bad.status})`);
+      }
+      return keys.length;
+    },
+  };
+}
+
+/** Grava no novo; lê no novo e, se não achar, no antigo; apaga nos dois. */
+export function withFallback(primary: StorageDriver, old: StorageDriver): StorageDriver {
+  return {
+    put: (key, bytes, contentType) => primary.put(key, bytes, contentType),
+    async get(key) {
+      return (await primary.get(key)) ?? (await old.get(key).catch(() => null));
+    },
+    async remove(keys) {
+      await old.remove(keys).catch((e: Error) => console.error("[storage] antigo:", e.message));
+      return primary.remove(keys);
+    },
+  };
+}
+
 function localDriver(root: string): StorageDriver {
   const safe = (key: string) => {
     const full = path.resolve(root, key);
@@ -85,10 +127,13 @@ export function storage(): StorageDriver {
   if (driver) return driver;
   const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
   const key = process.env.SUPABASE_SERVICE_KEY;
-  driver =
-    url && key
-      ? supabaseDriver(url, key, process.env.SUPABASE_BUCKET ?? "campo-evidencias")
-      : localDriver(path.resolve(/*turbopackIgnore: true*/ process.env.UPLOADS_DIR ?? ".data/uploads"));
+  const supabase = url && key ? supabaseDriver(url, key, process.env.SUPABASE_BUCKET ?? "campo-evidencias") : null;
+  const r2 = r2ConfigFromEnv();
+  driver = r2
+    ? supabase
+      ? withFallback(r2Driver(r2), supabase)
+      : r2Driver(r2)
+    : (supabase ?? localDriver(path.resolve(/*turbopackIgnore: true*/ process.env.UPLOADS_DIR ?? ".data/uploads")));
   return driver;
 }
 

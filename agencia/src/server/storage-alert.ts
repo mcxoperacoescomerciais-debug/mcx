@@ -19,6 +19,7 @@ import { audit } from "./audit";
 import { mergeSettings } from "@/lib/settings";
 import { recipients, sendCallMeBot } from "./whatsapp-alert";
 import { rowsOf } from "./promoter";
+import { r2BucketBytes, r2ConfigFromEnv } from "./r2";
 
 const GB = 1024 ** 3;
 const limitGb = (env: string | undefined, d: number) => (Number(env) > 0 ? Number(env) : d);
@@ -35,7 +36,18 @@ export async function measureStorage(): Promise<StorageUsage> {
   const db = await getDb();
   let photosBytes = 0;
   let photosEstimated = false;
-  try {
+  const r2 = r2ConfigFromEnv();
+  if (r2) {
+    // R2: soma o bucket, mais o que ficou no Supabase de antes da troca.
+    photosBytes = (await r2BucketBytes(r2)).bytes;
+    try {
+      const bucket = process.env.SUPABASE_BUCKET ?? "campo-evidencias";
+      const r = rowsOf<{ bytes: string | number }>(await db.execute(sql`select coalesce(sum((metadata->>'size')::bigint), 0) as bytes from storage.objects where bucket_id = ${bucket}`));
+      photosBytes += Number(r[0]?.bytes ?? 0);
+    } catch {
+      // sem o esquema "storage"
+    }
+  } else try {
     const bucket = process.env.SUPABASE_BUCKET ?? "campo-evidencias";
     const r = rowsOf<{ bytes: string | number }>(await db.execute(sql`select coalesce(sum((metadata->>'size')::bigint), 0) as bytes from storage.objects where bucket_id = ${bucket}`));
     photosBytes = Number(r[0]?.bytes ?? 0);
@@ -48,7 +60,8 @@ export async function measureStorage(): Promise<StorageUsage> {
   const d = rowsOf<{ bytes: string | number }>(await db.execute(sql`select pg_database_size(current_database()) as bytes`));
   return {
     photosBytes,
-    photosLimit: limitGb(process.env.STORAGE_PHOTOS_LIMIT_GB, 1) * GB,
+    // R2 grátis até 10 GB (depois ~US$ 0,015 por GB/mês); Supabase grátis: 1 GB.
+    photosLimit: limitGb(process.env.STORAGE_PHOTOS_LIMIT_GB, r2 ? 10 : 1) * GB,
     photosEstimated,
     dbBytes: Number(d[0]?.bytes ?? 0),
     dbLimit: limitGb(process.env.STORAGE_DB_LIMIT_GB, 0.5) * GB,
