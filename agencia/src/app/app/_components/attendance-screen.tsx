@@ -632,7 +632,10 @@ function ReportShareSheet({ visitId, attendance, brandIds, onDone }: { visitId: 
   const brand = cat.brandById.get(attendance.brandId);
   const [files, setFiles] = useState<File[] | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // Código criado ao finalizar (lido da visita: a prop pode ser de antes do toque).
+  const linkId = visit.attendances[attendance.id]?.reportLinkId ?? attendance.reportLinkId;
   const text = visitReportText(visit, {
+    reportUrl: linkId ? `${window.location.origin}/r/${linkId}` : null,
     agency: local.bootstrap?.agency.name ?? "",
     promoter: local.bootstrap?.user.name ?? "",
     store,

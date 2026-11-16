@@ -648,6 +648,12 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
   return result;
 }
 
+/** O código do link só vale se ainda não for de outro atendimento. */
+async function freeReportLinkId(tx: Tx, linkId: string): Promise<string | null> {
+  const [taken] = await tx.select({ id: s.attendances.id }).from(s.attendances).where(eq(s.attendances.reportLinkId, linkId));
+  return taken ? null : linkId;
+}
+
 async function applyAttendance(
   tx: Tx,
   scope: Scope,
@@ -743,11 +749,13 @@ async function applyAttendance(
     values.exceptionNote = null;
   }
 
+  // Link do relatório: gravado uma vez (o primeiro código que chega fica).
+  const reportLinkId = existing?.reportLinkId ?? (a.reportLinkId && targetStatus === "completed" ? await freeReportLinkId(tx, a.reportLinkId) : null);
   if (!existing) {
-    await tx.insert(s.attendances).values({ id: a.id, agencyId: scope.agencyId, visitId, brandId: a.brandId, ...values, createdBy: promoterId });
+    await tx.insert(s.attendances).values({ id: a.id, agencyId: scope.agencyId, visitId, brandId: a.brandId, ...values, reportLinkId, createdBy: promoterId });
     await audit(actor, "attendance", a.id, "started", { after: { brandId: a.brandId, visitId } }, tx);
   } else {
-    await tx.update(s.attendances).set(values).where(eq(s.attendances.id, a.id));
+    await tx.update(s.attendances).set({ ...values, reportLinkId }).where(eq(s.attendances.id, a.id));
   }
 
   // Fotos declaradas (o arquivo chega depois, pelo /api/photos).

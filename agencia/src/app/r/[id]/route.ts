@@ -13,7 +13,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/r/[id]">) {
   const { id } = await ctx.params;
   const link = await resolveAlertLink(id);
   const scope = link ? await agencySystemScope(link.agencyId) : null;
-  if (!link || !scope) return new Response("Link inválido ou expirado. Abra o atendimento pelo painel.", { status: 404 });
+  if (!link || !scope) return new Response("Relatório ainda não disponível: o atendimento pode estar sendo enviado pelo promotor (tente de novo em alguns minutos), ou o link expirou.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
   const block = await loadAttendanceBlock(scope, link.attendanceId);
   if (!block) return new Response("Atendimento não encontrado.", { status: 404 });
   const d = block.d;

@@ -28,6 +28,8 @@ import { addDays, todayIso } from "@/lib/dates";
 import type { AgencySettings } from "@/lib/settings";
 
 export const LINK_DAYS = 30;
+/** Link do relatório enviado pelo promotor no grupo da indústria. */
+export const REPORT_LINK_DAYS = 90;
 /** Rupturas listadas por mensagem; o resto vira "… e mais N" (o PDF tem todas). */
 export const MAX_RUPTURE_LINES = 25;
 
@@ -142,8 +144,15 @@ export async function resolveAlertLink(id: string): Promise<{ agencyId: string; 
   // O link pode ser do alerta de validade/avaria ou do aviso das perguntas da marca.
   const [found] = await db.select().from(s.whatsappAlerts).where(eq(s.whatsappAlerts.id, id));
   const row = found ?? (await db.select().from(s.brandAlerts).where(eq(s.brandAlerts.id, id)))[0];
-  if (!row || Date.now() - row.createdAt.getTime() > LINK_DAYS * 86_400_000) return null;
-  return { agencyId: row.agencyId, attendanceId: row.attendanceId };
+  if (row) return Date.now() - row.createdAt.getTime() > LINK_DAYS * 86_400_000 ? null : { agencyId: row.agencyId, attendanceId: row.attendanceId };
+  // Link do relatório que o promotor manda no grupo (código criado no celular ao finalizar).
+  const [att] = await db
+    .select({ id: s.attendances.id, agencyId: s.attendances.agencyId, status: s.attendances.status, finishedAt: s.attendances.finishedAt })
+    .from(s.attendances)
+    .where(eq(s.attendances.reportLinkId, id));
+  if (!att || att.status === "cancelled") return null;
+  if (att.finishedAt && Date.now() - att.finishedAt.getTime() > REPORT_LINK_DAYS * 86_400_000) return null;
+  return { agencyId: att.agencyId, attendanceId: att.id };
 }
 
 export function alertRule(st: AgencySettings): AlertRule {

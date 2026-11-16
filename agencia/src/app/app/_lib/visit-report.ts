@@ -3,7 +3,9 @@
  * agência liga a opção): por marca, os produtos com validade registrada (data,
  * dias, quantidade e valor) e os produtos em ruptura. Montado no celular, com o
  * que está guardado no aparelho — funciona sem internet (o WhatsApp envia
- * quando houver sinal).
+ * quando houver sinal). Com `reportUrl`, termina com o link do relatório
+ * completo (PDF com fotos), que abre sem login assim que o atendimento chega
+ * ao sistema.
  */
 import { RUPTURE_SITUATION_LABEL } from "@/lib/domain";
 import { daysBetween, fmtDate } from "@/lib/dates";
@@ -15,7 +17,7 @@ const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", curren
 
 export function visitReportText(
   visit: LocalVisit,
-  ctx: { agency: string; promoter: string; store: BootstrapStore | undefined; brandById: Map<string, BootstrapBrand>; productById: Map<string, BootstrapProduct>; brandIds?: string[] | null; attendanceId?: string },
+  ctx: { agency: string; promoter: string; store: BootstrapStore | undefined; brandById: Map<string, BootstrapBrand>; productById: Map<string, BootstrapProduct>; brandIds?: string[] | null; attendanceId?: string; reportUrl?: string | null },
 ): string {
   const product = (id: string) => ctx.productById.get(id)?.name ?? "Produto";
   const lines = [
@@ -44,6 +46,7 @@ export function visitReportText(
   }
   if (!atts.length) lines.push("", "Nenhuma marca atendida nesta visita.");
   if (visit.notes) lines.push("", `📝 ${visit.notes}`);
+  if (ctx.reportUrl) lines.push("", `📄 *Relatório completo (com fotos):* ${ctx.reportUrl}`);
   return lines.join("\n");
 }
 

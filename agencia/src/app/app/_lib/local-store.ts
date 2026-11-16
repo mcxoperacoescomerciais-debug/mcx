@@ -51,6 +51,8 @@ export interface LocalAttendance {
   exceptionReason: ExceptionReason | null;
   exceptionNote: string;
   cancelReason: string;
+  /** Código do link do relatório completo (/r/<código>), criado ao finalizar. */
+  reportLinkId?: string | null;
   photos: LocalPhoto[];
   deletedPhotoIds: string[];
   stock: Record<string, StockInput>;
@@ -663,7 +665,7 @@ export async function deleteOccurrence(visitId: string, attendanceId: string, id
 }
 
 export async function finishAttendance(visitId: string, attendanceId: string) {
-  await bumpAttendance(visitId, attendanceId, (a) => ({ ...a, status: "completed", finishedAt: new Date().toISOString() }));
+  await bumpAttendance(visitId, attendanceId, (a) => ({ ...a, status: "completed", finishedAt: new Date().toISOString(), reportLinkId: a.reportLinkId ?? uuid() }));
   void syncNow();
 }
 
@@ -749,6 +751,7 @@ function toAttendanceInput(a: LocalAttendance): AttendanceInput {
     exceptionReason: a.exceptionItems.length ? a.exceptionReason : null,
     exceptionNote: a.exceptionItems.length ? a.exceptionNote || null : null,
     cancelReason: a.cancelReason || null,
+    reportLinkId: a.reportLinkId ?? null,
     photos: a.photos.map(({ id, kind, ruptureId, occurrenceId, validityId, damageId, source, takenAt }) => ({
       id,
       kind,

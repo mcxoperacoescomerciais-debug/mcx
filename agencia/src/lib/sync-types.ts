@@ -115,6 +115,8 @@ export const attendanceInput = z.object({
   exceptionReason: z.enum(EXCEPTION_REASONS).nullable(),
   exceptionNote: shortText(500),
   cancelReason: shortText(500),
+  /** Código do link público do relatório (gerado no celular ao finalizar). */
+  reportLinkId: id.nullable().optional(),
   photos: z.array(photoInput).max(60),
   deletedPhotoIds: z.array(id).max(200),
   stock: z.array(stockInput).max(500),

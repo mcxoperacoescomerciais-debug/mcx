@@ -545,6 +545,8 @@ export const attendances = pgTable(
     exceptionReason: text("exception_reason").$type<ExceptionReason>(),
     exceptionNote: text("exception_note"),
     cancelReason: text("cancel_reason"),
+    /** Código aleatório do link público do relatório (/r/<código>), criado no celular ao finalizar. */
+    reportLinkId: uuid("report_link_id"),
     reviewStatus: text("review_status").$type<ReviewStatus>().notNull().default("none"),
     reviewNote: text("review_note"),
     reviewedBy: uuid("reviewed_by"),
@@ -556,6 +558,7 @@ export const attendances = pgTable(
     uniqueIndex("attendances_visit_brand_uq").on(t.visitId, t.brandId),
     index("attendances_agency_idx").on(t.agencyId, t.status),
     index("attendances_brand_idx").on(t.brandId),
+    uniqueIndex("attendances_report_link_uq").on(t.reportLinkId),
     check("attendances_status_ck", sql`${t.status} in ('in_progress','completed','correction_requested','cancelled')`),
     check("attendances_finish_ck", sql`${t.finishedAt} is null or ${t.finishedAt} >= ${t.startedAt}`),
     check(
