@@ -120,6 +120,15 @@ export async function clearAgencyDataAction(_: FormState, fd: FormData): Promise
   return { ok: true, message: r.message };
 }
 
+/** Início da operação: apaga visitas, atendimentos, fotos e programação antes da data (testes e treinamento). */
+export async function clearFieldHistoryAction(_: FormState, fd: FormData): Promise<FormState> {
+  const { clearFieldHistory } = await import("@/server/field-reset");
+  const r = await clearFieldHistory(await requirePlatform(), str(fd, "id"), str(fd, "before"), str(fd, "confirm"));
+  if (!r.ok) return r;
+  revalidatePath("/painel", "layout");
+  return { ok: true, message: r.message };
+}
+
 /** Exclui a agência e tudo o que é dela (nome digitado para confirmar). */
 export async function deleteAgencyAction(_: FormState, fd: FormData): Promise<FormState> {
   const { deleteAgency } = await import("@/server/agency-delete");

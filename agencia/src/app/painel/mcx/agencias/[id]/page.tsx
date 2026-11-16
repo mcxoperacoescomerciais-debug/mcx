@@ -7,13 +7,14 @@ import { agencyLogoUrl, requirePlatform } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { getClientAgency } from "@/server/platform";
 import { ROLE_LABEL } from "@/lib/domain";
-import { fmtAgo } from "@/lib/dates";
+import { addDays, fmtAgo, fmtDate, todayIso } from "@/lib/dates";
 import { Badge, PageHeader, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
-import { agencyLogoAction, agencyModulesAction, clearAgencyDataAction, deleteAgencyAction, enterAgencyAction, updateAgencyAction } from "../../actions";
+import { agencyLogoAction, agencyModulesAction, clearAgencyDataAction, clearFieldHistoryAction, deleteAgencyAction, enterAgencyAction, updateAgencyAction } from "../../actions";
 import { mergeSettings } from "@/lib/settings";
 import { agencyDataCounts } from "@/server/agency-delete";
+import { fieldHistoryCounts } from "@/server/field-reset";
 
 /** Nome das tabelas na tela de "Limpar dados" (as demais aparecem pelo nome técnico). */
 const TABLE_LABEL: Record<string, string> = {
@@ -61,7 +62,7 @@ const TABLE_LABEL: Record<string, string> = {
 
 export const metadata: Metadata = { title: "Agência" };
 
-export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agencias/[id]">) {
+export default async function AgencyPage({ params, searchParams }: PageProps<"/painel/mcx/agencias/[id]">) {
   await requirePlatform();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
@@ -77,6 +78,11 @@ export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agen
   const settings = mergeSettings(agency.settings);
   const counts = await agencyDataCounts(id);
   const totalRows = counts.reduce((sum, c) => sum + c.n, 0);
+  // Início da operação: padrão amanhã (o que é de hoje para trás sai).
+  const sp = await searchParams;
+  const asked = typeof sp.inicio === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.inicio) ? sp.inicio : null;
+  const start = asked ?? addDays(todayIso(), 1);
+  const field = await fieldHistoryCounts(id, start);
 
   return (
     <>
@@ -182,6 +188,37 @@ export default async function AgencyPage({ params }: PageProps<"/painel/mcx/agen
               ) : null}
             </tbody>
           </Table>
+        </SectionCard>
+
+        <SectionCard
+          title="Início da operação"
+          subtitle="Apaga os testes e o treinamento: visitas, atendimentos, fotos, rupturas, validades, avarias e a programação ANTES da data escolhida. Nada fica como não realizado antes dela. Cadastros, atribuições, roteiros e a programação da data em diante continuam. Não dá para desfazer."
+          bodyClass="px-5 pb-5"
+          className="border-warn/40 lg:col-span-2"
+        >
+          <form className="flex flex-wrap items-end gap-3 mb-4">
+            <label className="block">
+              <span className="block text-[12.5px] font-semibold text-ink-2 mb-1">A operação começa em</span>
+              <input type="date" name="inicio" defaultValue={start} className={inputClass} />
+            </label>
+            <button className={buttonClass("secondary")}>Ver o que sai</button>
+          </form>
+          <p className="text-[13px] text-ink-2 mb-3">
+            Antes de <strong>{fmtDate(start)}</strong> saem: <strong>{field.visits.toLocaleString("pt-BR")}</strong> visita(s), <strong>{field.attendances.toLocaleString("pt-BR")}</strong> atendimento(s) de marca,{" "}
+            <strong>{field.photos.toLocaleString("pt-BR")}</strong> foto(s) e <strong>{field.schedules.toLocaleString("pt-BR")}</strong> loja(s) programada(s) — {field.total.toLocaleString("pt-BR")} registros no total.
+          </p>
+          {field.total ? (
+            <>
+              <p className="text-[13px] text-ink-2 mb-3">
+                Faça isso depois do treinamento (o que for feito hoje também sai, se a data for amanhã). Peça para quem testou sair do app e entrar de novo. Para confirmar, digite o nome da agência (<strong>{agency.name}</strong>):
+              </p>
+              <ActionForm action={clearFieldHistoryAction} hidden={{ id: agency.id, before: start }} submitLabel={`Apagar o histórico antes de ${fmtDate(start)}`} variant="danger">
+                <input name="confirm" required autoComplete="off" placeholder={agency.name} className={inputClass} aria-label="Nome da agência para confirmar o início da operação" />
+              </ActionForm>
+            </>
+          ) : (
+            <p className="text-[13px] text-muted">Nada a apagar antes desta data.</p>
+          )}
         </SectionCard>
 
         <SectionCard
