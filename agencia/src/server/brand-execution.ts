@@ -50,7 +50,9 @@ export async function brandExecution(scope: Scope, f: PanelFilters) {
         f.city ? filterIn(s.stores.city, f.city) : undefined,
       ),
     );
-  const fromTargets = Math.round(targets.reduce((n, t) => n + expectedInRange(t.perWeek, t.period, f.from, f.to), 0));
+  // Início da operação: o previsto só conta a partir dele.
+  const pFrom = scope.settings.operationStart && scope.settings.operationStart > f.from ? scope.settings.operationStart : f.from;
+  const fromTargets = pFrom > f.to ? 0 : Math.round(targets.reduce((n, t) => n + expectedInRange(t.perWeek, t.period, pFrom, f.to), 0));
   const [visits, issues] = await Promise.all([listVisits(scope, f, 5000), listIssues(scope, f)]);
   const attendances = visits
     .flatMap((v) => v.attendances.map((a) => ({ ...a, date: v.date, storeId: v.storeId, storeName: v.storeName, city: v.city, promoterName: v.promoterName })))

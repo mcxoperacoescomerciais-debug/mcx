@@ -44,6 +44,39 @@ export function periodWindow(iso: string, period: TargetPeriod = "week"): { from
   return { from: ws, to: addDays(ws, 6) };
 }
 
+/** Início efetivo de uma janela: o início da operação, se cair dentro dela. */
+export function operationFrom(from: string, start: string | null | undefined): string {
+  return start && start > from ? start : from;
+}
+
+/**
+ * Meta e esperado de uma atribuição na janela [from, to] quando a operação
+ * começa depois de `from`: conta só os dias a partir do início (com dias fixos,
+ * os dias marcados que sobram; sem, a parte proporcional). null = nada a cobrar
+ * nesta janela (ela termina antes do início ou não sobra nenhum dia marcado).
+ */
+export function targetFromStart(
+  t: { perWeek: number; period: TargetPeriod; weekdays: number[] },
+  from: string,
+  to: string,
+  start: string | null | undefined,
+  ref: string,
+): { from: string; goal: number; expected: number } | null {
+  const eff = operationFrom(from, start);
+  if (eff > to) return null;
+  if (eff === from) return { from, goal: t.perWeek, expected: expectedByToday(t.perWeek, ref, t.period) };
+  const days = daysBetween(eff, to) + 1;
+  let goal: number;
+  if (t.weekdays.length) {
+    let marked = 0;
+    for (let d = eff; d <= to; d = addDays(d, 1)) if (t.weekdays.includes(weekdayOf(d))) marked++;
+    goal = Math.min(t.perWeek, marked);
+  } else goal = Math.round((t.perWeek * days) / (daysBetween(from, to) + 1));
+  if (goal <= 0) return null;
+  const elapsed = ref < eff ? 0 : Math.min(days, daysBetween(eff, ref) + 1);
+  return { from: eff, goal, expected: Math.floor((goal * elapsed) / days) };
+}
+
 /** Visitas esperadas até `today` (inclusive) no período que contém `today`. */
 export function expectedByToday(times: number, today: string, period: TargetPeriod = "week"): number {
   const w = periodWindow(today, period);

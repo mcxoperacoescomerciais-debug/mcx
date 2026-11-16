@@ -65,5 +65,8 @@ describe("início da operação", () => {
     );
     assert.equal(orphans, 0);
     assert.equal((await fieldHistoryCounts(agency.id, cut)).total, 0);
+    // A data fica nas configurações: metas e sistemática contam dela em diante.
+    const [after] = await db.select().from(s.agencies).where(eq(s.agencies.id, agency.id));
+    assert.equal((after.settings as { operationStart?: string }).operationStart, cut);
   });
 });

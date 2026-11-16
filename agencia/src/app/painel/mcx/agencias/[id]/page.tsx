@@ -192,7 +192,7 @@ export default async function AgencyPage({ params, searchParams }: PageProps<"/p
 
         <SectionCard
           title="Início da operação"
-          subtitle="Apaga os testes e o treinamento: visitas, atendimentos, fotos, rupturas, validades, avarias e a programação ANTES da data escolhida. Nada fica como não realizado antes dela. Cadastros, atribuições, roteiros e a programação da data em diante continuam. Não dá para desfazer."
+          subtitle="Apaga os testes e o treinamento: visitas, atendimentos, fotos, rupturas, validades, avarias e a programação ANTES da data escolhida. Nada fica como não realizado antes dela: Carteira e metas, Sistemática e o previsto passam a contar a partir da data (a semana em curso cobra só os dias dela em diante). Cadastros, atribuições, roteiros e a programação da data em diante continuam. Não dá para desfazer."
           bodyClass="px-5 pb-5"
           className="border-warn/40 lg:col-span-2"
         >

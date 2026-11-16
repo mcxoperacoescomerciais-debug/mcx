@@ -208,7 +208,9 @@ export async function monthlyReport(scope: Scope, f: MonthlyFilters) {
     for (const t of targets) {
       if (t.weekdays.length) continue;
       if (inWeek.some((sc) => sc.store.id === t.store.id && sc.promoterId === t.promoterId)) continue;
-      const expected = Math.round(expectedInRange(t.perWeek, t.period as TargetPeriod, w.from, w.to));
+      // Início da operação: a semana só cobra os dias a partir dele.
+      const wFrom = scope.settings.operationStart && scope.settings.operationStart > w.from ? scope.settings.operationStart : w.from;
+      const expected = wFrom > w.to ? 0 : Math.round(expectedInRange(t.perWeek, t.period as TargetPeriod, wFrom, w.to));
       for (let i = 0; i < expected; i++) {
         const att = doneOf(t.store.id, w.from, w.to).find((d) => d.promoterId === t.promoterId) ?? doneOf(t.store.id, w.from, w.to)[0];
         rows.push(rowOf(toStore(t.store), t.promoter, att ? ddmmyy(att.date) : "Sem dia fixo", att, false));

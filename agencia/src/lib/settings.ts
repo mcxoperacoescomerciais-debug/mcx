@@ -75,6 +75,8 @@ export interface AgencySettings {
   holidays: string[];
   /** Valor pago por visita válida (relatório mensal e sistemática); null = não informado. */
   visitValue: number | null;
+  /** Início da operação (AAAA-MM-DD): metas, previstas e não realizadas só contam desta data em diante; null = sempre. */
+  operationStart: string | null;
   /** Ao encerrar a visita, o app pergunta se o promotor quer enviar o relatório (vencimentos e rupturas) no WhatsApp. phone vazio = o promotor escolhe o contato. */
   visitReport: {
     enabled: boolean;
@@ -143,6 +145,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   holidays: [],
   visitValue: null,
   visitReport: { enabled: false, phone: "", brandIds: null },
+  operationStart: null,
 };
 
 export function mergeSettings(raw: unknown): AgencySettings {
@@ -156,6 +159,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
     modules: { tastings: bool(r.modules?.tastings, true), finance: bool(r.modules?.finance, true), sistematica: bool(r.modules?.sistematica, false) },
     holidays: Array.isArray(r.holidays) ? [...new Set(r.holidays.filter((d): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort().slice(-200) : [],
     visitValue: money(r.visitValue),
+    operationStart: typeof r.operationStart === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.operationStart) ? r.operationStart : null,
     visitReport: {
       enabled: bool(r.visitReport?.enabled, false),
       phone: typeof r.visitReport?.phone === "string" ? r.visitReport.phone : "",

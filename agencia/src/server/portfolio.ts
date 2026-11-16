@@ -11,7 +11,7 @@ import { brandFilter, promoterFilter } from "./scope";
 import type { ActionResult } from "./manager";
 import type { PanelFilters } from "@/lib/filters";
 import { addDays, todayIso, weekdayOf } from "@/lib/dates";
-import { effectiveWorkMode, expectedByToday, expectedInRange, periodWindow, targetStatus, PERIOD_LABEL, TARGET_PERIODS, weekEnd, weekStart, weekTotals, type TargetPeriod, type TargetStatus } from "@/lib/portfolio";
+import { effectiveWorkMode, expectedByToday, expectedInRange, operationFrom, periodWindow, targetFromStart, targetStatus, PERIOD_LABEL, TARGET_PERIODS, weekEnd, weekStart, weekTotals, type TargetPeriod, type TargetStatus } from "@/lib/portfolio";
 import { filterIn } from "@/server/filter-sql";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
@@ -176,18 +176,27 @@ export async function portfolioWeek(scope: Scope, f: Pick<PanelFilters, "date" |
   const doneIn = (t: { promoterId: string; storeId: string; brandId: string }, a: string, b: string) =>
     visits.filter((v) => key(v) === key(t) && v.date >= a && v.date <= b).length +
     handedOff.filter((v) => v.promoterId !== t.promoterId && v.storeId === t.storeId && v.brandId === t.brandId && v.date >= a && v.date <= b).length;
-  const rows: PortfolioRow[] = targets.map((t) => {
+  // Início da operação: antes dele nada é cobrado (testes e treinamento).
+  const start = scope.settings.operationStart;
+  const rows: PortfolioRow[] = targets.flatMap((t): PortfolioRow[] => {
     if (range) {
-      const n = doneIn(t, from, to);
-      const goal = Math.max(1, Math.round(expectedInRange(t.perWeek, t.period, from, to)));
-      const expected = Math.min(goal, Math.floor(expectedInRange(t.perWeek, t.period, from, ref)));
+      const rFrom = operationFrom(from, start);
+      if (rFrom > to) return [];
+      const n = doneIn(t, rFrom, to);
+      const goal = Math.max(1, Math.round(expectedInRange(t.perWeek, t.period, rFrom, to)));
+      const expected = ref < rFrom ? 0 : Math.min(goal, Math.floor(expectedInRange(t.perWeek, t.period, rFrom, ref)));
       const status = n >= goal ? "done" : n >= expected ? "on_track" : "behind";
-      return { ...t, source: "assignment" as const, done: n, goal, expected, expectedFixed: expected, status, lastVisit: lastBy.get(key(t)) ?? null, windowFrom: from, windowTo: to };
+      return [{ ...t, source: "assignment" as const, done: n, goal, expected, expectedFixed: expected, status, lastVisit: lastBy.get(key(t)) ?? null, windowFrom: rFrom, windowTo: to }];
     }
     const w = periodWindow(f.date, t.period);
     const tRef = today < w.from ? w.from : today > w.to ? w.to : today;
-    const n = doneIn(t, w.from, w.to);
-    return { ...t, source: "assignment" as const, done: n, expected: expectedByToday(t.perWeek, tRef, t.period), status: targetStatus(t.perWeek, n, tRef, t.period), lastVisit: lastBy.get(key(t)) ?? null, windowFrom: w.from, windowTo: w.to };
+    const clip = targetFromStart(t, w.from, w.to, start, tRef);
+    if (!clip) return [];
+    const n = doneIn(t, clip.from, w.to);
+    if (clip.from === w.from)
+      return [{ ...t, source: "assignment" as const, done: n, expected: expectedByToday(t.perWeek, tRef, t.period), status: targetStatus(t.perWeek, n, tRef, t.period), lastVisit: lastBy.get(key(t)) ?? null, windowFrom: w.from, windowTo: w.to }];
+    const status = n >= clip.goal ? "done" : n >= clip.expected ? "on_track" : "behind";
+    return [{ ...t, source: "assignment" as const, done: n, goal: clip.goal, expected: clip.expected, expectedFixed: clip.expected, status, lastVisit: lastBy.get(key(t)) ?? null, windowFrom: clip.from, windowTo: w.to }];
   });
   for (const e of extra.values()) {
     const dates = [...new Set(e.dates)].sort();

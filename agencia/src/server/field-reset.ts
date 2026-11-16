@@ -6,7 +6,9 @@
  * Serve para tirar os testes e o treinamento: a partir da data, o promotor
  * começa com tudo a fazer e nada fica como "não realizado" antes dela.
  * Cadastros (lojas, marcas, produtos, mix, usuários, atribuições, roteiros)
- * não mudam; a programação da data em diante também não.
+ * não mudam; a programação da data em diante também não. A data fica nas
+ * configurações (operationStart): Carteira e metas, Sistemática e o previsto
+ * da execução por marca só cobram dela em diante.
  *
  * O que depende de visitas, atendimentos e programação é lido das chaves
  * estrangeiras do banco: uma tabela nova ligada a eles entra sem mudar este
@@ -152,6 +154,8 @@ export async function clearFieldHistory(user: SessionUser, agencyId: string, bef
       if (!progress) break;
     }
     if (pending.size) throw new Error(`Não foi possível apagar: ${[...pending.keys()].join(", ")}`);
+    // A partir de agora metas, previstas e não realizadas contam desta data em diante.
+    await tx.execute(sql`update agencies set settings = coalesce(settings, '{}'::jsonb) || jsonb_build_object('operationStart', ${before}::text) where id = ${agencyId}::uuid`);
     return { deleted, files };
   });
 
