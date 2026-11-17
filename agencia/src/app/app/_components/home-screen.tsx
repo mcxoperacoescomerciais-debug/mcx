@@ -79,7 +79,7 @@ export function HomeScreen() {
 
   return (
     <Screen>
-      <header className="bg-brand-900 text-white">
+      <header className="bg-brand-900 text-white" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <div className="max-w-[560px] mx-auto px-4 pt-4 pb-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">

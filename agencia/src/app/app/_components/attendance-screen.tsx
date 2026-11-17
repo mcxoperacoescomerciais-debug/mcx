@@ -585,6 +585,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
           visitId={visitId}
           attendance={attendance}
           brandIds={report?.brandIds}
+          onBack={() => setAskReport(false)}
           onDone={(sent) => {
             setAskReport(false);
             if (sent) go(`visita/${visitId}`, true);
@@ -624,14 +625,31 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
  * atendimento — o promotor escolhe o WhatsApp e o contato ou grupo. Celular que
  * não compartilha arquivos: abre o WhatsApp só com o texto.
  */
-function ReportShareSheet({ visitId, attendance, brandIds, onDone }: { visitId: string; attendance: LocalAttendance; brandIds: string[] | null | undefined; onDone: (sent: boolean) => void }) {
+function ReportShareSheet({
+  visitId,
+  attendance,
+  brandIds,
+  onDone,
+  onBack,
+}: {
+  visitId: string;
+  attendance: LocalAttendance;
+  brandIds: string[] | null | undefined;
+  onDone: (sent: boolean) => void;
+  onBack: () => void;
+}) {
   const visit = useVisit(visitId)!;
   const cat = useCatalog();
   const local = useLocal();
   const store = cat.storeById.get(visit.storeId);
   const brand = cat.brandById.get(attendance.brandId);
-  const [files, setFiles] = useState<File[] | null>(null);
+  const [allFiles, setFiles] = useState<File[] | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // Antes e depois marcados de início; as demais fotos (ruptura, validade, avaria…) vão sempre.
+  const [kinds, setKinds] = useState<{ before: boolean; after: boolean }>({ before: true, after: true });
+  const kindOf = (f: File) => (/_Antes_/.test(f.name) ? "before" : /_Depois_/.test(f.name) ? "after" : "other");
+  const counts = { before: allFiles?.filter((f) => kindOf(f) === "before").length ?? 0, after: allFiles?.filter((f) => kindOf(f) === "after").length ?? 0 };
+  const files = allFiles?.filter((f) => { const k = kindOf(f); return k === "other" || kinds[k]; }) ?? null;
   // Código criado ao finalizar (lido da visita: a prop pode ser de antes do toque).
   const linkId = visit.attendances[attendance.id]?.reportLinkId ?? attendance.reportLinkId;
   const text = visitReportText(visit, {
@@ -693,10 +711,13 @@ function ReportShareSheet({ visitId, attendance, brandIds, onDone }: { visitId: 
   return (
     <Sheet
       open
-      onClose={() => onDone(false)}
+      onClose={onBack}
       title="Deseja enviar o relatório preenchido?"
       footer={
         <div className="flex gap-2">
+          <Button size="xl" variant="secondary" className="flex-1" onClick={onBack} aria-label="Voltar à tela anterior">
+            <ArrowLeft className="size-5" /> Voltar
+          </Button>
           <Button size="xl" variant="secondary" className="flex-1" onClick={() => onDone(false)}>
             Não
           </Button>
@@ -710,6 +731,23 @@ function ReportShareSheet({ visitId, attendance, brandIds, onDone }: { visitId: 
         Vai pelo WhatsApp (você escolhe o contato ou grupo): os produtos de {brand?.name ?? "da marca"} próximos ao vencimento (data, quantidade e valor), os produtos em ruptura
         {files?.length ? ` e ${files.length} foto(s) do atendimento` : ""}.
       </p>
+      {counts.before || counts.after ? (
+        <div className="mt-3">
+          <p className="text-[13px] font-semibold text-ink-2 mb-2">Fotos que vão junto:</p>
+          <div className="flex gap-2">
+            {counts.before ? (
+              <Chip selected={kinds.before} onClick={() => setKinds((k) => ({ ...k, before: !k.before }))}>
+                Antes ({counts.before})
+              </Chip>
+            ) : null}
+            {counts.after ? (
+              <Chip selected={kinds.after} onClick={() => setKinds((k) => ({ ...k, after: !k.after }))}>
+                Depois ({counts.after})
+              </Chip>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {msg ? <p className="mt-2 text-[13px] font-medium text-warn">{msg}</p> : null}
     </Sheet>
   );

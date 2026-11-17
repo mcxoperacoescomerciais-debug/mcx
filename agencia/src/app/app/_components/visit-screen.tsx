@@ -224,7 +224,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
         {shareAttendance ? (
           <>
             <p className="text-[14px] text-muted mb-3">
-              {cat.brandById.get(shareAttendance.brandId)?.name}: o PDF vai junto com as fotos do depois. Escolha o grupo no WhatsApp.
+              {cat.brandById.get(shareAttendance.brandId)?.name}: envie o PDF e depois as fotos (antes e/ou depois). Escolha o grupo no WhatsApp nos dois envios.
             </p>
             <SharePdf attendance={shareAttendance} storeId={visit.storeId} visitDate={visit.visitDate} />
             <button type="button" onClick={closeShare} className="w-full text-center text-[13px] text-muted font-medium py-3">

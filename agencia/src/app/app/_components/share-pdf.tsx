@@ -1,7 +1,10 @@
 "use client";
 
 /**
- * "Enviar PDF no WhatsApp" (modo SUINCO). Com sinal e o atendimento já no
+ * "Enviar PDF no WhatsApp" (modo SUINCO). Dois envios: 1) o PDF com a mensagem;
+ * 2) as fotos escolhidas (antes e/ou depois) SÓ com imagens — misturadas com o
+ * PDF, o WhatsApp manda as fotos como arquivo (documento) em vez de foto.
+ * Com sinal e o atendimento já no
  * servidor, usa o PDF oficial; sem sinal (ou antes de sincronizar), gera o PDF
  * no próprio celular com o que está gravado nele — o promotor nunca fica sem o
  * relatório. O arquivo é preparado ANTES do toque: o celular só abre a janela
@@ -10,6 +13,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, Images, Share2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui";
+import { Chip } from "./primitives";
 import { fmtDate } from "@/lib/dates";
 import { attendanceDisplayStatus, type LocalAttendance } from "../_lib/local-store";
 import { useCatalog, useLocal, useObjectUrl } from "../_lib/hooks";
@@ -92,49 +96,67 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
   const localFile = localPdf?.source === attendance ? localPdf.file : null;
   const file = useServer && serverFile ? serverFile : needLocal ? localFile : null;
 
-  // Fotos do depois (com faixa de identificação) vão junto com o PDF.
-  const afterKey = attendance.photos
-    .filter((ph) => ph.kind === "after")
+  // Fotos do antes e do depois (com faixa de identificação), enviadas à parte do PDF.
+  const photoKey = attendance.photos
+    .filter((ph) => ph.kind === "after" || ph.kind === "before")
     .map((ph) => `${ph.id}:${ph.uploaded}`)
     .join(",");
-  const [photos, setPhotos] = useState<{ key: string; files: File[] } | null>(null);
+  const [photos, setPhotos] = useState<{ key: string; before: File[]; after: File[] } | null>(null);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { afterPhotoFiles } = await import("../_lib/photo-stamp");
-      const files = await afterPhotoFiles(attendance.photos, {
+      const { beforeAfterPhotoFiles } = await import("../_lib/photo-stamp");
+      const files = await beforeAfterPhotoFiles(attendance.photos, {
         store: store?.name ?? "",
         city: [store?.city, store?.state].filter(Boolean).join(" - "),
         promoter: bootstrap?.user.name ?? "",
-      }).catch(() => []);
-      if (!cancelled) setPhotos({ key: afterKey, files });
+      }).catch(() => ({ before: [], after: [] }));
+      if (!cancelled) setPhotos({ key: photoKey, ...files });
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refaz só quando as fotos do depois mudam
-  }, [afterKey, store?.name, bootstrap?.user.name]);
-  const photoFiles = photos?.key === afterKey ? photos.files : null;
-  const ready = Boolean(file) && photoFiles !== null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refaz só quando as fotos mudam
+  }, [photoKey, store?.name, bootstrap?.user.name]);
+  const loaded = photos?.key === photoKey ? photos : null;
+  // Antes e depois marcados de início; o promotor desmarca o que não quer mandar.
+  const [kinds, setKinds] = useState<{ before: boolean; after: boolean }>({ before: true, after: true });
+  const photoFiles = loaded ? [...(kinds.before ? loaded.before : []), ...(kinds.after ? loaded.after : [])] : null;
+  const [pdfSent, setPdfSent] = useState(false);
+  const ready = Boolean(file);
   const isLocal = file !== null && file === localFile;
   const fileUrl = useObjectUrl(isLocal ? file : null);
 
-  async function share(onlyPhotos = false) {
-    if (!file && !onlyPhotos) return;
+  async function sharePhotos() {
+    const all = photoFiles ?? [];
+    if (!all.length) return;
+    setMsg(null);
+    try {
+      // Só imagens, sem texto nem PDF: o WhatsApp manda como FOTO (não como arquivo).
+      if (navigator.canShare?.({ files: all })) await navigator.share({ files: all });
+      else setMsg("Este celular não compartilha fotos pelo app. Envie pela galeria.");
+    } catch (e) {
+      const n = (e as Error)?.name;
+      if (n === "NotAllowedError") setMsg("O celular bloqueou a janela de compartilhar. Toque de novo.");
+      else if (n !== "AbortError") setMsg("Não foi possível compartilhar agora. Tente de novo.");
+    }
+  }
+
+  async function share() {
+    if (!file) return;
     setMsg(null);
     // Mensagem também na área de transferência (sem esperar: o compartilhar sai no mesmo toque).
     navigator.clipboard?.writeText(text).then(
       () => undefined,
       () => undefined,
     );
-    const all = onlyPhotos ? (photoFiles ?? []) : [file!, ...(photoFiles ?? [])];
     try {
-      if (all.length && navigator.canShare?.({ files: all, text })) await navigator.share({ files: all, text, title: "Relatório de atendimento" });
-      else if (all.length && navigator.canShare?.({ files: all })) await navigator.share({ files: all, title: "Relatório de atendimento" });
-      else if (!onlyPhotos && navigator.canShare?.({ files: [file!] })) {
-        // Celular não aceita vários arquivos de uma vez: vai o PDF; as fotos no botão abaixo.
-        await navigator.share({ files: [file!], text, title: "Relatório de atendimento" });
-        if (photoFiles?.length) setMsg("Este celular envia um arquivo por vez. Toque em “Enviar fotos do depois”.");
+      if (navigator.canShare?.({ files: [file], text })) {
+        await navigator.share({ files: [file], text, title: "Relatório de atendimento" });
+        setPdfSent(true);
+      } else if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: "Relatório de atendimento" });
+        setPdfSent(true);
       } else if (file) {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(file);
@@ -151,14 +173,9 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
   const href = isLocal ? fileUrl : url;
   return (
     <div className="space-y-2">
-      <Button size="xl" variant="success" className="w-full" disabled={!ready} onClick={() => void share()}>
-        <Share2 className="size-5" /> {ready ? "ENVIAR PDF + FOTOS DO DEPOIS" : "PREPARANDO O RELATÓRIO…"}
+      <Button size="xl" variant={pdfSent ? "secondary" : "success"} className="w-full" disabled={!ready} onClick={() => void share()}>
+        <Share2 className="size-5" /> {ready ? (pdfSent ? "1. PDF ENVIADO · ENVIAR DE NOVO" : "1. ENVIAR PDF") : "PREPARANDO O RELATÓRIO…"}
       </Button>
-      {ready && photoFiles?.length ? (
-        <p className="text-[12.5px] text-muted text-center">
-          PDF + {photoFiles.length} foto(s) do depois. No WhatsApp, escolha o grupo da loja.
-        </p>
-      ) : null}
       {isLocal ? (
         <p className="text-[12.5px] text-muted text-center inline-flex items-center justify-center gap-1.5 w-full">
           <WifiOff className="size-3.5" />
@@ -166,10 +183,27 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
         </p>
       ) : null}
       {msg ? <p className="text-[13px] text-bad text-center">{msg}</p> : null}
-      {photoFiles?.length ? (
-        <button type="button" onClick={() => void share(true)} className="w-full h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
-          <Images className="size-4" /> Enviar fotos do depois
-        </button>
+      {loaded && loaded.before.length + loaded.after.length ? (
+        <div className="rounded-xl border border-line p-3 space-y-2.5">
+          <p className="text-[13px] font-semibold text-ink-2">2. Fotos para o grupo (vão como foto):</p>
+          <div className="flex gap-2">
+            {loaded.before.length ? (
+              <Chip selected={kinds.before} onClick={() => setKinds((k) => ({ ...k, before: !k.before }))}>
+                Antes ({loaded.before.length})
+              </Chip>
+            ) : null}
+            {loaded.after.length ? (
+              <Chip selected={kinds.after} onClick={() => setKinds((k) => ({ ...k, after: !k.after }))}>
+                Depois ({loaded.after.length})
+              </Chip>
+            ) : null}
+          </div>
+          <Button size="xl" variant={pdfSent ? "success" : "secondary"} className="w-full" disabled={!photoFiles?.length} onClick={() => void sharePhotos()}>
+            <Images className="size-5" /> {photoFiles?.length ? `ENVIAR ${photoFiles.length} FOTO(S)` : "ESCOLHA ANTES OU DEPOIS"}
+          </Button>
+        </div>
+      ) : loaded === null ? (
+        <p className="text-[12.5px] text-muted text-center">Preparando as fotos…</p>
       ) : null}
       {href && file ? (
         <div className="grid grid-cols-2 gap-2">

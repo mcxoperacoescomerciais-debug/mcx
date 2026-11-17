@@ -24,7 +24,7 @@ export function Screen({ children, footer, className }: { children: ReactNode; f
 
 export function TopBar({ title, subtitle, back, right }: { title: ReactNode; subtitle?: ReactNode; back?: string | (() => void); right?: ReactNode }) {
   return (
-    <header className="sticky top-0 z-30 bg-brand-900 text-white">
+    <header className="sticky top-0 z-30 bg-brand-900 text-white" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
       <div className="max-w-[560px] mx-auto flex items-center gap-1 px-2 h-14">
         {back !== undefined ? (
           <button

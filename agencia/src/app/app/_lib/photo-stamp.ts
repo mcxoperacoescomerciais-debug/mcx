@@ -62,15 +62,18 @@ export async function attendancePhotoFiles(photos: LocalPhoto[], info: StampInfo
   return files;
 }
 
-export async function afterPhotoFiles(photos: LocalPhoto[], info: StampInfo): Promise<File[]> {
-  const after = photos.filter((p) => p.kind === "after");
+/** Fotos do antes e do depois, separadas, com a faixa de identificação (envio no grupo da loja). */
+export async function beforeAfterPhotoFiles(photos: LocalPhoto[], info: StampInfo): Promise<{ before: File[]; after: File[] }> {
   const safe = (v: string) => v.normalize("NFD").replace(/[^\w]+/g, "_").replace(/^_|_$/g, "");
-  const files: File[] = [];
-  for (const [i, p] of after.entries()) {
-    const blob = await photoBlob(p);
-    if (!blob) continue;
-    const stamped = await stamp(blob, [info.store.toUpperCase(), info.city, fmtDateTime(p.takenAt), info.promoter ? `Promotor: ${info.promoter}` : ""].filter(Boolean)).catch(() => blob);
-    files.push(new File([stamped], `Depois_${i + 1}_${safe(info.store)}.jpg`, { type: "image/jpeg" }));
+  const out = { before: [] as File[], after: [] as File[] };
+  for (const kind of ["before", "after"] as const) {
+    const label = kind === "before" ? "Antes" : "Depois";
+    for (const [i, p] of photos.filter((x) => x.kind === kind).entries()) {
+      const blob = await photoBlob(p);
+      if (!blob) continue;
+      const stamped = await stamp(blob, [info.store.toUpperCase(), `${label} · ${info.city}`, fmtDateTime(p.takenAt), info.promoter ? `Promotor: ${info.promoter}` : ""].filter(Boolean)).catch(() => blob);
+      out[kind].push(new File([stamped], `${label}_${i + 1}_${safe(info.store)}.jpg`, { type: "image/jpeg" }));
+    }
   }
-  return files;
+  return out;
 }
