@@ -17,13 +17,22 @@ async function draw(bitmap: ImageBitmap, maxSide: number, quality: number): Prom
   return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
 }
 
-export async function preparePhoto(file: File): Promise<{ full: Blob; thumb: Blob | null }> {
-  try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-    const [full, thumb] = await Promise.all([draw(bitmap, MAX_SIDE, 0.82), draw(bitmap, THUMB_SIDE, 0.72)]);
-    bitmap.close();
-    return { full: full ?? file, thumb };
-  } catch {
-    return { full: file, thumb: null };
+export async function preparePhoto(file: Blob): Promise<{ full: Blob; thumb: Blob | null }> {
+  // 1ª tentativa: decodifica inteira. Câmeras de 50 MP passam de 200 MB de memória e o
+  // Android recusa — aí decodifica já reduzida (bem mais leve). Só em último caso fica o original.
+  const attempts: ImageBitmapOptions[] = [{ imageOrientation: "from-image" }, { imageOrientation: "from-image", resizeWidth: MAX_SIDE, resizeQuality: "high" }];
+  for (const opts of attempts) {
+    try {
+      const bitmap = await createImageBitmap(file, opts);
+      const [full, thumb] = await Promise.all([draw(bitmap, MAX_SIDE, 0.82), draw(bitmap, THUMB_SIDE, 0.72)]);
+      bitmap.close();
+      if (full) return { full, thumb };
+    } catch {
+      /* tenta a próxima forma */
+    }
   }
+  return { full: file, thumb: null };
 }
+
+/** Foto que ficou grande demais (não foi reduzida ao tirar) — reduz antes de enviar. */
+export const UPLOAD_MAX_BYTES = 6 * 1024 * 1024;

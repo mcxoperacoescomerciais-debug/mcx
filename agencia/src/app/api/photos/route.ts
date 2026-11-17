@@ -8,7 +8,8 @@ import { getApiScope, unauthorized } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { photoKeys, storage } from "@/server/storage";
 
-const MAX_BYTES = 8 * 1024 * 1024;
+// O app reduz para ~300 KB; o limite alto só cobre celular que não consegue reduzir (foto original da câmera).
+const MAX_BYTES = 25 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   const thumb = form?.get("thumb");
   const id = String(form?.get("id") ?? "");
   if (!(file instanceof File) || !UUID.test(id)) return Response.json({ error: "Dados inválidos." }, { status: 400 });
-  if (file.size > MAX_BYTES || !ALLOWED.has(file.type)) return Response.json({ error: "Arquivo inválido ou muito grande." }, { status: 400 });
+  if (file.size > MAX_BYTES || !(ALLOWED.has(file.type) || file.type === "")) return Response.json({ error: "Arquivo inválido ou muito grande." }, { status: 400 });
 
   const db = await getDb();
   const [row] = await db
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
 
   const keys = photoKeys(scope.agencyId, row.visitDate, row.visitId, row.photo.attendanceId, id);
   const bytes = new Uint8Array(await file.arrayBuffer());
-  await storage().put(keys.full, bytes, file.type);
+  await storage().put(keys.full, bytes, file.type || "image/jpeg");
   let thumbKey: string | null = null;
   if (thumb instanceof File && thumb.size > 0 && thumb.size < 1024 * 1024 && ALLOWED.has(thumb.type)) {
     await storage().put(keys.thumb, new Uint8Array(await thumb.arrayBuffer()), thumb.type);
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       uploadedAt: new Date(),
       storageKey: keys.full,
       thumbKey,
-      contentType: file.type,
+      contentType: file.type || "image/jpeg",
       bytes: bytes.byteLength,
       width: Number(form?.get("width")) || null,
       height: Number(form?.get("height")) || null,

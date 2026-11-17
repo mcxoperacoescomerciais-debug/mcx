@@ -28,6 +28,7 @@ import type {
 } from "@/lib/sync-types";
 import type { AttendanceDisplayStatus, AttendanceStatus, ExceptionItem, ExceptionReason, PhotoKind, PhotoPlacement, PhotoSource, QuestionAnswer, VisitStatus } from "@/lib/domain";
 import { todayIso } from "@/lib/dates";
+import { preparePhoto, UPLOAD_MAX_BYTES } from "./photo";
 
 export interface LocalPhoto extends PhotoInput {
   /** Arquivo confirmado no servidor. */
@@ -875,12 +876,24 @@ async function doSync(): Promise<void> {
     for (const a of Object.values(v.attendances)) {
       if (a.syncedRev === 0) continue;
       for (const p of a.photos.filter((ph) => !ph.uploaded && ph.local)) {
-        const blob = await getPhotoBlob(p.id);
+        let blob = await getPhotoBlob(p.id);
         if (!blob) {
           await markPhoto(v.id, a.id, p.id, { local: false, lastError: "Arquivo não encontrado no aparelho." });
           continue;
         }
-        const thumb = await getPhotoBlob(p.id, true);
+        let thumb = await getPhotoBlob(p.id, true);
+        // Foto que não foi reduzida ao tirar (celular sem memória na hora): reduz agora e guarda a versão leve.
+        if (blob.size > UPLOAD_MAX_BYTES || !thumb || !["image/jpeg", "image/png", "image/webp"].includes(blob.type)) {
+          const small = await preparePhoto(blob).catch(() => null);
+          if (small && small.full !== blob && small.full.size < blob.size) {
+            blob = small.full;
+            await set(blobKey(p.id), blob, idb);
+          }
+          if (small?.thumb && !thumb) {
+            thumb = small.thumb;
+            await set(thumbKey(p.id), thumb, idb);
+          }
+        }
         const form = new FormData();
         form.set("id", p.id);
         form.set("file", blob, `${p.id}.jpg`);
