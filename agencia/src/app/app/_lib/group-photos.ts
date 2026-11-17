@@ -8,9 +8,17 @@ export const GROUP_MAX_FILES = 10;
 
 type Taken = { kind: string; takenAt: string };
 
-export function groupPhotos<T extends Taken>(photos: T[], max = GROUP_MAX_FILES): { sent: T[]; hasBefore: boolean } {
+export function groupPhotos<T extends Taken>(photos: T[], max = GROUP_MAX_FILES): { sent: T[]; hasBefore: boolean; afterLeft: number } {
   const after = photos.filter((p) => p.kind === "after").sort((a, b) => a.takenAt.localeCompare(b.takenAt));
-  return { sent: after.slice(0, Math.max(0, max)), hasBefore: photos.some((p) => p.kind === "before") };
+  const sent = after.slice(0, Math.max(0, max));
+  return { sent, hasBefore: photos.some((p) => p.kind === "before"), afterLeft: after.length - sent.length };
+}
+
+/** Texto para o promotor, embaixo do botão de envio. */
+export function groupSendHint(sentCount: number, afterLeft: number, hasBefore: boolean): string {
+  const head = `Vão ${sentCount} foto${sentCount === 1 ? "" : "s"} do DEPOIS para o grupo.`;
+  if (afterLeft > 0) return `${head} As outras ${afterLeft} do depois${hasBefore ? " e as do antes" : ""} ficam no relatório.`;
+  return hasBefore ? `${head} As do antes ficam no relatório.` : head;
 }
 
 /** Linha padrão da mensagem do grupo quando o atendimento tem fotos do antes. */

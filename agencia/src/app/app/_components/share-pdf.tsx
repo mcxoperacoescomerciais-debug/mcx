@@ -17,7 +17,7 @@ import { Button } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 import { attendanceDisplayStatus, type LocalAttendance } from "../_lib/local-store";
 import { useCatalog, useLocal, useObjectUrl } from "../_lib/hooks";
-import { BEFORE_IN_REPORT_NOTE, GROUP_MAX_FILES, groupPhotos } from "../_lib/group-photos";
+import { BEFORE_IN_REPORT_NOTE, GROUP_MAX_FILES, groupPhotos, groupSendHint } from "../_lib/group-photos";
 
 export function SharePdf({ attendance, storeId, visitDate }: { attendance: LocalAttendance; storeId: string; visitDate: string }) {
   const { bootstrap, sync } = useLocal();
@@ -167,7 +167,7 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
       </Button>
       {ready ? (
         <p className="text-[12.5px] text-muted text-center">
-          {count ? `${count} foto(s) do DEPOIS e ` : ""}o relatório em PDF{group.hasBefore ? " (as fotos do antes ficam no relatório)" : ""}. No WhatsApp, escolha o grupo da loja.
+          {count ? `${groupSendHint(count, group.afterLeft + (group.sent.length - count), group.hasBefore)} ` : ""}No WhatsApp, escolha o grupo da loja.
         </p>
       ) : null}
       {msg ? <p className="text-[13px] text-bad text-center">{msg}</p> : null}
