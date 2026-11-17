@@ -34,7 +34,7 @@ import { classify, DEFAULT_BANDS, SEVERITY_LABEL } from "@/lib/validity";
 import { OccurrenceStep } from "./occurrence-step";
 import { SharePdf } from "./share-pdf";
 import { visitReportText, whatsappLink } from "../_lib/visit-report";
-import { GROUP_MAX_FILES, groupPhotos, groupPhotosNote } from "../_lib/group-photos";
+import { GROUP_MAX_FILES } from "../_lib/group-photos";
 
 const STEPS = [
   { id: "antes", label: "Antes" },
@@ -242,7 +242,6 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             kind="before"
             photos={attendance.photos.filter((p) => p.kind === "before")}
             min={brand.minBeforePhotos}
-            groupTotal={groupPhotos(attendance.photos).total}
             allowGallery={brand.allowGallery}
             editable={editable}
             title="Foto do antes"
@@ -257,7 +256,6 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             kind="after"
             photos={attendance.photos.filter((p) => p.kind === "after")}
             min={brand.minAfterPhotos}
-            groupTotal={groupPhotos(attendance.photos).total}
             allowGallery={brand.allowGallery}
             editable={editable}
             title="Foto do depois"
@@ -680,8 +678,7 @@ function ReportShareSheet({
     brandIds,
     attendanceId: attendance.id,
   });
-  const note = files && chosen ? groupPhotosNote(files.length, chosen.length) : null;
-  const text = note ? `${baseText}\n\n${note}` : baseText;
+  const text = baseText;
   // Prepara as fotos antes do toque (o compartilhar precisa sair no mesmo toque).
   useEffect(() => {
     let cancelled = false;
@@ -753,7 +750,7 @@ function ReportShareSheet({
       </p>
       {leftOut > 0 ? (
         <p className="mt-2 text-[13px] font-semibold text-warn">
-          O WhatsApp aceita até {GROUP_MAX_FILES} fotos por envio: vão as {files?.length} primeiras. As outras {leftOut} ficam só no relatório (a mensagem avisa).
+          O WhatsApp aceita até {GROUP_MAX_FILES} fotos por envio: vão as {files?.length} primeiras. Todas ficam no relatório completo.
         </p>
       ) : null}
       {counts.before || counts.after ? (
