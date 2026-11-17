@@ -9,7 +9,7 @@ import { useEffect } from "react";
 import { Loader2, WifiOff } from "lucide-react";
 import { initLocalStore } from "../_lib/local-store";
 import { useHashRoute, useLocal } from "../_lib/hooks";
-import { ToastHost } from "./primitives";
+import { releaseStuckScroll, ToastHost } from "./primitives";
 import { HomeScreen } from "./home-screen";
 import { StoresScreen } from "./stores-screen";
 import { HistoryScreen, ProfileScreen } from "./history-profile";
@@ -42,6 +42,12 @@ export function PromoterApp() {
     void initLocalStore();
     registerServiceWorker();
   }, []);
+
+  // Trocou de tela sem folha aberta: garante que a página rola (nunca fica travada).
+  const routeKey = route.join("/");
+  useEffect(() => {
+    releaseStuckScroll();
+  }, [routeKey]);
 
   useEffect(() => {
     if (state.sessionExpired) window.location.replace("/sair");

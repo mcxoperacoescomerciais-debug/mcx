@@ -151,19 +151,40 @@ export function BottomTabs({ active }: { active: "hoje" | "lojas" | "historico" 
 
 // ───────────────────────────── Folha inferior / diálogo ─────────────────────────────
 
+/**
+ * Trava a rolagem da página enquanto há folha aberta — com contador: antes cada folha
+ * guardava o estado anterior, e duas folhas sobrepostas deixavam a página travada
+ * ("hidden") depois de fechar as duas; no iPhone o app quase nunca recarrega, e
+ * nenhuma tela rolava mais.
+ */
+let scrollLocks = 0;
+function lockScroll() {
+  scrollLocks += 1;
+  document.body.style.overflow = "hidden";
+}
+function unlockScroll() {
+  scrollLocks = Math.max(0, scrollLocks - 1);
+  if (scrollLocks === 0) document.body.style.overflow = "";
+}
+/** Segurança: ao trocar de tela sem folha aberta, a rolagem volta. */
+export function releaseStuckScroll() {
+  if (scrollLocks === 0 && document.body.style.overflow) document.body.style.overflow = "";
+}
+
 export function Sheet({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockScroll();
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
