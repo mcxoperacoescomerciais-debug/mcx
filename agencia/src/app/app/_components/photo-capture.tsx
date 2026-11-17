@@ -9,6 +9,7 @@ import { addPhoto, getPhotoBlob, removePhoto, type LocalPhoto, type PhotoLink } 
 import { haptic, useObjectUrl } from "../_lib/hooks";
 import { preparePhoto } from "../_lib/photo";
 import { Sheet, toast } from "./primitives";
+import { GROUP_MAX_FILES } from "../_lib/group-photos";
 
 /**
  * Foto do atendimento. Ampliada: original do aparelho → servidor (com sinal) →
@@ -69,10 +70,12 @@ interface CaptureProps {
   cta: string;
   link?: PhotoLink;
   compact?: boolean;
+  /** Fotos do antes + depois já tiradas (o grupo recebe só as 10 primeiras). */
+  groupTotal?: number;
 }
 
 /** Captura com câmera traseira (prioridade) e galeria (se a marca permitir). */
-export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGallery, editable, title, cta, link, compact }: CaptureProps) {
+export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGallery, editable, title, cta, link, compact, groupTotal }: CaptureProps) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -181,6 +184,11 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
         </div>
       ) : null}
 
+      {editable && groupTotal !== undefined && groupTotal >= GROUP_MAX_FILES ? (
+        <p className="mb-2 text-[13px] font-semibold text-warn bg-warn-bg rounded-xl px-3 py-2">
+          {groupTotal} fotos (antes + depois). O grupo do WhatsApp recebe as {GROUP_MAX_FILES} primeiras; as próximas ficam só no relatório.
+        </p>
+      ) : null}
       {editable ? (
         <div className="space-y-2">
           <button

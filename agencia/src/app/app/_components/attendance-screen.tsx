@@ -34,6 +34,7 @@ import { classify, DEFAULT_BANDS, SEVERITY_LABEL } from "@/lib/validity";
 import { OccurrenceStep } from "./occurrence-step";
 import { SharePdf } from "./share-pdf";
 import { visitReportText, whatsappLink } from "../_lib/visit-report";
+import { GROUP_MAX_FILES, groupPhotos, groupPhotosNote } from "../_lib/group-photos";
 
 const STEPS = [
   { id: "antes", label: "Antes" },
@@ -241,6 +242,7 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             kind="before"
             photos={attendance.photos.filter((p) => p.kind === "before")}
             min={brand.minBeforePhotos}
+            groupTotal={groupPhotos(attendance.photos).total}
             allowGallery={brand.allowGallery}
             editable={editable}
             title="Foto do antes"
@@ -255,6 +257,7 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             kind="after"
             photos={attendance.photos.filter((p) => p.kind === "after")}
             min={brand.minAfterPhotos}
+            groupTotal={groupPhotos(attendance.photos).total}
             allowGallery={brand.allowGallery}
             editable={editable}
             title="Foto do depois"
@@ -661,10 +664,13 @@ function ReportShareSheet({
   const [kinds, setKinds] = useState<{ before: boolean; after: boolean }>({ before: true, after: true });
   const kindOf = (f: File) => (/_Antes_/.test(f.name) ? "before" : /_Depois_/.test(f.name) ? "after" : "other");
   const counts = { before: allFiles?.filter((f) => kindOf(f) === "before").length ?? 0, after: allFiles?.filter((f) => kindOf(f) === "after").length ?? 0 };
-  const files = allFiles?.filter((f) => { const k = kindOf(f); return k === "other" || kinds[k]; }) ?? null;
+  const chosen = allFiles?.filter((f) => { const k = kindOf(f); return k === "other" || kinds[k]; }) ?? null;
+  // Android aceita no máximo 10 arquivos por envio: vão as 10 primeiras; o resto fica só no relatório.
+  const files = chosen?.slice(0, GROUP_MAX_FILES) ?? null;
+  const leftOut = (chosen?.length ?? 0) - (files?.length ?? 0);
   // Código criado ao finalizar (lido da visita: a prop pode ser de antes do toque).
   const linkId = visit.attendances[attendance.id]?.reportLinkId ?? attendance.reportLinkId;
-  const text = visitReportText(visit, {
+  const baseText = visitReportText(visit, {
     reportUrl: linkId ? `${window.location.origin}/r/${linkId}` : null,
     agency: local.bootstrap?.agency.name ?? "",
     promoter: local.bootstrap?.user.name ?? "",
@@ -674,6 +680,8 @@ function ReportShareSheet({
     brandIds,
     attendanceId: attendance.id,
   });
+  const note = files && chosen ? groupPhotosNote(files.length, chosen.length) : null;
+  const text = note ? `${baseText}\n\n${note}` : baseText;
   // Prepara as fotos antes do toque (o compartilhar precisa sair no mesmo toque).
   useEffect(() => {
     let cancelled = false;
@@ -743,6 +751,11 @@ function ReportShareSheet({
         Vai pelo WhatsApp (você escolhe o contato ou grupo): os produtos de {brand?.name ?? "da marca"} próximos ao vencimento (data, quantidade e valor), os produtos em ruptura
         {files?.length ? ` e ${files.length} foto(s) do atendimento` : ""}.
       </p>
+      {leftOut > 0 ? (
+        <p className="mt-2 text-[13px] font-semibold text-warn">
+          O WhatsApp aceita até {GROUP_MAX_FILES} fotos por envio: vão as {files?.length} primeiras. As outras {leftOut} ficam só no relatório (a mensagem avisa).
+        </p>
+      ) : null}
       {counts.before || counts.after ? (
         <div className="mt-3">
           <p className="text-[13px] font-semibold text-ink-2 mb-2">Fotos que vão junto:</p>

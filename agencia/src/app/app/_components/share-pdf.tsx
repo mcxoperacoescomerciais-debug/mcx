@@ -17,6 +17,7 @@ import { Button } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 import { attendanceDisplayStatus, type LocalAttendance } from "../_lib/local-store";
 import { useCatalog, useLocal, useObjectUrl } from "../_lib/hooks";
+import { GROUP_MAX_FILES, groupPhotos, groupPhotosNote } from "../_lib/group-photos";
 
 export function SharePdf({ attendance, storeId, visitDate }: { attendance: LocalAttendance; storeId: string; visitDate: string }) {
   const { bootstrap, sync } = useLocal();
@@ -97,16 +98,17 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
   const file = useServer && serverFile ? serverFile : needLocal ? localFile : null;
 
   // Fotos do antes e do depois (com faixa de identificação), enviadas à parte do PDF.
-  const photoKey = attendance.photos
-    .filter((ph) => ph.kind === "after" || ph.kind === "before")
-    .map((ph) => `${ph.id}:${ph.uploaded}`)
-    .join(",");
+  // Android aceita no máximo 10 arquivos por envio: vão as 10 primeiras tiradas (9 se o PDF
+  // for anexado); o excedente fica só no relatório e a mensagem avisa.
+  const groupMax = attendance.reportLinkId ? GROUP_MAX_FILES : GROUP_MAX_FILES - 1;
+  const group = groupPhotos(attendance.photos, groupMax);
+  const photoKey = group.sent.map((ph) => `${ph.id}:${ph.uploaded}`).join(",");
   const [photos, setPhotos] = useState<{ key: string; before: File[]; after: File[] } | null>(null);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const { beforeAfterPhotoFiles } = await import("../_lib/photo-stamp");
-      const files = await beforeAfterPhotoFiles(attendance.photos, {
+      const files = await beforeAfterPhotoFiles(group.sent, {
         store: store?.name ?? "",
         city: [store?.city, store?.state].filter(Boolean).join(" - "),
         promoter: bootstrap?.user.name ?? "",
@@ -125,7 +127,9 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
   // Link do relatório completo (criado ao finalizar): o PDF vai como link na mensagem e as
   // fotos vão como FOTO. Sem o link (atendimento antigo), o PDF vai como arquivo junto.
   const reportUrl = attendance.reportLinkId && typeof window !== "undefined" ? `${window.location.origin}/r/${attendance.reportLinkId}` : null;
-  const message = reportUrl ? `${text}\n\n📄 Relatório completo (PDF): ${reportUrl}` : text;
+  const note = photoFiles ? groupPhotosNote(photoFiles.length, photoFiles.length + group.left) : null;
+  const message0 = reportUrl ? `${text}\n\n📄 Relatório completo (PDF): ${reportUrl}` : text;
+  const message = note ? `${message0}\n\n${note}` : message0;
   const ready = photoFiles !== null && (Boolean(reportUrl) || Boolean(file));
 
   async function share() {
@@ -166,6 +170,11 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
       {ready ? (
         <p className="text-[12.5px] text-muted text-center">
           {count ? `${count} foto(s) — cada uma marcada ANTES ou DEPOIS — ` : ""}e o relatório em PDF. No WhatsApp, escolha o grupo da loja.
+        </p>
+      ) : null}
+      {ready && group.left > 0 ? (
+        <p className="text-[12.5px] text-warn font-semibold text-center">
+          O WhatsApp aceita até {groupMax} fotos por envio: vão as {count} primeiras. As outras {group.left} ficam só no relatório (a mensagem avisa o grupo).
         </p>
       ) : null}
       {msg ? <p className="text-[13px] text-bad text-center">{msg}</p> : null}
