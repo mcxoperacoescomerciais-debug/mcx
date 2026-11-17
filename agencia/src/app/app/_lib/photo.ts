@@ -18,9 +18,9 @@ async function draw(bitmap: ImageBitmap, maxSide: number, quality: number): Prom
 }
 
 export async function preparePhoto(file: Blob): Promise<{ full: Blob; thumb: Blob | null }> {
-  // 1ª tentativa: decodifica inteira. Câmeras de 50 MP passam de 200 MB de memória e o
-  // Android recusa — aí decodifica já reduzida (bem mais leve). Só em último caso fica o original.
-  const attempts: ImageBitmapOptions[] = [{ imageOrientation: "from-image" }, { imageOrientation: "from-image", resizeWidth: MAX_SIDE, resizeQuality: "high" }];
+  // Já decodifica reduzida (uma foto de 50 MP inteira ocupa ~200 MB; depois de algumas, o Android
+  // fecha o navegador enquanto a câmera está aberta e a foto se perde). A inteira fica de reserva.
+  const attempts: ImageBitmapOptions[] = [{ imageOrientation: "from-image", resizeWidth: MAX_SIDE, resizeQuality: "high" }, { imageOrientation: "from-image" }];
   for (const opts of attempts) {
     try {
       const bitmap = await createImageBitmap(file, opts);

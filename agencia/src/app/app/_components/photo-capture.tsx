@@ -94,7 +94,8 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
       setReplacing(null);
       return;
     }
-    if (!file.type.startsWith("image/")) {
+    // Algumas câmeras do Android devolvem a foto sem tipo — só recusa o que claramente não é imagem.
+    if (file.type && !file.type.startsWith("image/")) {
       toast("Escolha uma imagem.", "warn");
       return;
     }
