@@ -152,23 +152,13 @@ export function BottomTabs({ active }: { active: "hoje" | "lojas" | "historico" 
 // ───────────────────────────── Folha inferior / diálogo ─────────────────────────────
 
 /**
- * Trava a rolagem da página enquanto há folha aberta — com contador: antes cada folha
- * guardava o estado anterior, e duas folhas sobrepostas deixavam a página travada
- * ("hidden") depois de fechar as duas; no iPhone o app quase nunca recarrega, e
- * nenhuma tela rolava mais.
+ * A página NUNCA tem a rolagem travada: antes, abrir uma folha travava a página e, com duas
+ * folhas sobrepostas, ela podia ficar travada para sempre (iPhone). Agora só a folha segura
+ * o próprio rolar (overscroll-contain), sem mexer na página.
  */
-let scrollLocks = 0;
-function lockScroll() {
-  scrollLocks += 1;
-  document.body.style.overflow = "hidden";
-}
-function unlockScroll() {
-  scrollLocks = Math.max(0, scrollLocks - 1);
-  if (scrollLocks === 0) document.body.style.overflow = "";
-}
-/** Segurança: ao trocar de tela sem folha aberta, a rolagem volta. */
+/** Segurança: se algo (versão antiga, outro script) travou a página, a rolagem volta. */
 export function releaseStuckScroll() {
-  if (scrollLocks === 0 && document.body.style.overflow) document.body.style.overflow = "";
+  if (document.body.style.overflow) document.body.style.overflow = "";
 }
 
 export function Sheet({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode }) {
@@ -179,16 +169,14 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
     window.addEventListener("keydown", onKey);
-    lockScroll();
     return () => {
       window.removeEventListener("keydown", onKey);
-      unlockScroll();
     };
   }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Fechar" className="absolute inset-0 bg-black/45" onClick={onClose} />
+      <button type="button" aria-label="Fechar" className="absolute inset-0 bg-black/45 touch-none" onClick={onClose} />
       <div ref={ref} className="relative w-full max-w-[560px] max-h-[92dvh] flex flex-col bg-surface rounded-t-3xl sm:rounded-3xl shadow-[var(--shadow-pop)] animate-rise">
         <div className="flex items-start gap-3 px-5 pt-5 pb-3">
           <div className="flex-1 min-w-0 text-[17px] font-semibold text-ink">{title}</div>
@@ -196,7 +184,7 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
             <X className="size-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 pb-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4">{children}</div>
         {footer ? <div className="border-t border-line px-5 py-3 pb-safe">{footer}</div> : null}
       </div>
     </div>

@@ -43,7 +43,7 @@ export function PromoterApp() {
     registerServiceWorker();
   }, []);
 
-  // Trocou de tela sem folha aberta: garante que a página rola (nunca fica travada).
+  // Trocou de tela: garante que a página rola (nunca fica travada).
   const routeKey = route.join("/");
   useEffect(() => {
     releaseStuckScroll();
