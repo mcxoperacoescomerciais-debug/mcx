@@ -310,6 +310,22 @@ describe("fluxos críticos", () => {
     assert.equal(Buffer.from(out).subarray(0, 4).toString(), "%PDF");
   });
 
+  test("relatório do atendimento traz todas as fotos (20 do depois), quebrando página", async () => {
+    const b = await pdf.loadAttendanceBlock(scopes.gestor, ids.bravoAtt);
+    assert.ok(b);
+    const png = { data: (await import("node:fs")).readFileSync("public/icon-192.png"), format: "png" as const };
+    const base = b!.d.photos[0] ?? ({ kind: "after", uploadedAt: new Date(), takenAt: new Date() } as (typeof b.d.photos)[number]);
+    const extra = Array.from({ length: 20 }, (_, i) => ({ ...base, id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, kind: "after", uploadedAt: new Date(), takenAt: new Date() }));
+    const images = new Map(b!.images);
+    for (const ph of extra) images.set(ph.id, png);
+    const block = { d: { ...b!.d, photos: [...b!.d.photos, ...extra] } as typeof b.d, images };
+    const out = await pdf.renderAttendancesPdf({ agency: { name: "Teste", logo: null }, title: "Atendimento", subtitle: "", blocks: [block], footer: "" });
+    // Cada foto carregada vira miniatura com link para a página ampliada (antes: só as 8 primeiras).
+    const raw = Buffer.from(out).toString("latin1");
+    const linked = new Set(raw.match(/foto-00000000-0000-4000-8000-\d{12}/g) ?? []);
+    assert.equal(linked.size, 20);
+  });
+
   test("cenário 8: correção pedida pelo gestor preserva o original e identifica quem alterou", async () => {
     // Promotor não altera atendimento concluído.
     const now = new Date().toISOString();

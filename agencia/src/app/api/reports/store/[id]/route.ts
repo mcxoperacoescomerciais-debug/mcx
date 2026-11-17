@@ -24,7 +24,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/stor
   const f = { ...parseFilters(Object.fromEntries(url.searchParams), 7), store: id };
   const visits = await listVisits(scope, f);
   const attIds = visits.flatMap((v) => v.attendances.map((a) => a.id));
-  const blocks = (await Promise.all(attIds.slice(0, MAX_ATTENDANCES).map((a) => loadAttendanceBlock(scope, a, 4)))).filter((b) => b !== null);
+  const blocks = (await Promise.all(attIds.slice(0, MAX_ATTENDANCES).map((a) => loadAttendanceBlock(scope, a, 4, 8)))).filter((b) => b !== null);
   const brands = new Set(visits.flatMap((v) => v.attendances.map((a) => a.brandName)));
   const pdf = await renderAttendancesPdf({
     agency: await pdfAgency(scope),

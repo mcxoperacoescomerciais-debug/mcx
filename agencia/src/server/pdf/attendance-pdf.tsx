@@ -52,13 +52,18 @@ export interface AttendanceBlockData {
   images: Map<string, Img>;
 }
 
-export async function loadAttendanceBlock(scope: Scope, attendanceId: string, maxPhotos = 6): Promise<AttendanceBlockData | null> {
+/**
+ * maxBeforeAfter: fotos do antes e do depois carregadas por tipo. O relatório do atendimento
+ * (link do grupo) traz TODAS — o grupo recebe só as 10 primeiras e o resto fica aqui. Antes eram
+ * 8 por tipo e as demais saíam como "Aguardando sincronização".
+ */
+export async function loadAttendanceBlock(scope: Scope, attendanceId: string, maxPhotos = 6, maxBeforeAfter = 60): Promise<AttendanceBlockData | null> {
   const d = await getAttendanceDetail(scope, attendanceId);
   if (!d) return null;
   const images = new Map<string, Img>();
   const wanted = [
-    ...d.photos.filter((p) => p.kind === "before").slice(0, 8),
-    ...d.photos.filter((p) => p.kind === "after").slice(0, 8),
+    ...d.photos.filter((p) => p.kind === "before").slice(0, maxBeforeAfter),
+    ...d.photos.filter((p) => p.kind === "after").slice(0, maxBeforeAfter),
     ...d.photos.filter((p) => p.kind === "validity").slice(0, maxPhotos),
     ...d.photos.filter((p) => p.kind === "damage").slice(0, maxPhotos),
   ];
@@ -94,15 +99,15 @@ function PhotoStrip({ title, photos, images }: { title: string; photos: Detail["
 function PhotoGrid({ label, photos, images }: { label: string; photos: Detail["photos"]; images: Map<string, Img> }) {
   if (!photos.length) return <PhotoBox label={label} photo={undefined} img={undefined} />;
   return (
-    <View style={{ marginTop: 6 }} wrap={false}>
-      <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.muted, marginBottom: 3, textTransform: "uppercase" }}>
+    <View style={{ marginTop: 6 }}>
+      <Text minPresenceAhead={130} style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.muted, marginBottom: 3, textTransform: "uppercase" }}>
         {label} · {photos.length} foto(s) · toque para ampliar
       </Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {photos.map((p) => {
           const img = images.get(p.id);
           return (
-            <View key={p.id} style={{ width: 165 }}>
+            <View key={p.id} style={{ width: 165 }} wrap={false}>
               {img ? (
                 <Link src={`#foto-${p.id}`}>
                   {/* eslint-disable-next-line jsx-a11y/alt-text */}
@@ -110,7 +115,7 @@ function PhotoGrid({ label, photos, images }: { label: string; photos: Detail["p
                 </Link>
               ) : (
                 <View style={{ height: 124, borderRadius: 3, backgroundColor: C.syncBg, justifyContent: "center", alignItems: "center" }}>
-                  <Text style={{ fontSize: 8, color: C.sync }}>Aguardando sincronização</Text>
+                  <Text style={{ fontSize: 8, color: C.sync }}>{p.uploadedAt ? "Ver no painel" : "Aguardando sincronização"}</Text>
                 </View>
               )}
               <Text style={{ fontSize: 7, color: C.muted, marginTop: 2 }}>{fmtDateTime(p.takenAt)}</Text>
