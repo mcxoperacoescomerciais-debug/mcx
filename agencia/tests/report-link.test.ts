@@ -129,6 +129,19 @@ describe("link do relatório na mensagem do grupo", () => {
     assert.equal(row.link, null);
   });
 
+  test("atendimento concluído antes do link ganha um ao abrir o app (e ele abre o relatório)", async () => {
+    const old = attendance({});
+    await promoter.applySync(lucas, [visit(old)]);
+    const [v] = await db.select().from(s.visits).where(eq(s.visits.id, (await db.select({ visitId: s.attendances.visitId }).from(s.attendances).where(eq(s.attendances.id, old.id)))[0].visitId));
+    const [sv] = await promoter.loadServerVisits(db, [v]);
+    const link = sv.attendances.find((a) => a.id === old.id)?.reportLinkId;
+    assert.ok(link, "deveria criar o link");
+    assert.equal((await alerts.resolveAlertLink(link!))?.attendanceId, old.id);
+    // Abrir de novo não troca o link.
+    const [again] = await promoter.loadServerVisits(db, [v]);
+    assert.equal(again.attendances.find((a) => a.id === old.id)?.reportLinkId, link);
+  });
+
   test("atendimento em andamento não grava o código", async () => {
     const att = attendance({ status: "in_progress", finishedAt: null, reportLinkId: randomUUID() });
     const v = { ...visit(att), status: "in_progress" as const, finishedAt: null };

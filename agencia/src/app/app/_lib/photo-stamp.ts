@@ -71,7 +71,8 @@ export async function beforeAfterPhotoFiles(photos: LocalPhoto[], info: StampInf
     for (const [i, p] of photos.filter((x) => x.kind === kind).entries()) {
       const blob = await photoBlob(p);
       if (!blob) continue;
-      const stamped = await stamp(blob, [info.store.toUpperCase(), `${label} · ${info.city}`, fmtDateTime(p.takenAt), info.promoter ? `Promotor: ${info.promoter}` : ""].filter(Boolean)).catch(() => blob);
+      // ANTES/DEPOIS em destaque na 1ª linha (negrito) da faixa.
+      const stamped = await stamp(blob, [`${label.toUpperCase()} · ${info.store.toUpperCase()}`, info.city, fmtDateTime(p.takenAt), info.promoter ? `Promotor: ${info.promoter}` : ""].filter(Boolean)).catch(() => blob);
       out[kind].push(new File([stamped], `${label}_${i + 1}_${safe(info.store)}.jpg`, { type: "image/jpeg" }));
     }
   }

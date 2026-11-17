@@ -1,19 +1,19 @@
 "use client";
 
 /**
- * "Enviar PDF no WhatsApp" (modo SUINCO). Dois envios: 1) o PDF com a mensagem;
- * 2) as fotos escolhidas (antes e/ou depois) SÓ com imagens — misturadas com o
- * PDF, o WhatsApp manda as fotos como arquivo (documento) em vez de foto.
- * Com sinal e o atendimento já no
+ * "Enviar PDF + fotos no WhatsApp" (modo SUINCO), num toque só: as fotos do antes
+ * e do depois (cada uma com a faixa ANTES/DEPOIS) vão como FOTO e o relatório em
+ * PDF vai como link na mensagem (/r/<código>, abre sem login). Anexar o PDF faria
+ * o WhatsApp mandar as fotos como arquivo; por isso o PDF só vai anexado quando o
+ * atendimento não tem link (finalizado antes da atualização). Com sinal e o atendimento já no
  * servidor, usa o PDF oficial; sem sinal (ou antes de sincronizar), gera o PDF
  * no próprio celular com o que está gravado nele — o promotor nunca fica sem o
  * relatório. O arquivo é preparado ANTES do toque: o celular só abre a janela
  * de compartilhar logo após o toque, então o toque não pode esperar.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, Images, Share2, WifiOff } from "lucide-react";
+import { Download, Share2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui";
-import { Chip } from "./primitives";
 import { fmtDate } from "@/lib/dates";
 import { attendanceDisplayStatus, type LocalAttendance } from "../_lib/local-store";
 import { useCatalog, useLocal, useObjectUrl } from "../_lib/hooks";
@@ -119,45 +119,31 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refaz só quando as fotos mudam
   }, [photoKey, store?.name, bootstrap?.user.name]);
   const loaded = photos?.key === photoKey ? photos : null;
-  // Antes e depois marcados de início; o promotor desmarca o que não quer mandar.
-  const [kinds, setKinds] = useState<{ before: boolean; after: boolean }>({ before: true, after: true });
-  const photoFiles = loaded ? [...(kinds.before ? loaded.before : []), ...(kinds.after ? loaded.after : [])] : null;
-  const [pdfSent, setPdfSent] = useState(false);
-  const ready = Boolean(file);
+  const photoFiles = loaded ? [...loaded.before, ...loaded.after] : null;
   const isLocal = file !== null && file === localFile;
   const fileUrl = useObjectUrl(isLocal ? file : null);
-
-  async function sharePhotos() {
-    const all = photoFiles ?? [];
-    if (!all.length) return;
-    setMsg(null);
-    try {
-      // Só imagens, sem texto nem PDF: o WhatsApp manda como FOTO (não como arquivo).
-      if (navigator.canShare?.({ files: all })) await navigator.share({ files: all });
-      else setMsg("Este celular não compartilha fotos pelo app. Envie pela galeria.");
-    } catch (e) {
-      const n = (e as Error)?.name;
-      if (n === "NotAllowedError") setMsg("O celular bloqueou a janela de compartilhar. Toque de novo.");
-      else if (n !== "AbortError") setMsg("Não foi possível compartilhar agora. Tente de novo.");
-    }
-  }
+  // Link do relatório completo (criado ao finalizar): o PDF vai como link na mensagem e as
+  // fotos vão como FOTO. Sem o link (atendimento antigo), o PDF vai como arquivo junto.
+  const reportUrl = attendance.reportLinkId && typeof window !== "undefined" ? `${window.location.origin}/r/${attendance.reportLinkId}` : null;
+  const message = reportUrl ? `${text}\n\n📄 Relatório completo (PDF): ${reportUrl}` : text;
+  const ready = photoFiles !== null && (Boolean(reportUrl) || Boolean(file));
 
   async function share() {
-    if (!file) return;
     setMsg(null);
-    // Mensagem também na área de transferência (sem esperar: o compartilhar sai no mesmo toque).
-    navigator.clipboard?.writeText(text).then(
+    // Mensagem também na área de transferência (alguns WhatsApp ignoram o texto quando vão fotos).
+    navigator.clipboard?.writeText(message).then(
       () => undefined,
       () => undefined,
     );
+    const imgs = photoFiles ?? [];
+    const all = reportUrl ? imgs : file ? [file, ...imgs] : imgs;
     try {
-      if (navigator.canShare?.({ files: [file], text })) {
-        await navigator.share({ files: [file], text, title: "Relatório de atendimento" });
-        setPdfSent(true);
-      } else if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: "Relatório de atendimento" });
-        setPdfSent(true);
-      } else if (file) {
+      if (all.length && navigator.canShare?.({ files: all, text: message })) await navigator.share({ files: all, text: message, title: "Relatório de atendimento" });
+      else if (all.length && navigator.canShare?.({ files: all })) {
+        await navigator.share({ files: all, title: "Relatório de atendimento" });
+        setMsg("O texto foi copiado: cole na conversa do WhatsApp.");
+      } else if (!all.length) window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+      else if (file) {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(file);
         a.download = file.name;
@@ -171,54 +157,28 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
   }
 
   const href = isLocal ? fileUrl : url;
+  const count = photoFiles?.length ?? 0;
   return (
     <div className="space-y-2">
-      <Button size="xl" variant={pdfSent ? "secondary" : "success"} className="w-full" disabled={!ready} onClick={() => void share()}>
-        <Share2 className="size-5" /> {ready ? (pdfSent ? "1. PDF ENVIADO · ENVIAR DE NOVO" : "1. ENVIAR PDF") : "PREPARANDO O RELATÓRIO…"}
+      <Button size="xl" variant="success" className="w-full" disabled={!ready} onClick={() => void share()}>
+        <Share2 className="size-5" /> {ready ? "ENVIAR PDF + FOTOS" : "PREPARANDO O RELATÓRIO…"}
       </Button>
-      {isLocal ? (
-        <p className="text-[12.5px] text-muted text-center inline-flex items-center justify-center gap-1.5 w-full">
-          <WifiOff className="size-3.5" />
-          {sync.online ? "PDF gerado no celular (o oficial fica pronto quando tudo for enviado)." : "Sem sinal: PDF gerado no celular com o que está gravado nele."}
+      {ready ? (
+        <p className="text-[12.5px] text-muted text-center">
+          {count ? `${count} foto(s) — cada uma marcada ANTES ou DEPOIS — ` : ""}e o relatório em PDF. No WhatsApp, escolha o grupo da loja.
         </p>
       ) : null}
       {msg ? <p className="text-[13px] text-bad text-center">{msg}</p> : null}
-      {loaded && loaded.before.length + loaded.after.length ? (
-        <div className="rounded-xl border border-line p-3 space-y-2.5">
-          <p className="text-[13px] font-semibold text-ink-2">2. Fotos para o grupo (vão como foto):</p>
-          <div className="flex gap-2">
-            {loaded.before.length ? (
-              <Chip selected={kinds.before} onClick={() => setKinds((k) => ({ ...k, before: !k.before }))}>
-                Antes ({loaded.before.length})
-              </Chip>
-            ) : null}
-            {loaded.after.length ? (
-              <Chip selected={kinds.after} onClick={() => setKinds((k) => ({ ...k, after: !k.after }))}>
-                Depois ({loaded.after.length})
-              </Chip>
-            ) : null}
-          </div>
-          <Button size="xl" variant={pdfSent ? "success" : "secondary"} className="w-full" disabled={!photoFiles?.length} onClick={() => void sharePhotos()}>
-            <Images className="size-5" /> {photoFiles?.length ? `ENVIAR ${photoFiles.length} FOTO(S)` : "ESCOLHA ANTES OU DEPOIS"}
-          </Button>
-        </div>
-      ) : loaded === null ? (
-        <p className="text-[12.5px] text-muted text-center">Preparando as fotos…</p>
-      ) : null}
       {href && file ? (
-        <div className="grid grid-cols-2 gap-2">
-          <a href={href} download={file.name} className="h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
-            <Download className="size-4" /> Baixar PDF
-          </a>
-          <a href={href} target="_blank" rel="noreferrer" className="h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
-            <FileText className="size-4" /> Ver relatório
-          </a>
-        </div>
+        <a href={href} download={file.name} className="w-full h-11 rounded-xl border border-line-strong text-[14px] font-semibold inline-flex items-center justify-center gap-2">
+          <Download className="size-4" /> Baixar PDF
+        </a>
       ) : null}
-      <div className="rounded-xl bg-canvas px-3 py-2.5 text-[12.5px] text-ink-2">
-        <p className="font-semibold mb-0.5">Mensagem que vai junto do PDF:</p>
-        <p className="whitespace-pre-line">{text}</p>
-      </div>
+      {isLocal && !sync.online ? (
+        <p className="text-[12px] text-muted text-center inline-flex items-center justify-center gap-1.5 w-full">
+          <WifiOff className="size-3.5" /> Sem sinal: o link do relatório abre quando o celular enviar o atendimento.
+        </p>
+      ) : null}
     </div>
   );
 }

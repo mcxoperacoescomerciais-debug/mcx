@@ -289,6 +289,7 @@ function fromServerVisit(sv: ServerVisit, plannedBrandIds: string[], previous?: 
       exceptionReason: a.exceptionReason,
       exceptionNote: a.exceptionNote ?? "",
       cancelReason: a.cancelReason ?? "",
+      reportLinkId: a.reportLinkId ?? previous?.attendances[a.id]?.reportLinkId ?? null,
       photos: a.photos.map((p) => ({ ...p, local: prevPhotos.get(p.id)?.local ?? false })),
       deletedPhotoIds: [],
       stock: Object.fromEntries(a.stock.map((x) => [x.productId, x])),

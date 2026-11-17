@@ -328,6 +328,17 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
   if (!rows.length) return [];
   const visitIds = rows.map((r) => r.id);
   const atts = await db.select().from(s.attendances).where(inArray(s.attendances.visitId, visitIds));
+  // Atendimento concluído sem link do relatório (finalizado antes do link existir): cria agora,
+  // para o envio no grupo levar o PDF como link e as fotos como foto.
+  for (const a of atts) {
+    if (a.status !== "completed" || a.reportLinkId) continue;
+    const [u] = await db
+      .update(s.attendances)
+      .set({ reportLinkId: crypto.randomUUID() })
+      .where(and(eq(s.attendances.id, a.id), isNull(s.attendances.reportLinkId)))
+      .returning({ reportLinkId: s.attendances.reportLinkId });
+    if (u) a.reportLinkId = u.reportLinkId;
+  }
   const attIds = atts.map((a) => a.id);
   const none = [] as never[];
   const [ph, st, un, ru, oc, cr, va, dm] = attIds.length
@@ -372,6 +383,7 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
           exceptionReason: a.exceptionReason,
           exceptionNote: a.exceptionNote,
           cancelReason: a.cancelReason,
+          reportLinkId: a.reportLinkId,
           photos: ph
             .filter((p) => p.attendanceId === a.id)
             .map((p) => ({
