@@ -13,6 +13,9 @@ import { addDays, fmtDate, fmtDateTime, fmtDuration, fmtTime } from "@/lib/dates
 import { LinkButton, PageHeader, StatusBadge } from "@/components/ui";
 import { SectionCard } from "../../_components/widgets";
 import { BeforeAfter, type ViewerPhoto } from "../../_components/photo-viewer";
+import { ActionForm, Disclosure } from "../../_components/action-form";
+import { undoMistakenVisitAction } from "../../actions";
+import { isStaff } from "@/server/scope";
 
 export const metadata: Metadata = { title: "Visita" };
 
@@ -196,6 +199,19 @@ export default async function VisitPage({ params }: PageProps<"/painel/visitas/[
           );
         })}
       </div>
+      {isStaff(scope) && (v.status === "completed" || v.status === "closed_incomplete") && d.attendances.every((x) => x.a.status === "cancelled") ? (
+        <div className="mt-6">
+          <Disclosure tone="danger" label="Visita aberta por engano (loja errada)? Desfazer visita">
+            <p className="text-[13px] text-ink-2 mb-3">
+              A visita sai dos relatórios, pendências e metas, e a loja volta a ficar pendente no app do promotor para ele abrir quando for de fato à loja. O registro fica na auditoria.
+            </p>
+            <ActionForm action={undoMistakenVisitAction} hidden={{ id: v.id }} submitLabel="Desfazer visita" variant="danger">
+              <input name="reason" required minLength={5} placeholder="Motivo (ex.: promotor abriu a loja errada)" className="w-full h-10 rounded-lg border border-line-strong px-3 text-[14px] bg-surface" />
+            </ActionForm>
+          </Disclosure>
+        </div>
+      ) : null}
+      {v.status === "cancelled" && v.closeReason ? <p className="mt-6 text-[13.5px] text-warn font-medium">Visita cancelada: “{v.closeReason}”</p> : null}
       {v.notes ? (
         <SectionCard className="mt-6" title="Observações da visita" bodyClass="px-5 pb-5">
           <p className="text-[14px]">“{v.notes}”</p>

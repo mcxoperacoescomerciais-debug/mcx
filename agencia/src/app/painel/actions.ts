@@ -19,6 +19,10 @@ export async function requestCorrectionAction(_: FormState, fd: FormData): Promi
   return done(await m.requestCorrection(await getScope(), str(fd, "id"), str(fd, "reason")));
 }
 
+export async function undoMistakenVisitAction(_: FormState, fd: FormData): Promise<FormState> {
+  return done(await m.undoMistakenVisit(await getScope(), str(fd, "id"), str(fd, "reason")));
+}
+
 export async function cancelCorrectionAction(_: FormState, fd: FormData): Promise<FormState> {
   return done(await m.cancelCorrection(await getScope(), str(fd, "id"), str(fd, "reason")));
 }

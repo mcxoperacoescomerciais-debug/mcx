@@ -305,7 +305,7 @@ export function rowsOf<T>(result: unknown): T[] {
   return ((result as { rows?: T[] }).rows ?? []) as T[];
 }
 
-/** Visitas que o aparelho precisa conhecer: de hoje, abertas e com correção pedida. */
+/** Visitas que o aparelho precisa conhecer: de hoje (inclusive as desfeitas pelo gestor, para a loja voltar a pendente), abertas e com correção pedida. */
 async function serverVisitsForPromoter(db: DB, promoterId: string, today: string): Promise<ServerVisit[]> {
   const correctionVisitIds = db
     .select({ id: s.attendances.visitId })
@@ -317,8 +317,7 @@ async function serverVisitsForPromoter(db: DB, promoterId: string, today: string
     .where(
       and(
         eq(s.visits.promoterId, promoterId),
-        ne(s.visits.status, "cancelled"),
-        or(eq(s.visits.visitDate, today), eq(s.visits.status, "in_progress"), inArray(s.visits.id, correctionVisitIds)),
+        or(eq(s.visits.visitDate, today), and(ne(s.visits.status, "cancelled"), or(eq(s.visits.status, "in_progress"), inArray(s.visits.id, correctionVisitIds)))),
       ),
     );
   return loadServerVisits(db, rows);
