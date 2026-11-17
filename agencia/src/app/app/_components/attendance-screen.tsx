@@ -21,13 +21,13 @@ import {
 import { fmtDate, fmtDuration, fmtTime } from "@/lib/dates";
 import { exceptionIsValid } from "@/lib/rules";
 import { pendingQuestions, QUESTION_NOTE_MIN, type QuestionAnswer } from "@/lib/domain";
-import { attendanceDisplayStatus, cancelAttendance, finishAttendance, requestShare, updateAttendance, type LocalAttendance } from "../_lib/local-store";
+import { attendanceDisplayStatus, getAttendance, cancelAttendance, finishAttendance, requestShare, updateAttendance, type LocalAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useLocal, useVisit } from "../_lib/hooks";
 import { missingFor } from "../_lib/derive";
 import { Chip, Notice, Screen, Sheet, TextArea, toast, TopBar } from "./primitives";
 import { PhotoCapture, PhotoThumb } from "./photo-capture";
 import { StockStep } from "./stock-step";
-import { markProductRupture } from "./product-sheet";
+import { markProductRupture, saveOpenProductForms } from "./product-sheet";
 import { DamageStep } from "./damage-step";
 import { daysBetween } from "@/lib/dates";
 import { classify, DEFAULT_BANDS, SEVERITY_LABEL } from "@/lib/validity";
@@ -83,7 +83,26 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
   const current: StepId = (STEPS.find((s) => s.id === step)?.id ?? (editable ? firstOpenStep(attendance, brand, tracked.length) : "revisao")) as StepId;
   const idx = STEPS.findIndex((s) => s.id === current);
   const status = attendanceDisplayStatus(attendance);
-  const goStep = (id: StepId) => go(`visita/${visitId}/marca/${attendanceId}/${id}`, true);
+  const openStep = (id: StepId) => go(`visita/${visitId}/marca/${attendanceId}/${id}`, true);
+  // Saindo do estoque: produto com NÃO RUPTURA preenchido e sem "Salvar produto" é salvo agora;
+  // se faltar algo nele, a saída para e mostra o produto.
+  const goStep = async (id: StepId, askUnmarked = false) => {
+    if (current === "estoque" && editable) {
+      const blocked = await saveOpenProductForms(attendanceId);
+      if (blocked.length) {
+        toast(`${blocked[0].name}: ${blocked[0].problem}.`, "warn");
+        document.getElementById(`produto-${blocked[0].productId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (askUnmarked) {
+        const fresh = getAttendance(visitId, attendanceId) ?? attendance;
+        const hasRupture = new Set(Object.values(fresh.ruptures).map((r) => r.productId));
+        const missing = tracked.filter((p) => !fresh.stock[p.id] && !hasRupture.has(p.id));
+        if (missing.length) return setUnmarked(missing.map((p) => ({ id: p.id, name: p.name })));
+      }
+    }
+    openStep(id);
+  };
   const allowExceptions = cat.settings?.allowExceptions ?? false;
 
   const stepDone: Record<StepId, boolean> = {
@@ -107,14 +126,7 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             <Button
               size="xl"
               className="flex-1"
-              onClick={() => {
-                if (current === "estoque" && editable) {
-                  const hasRupture = new Set(Object.values(attendance.ruptures).map((r) => r.productId));
-                  const missing = tracked.filter((p) => !attendance.stock[p.id] && !hasRupture.has(p.id));
-                  if (missing.length) return setUnmarked(missing.map((p) => ({ id: p.id, name: p.name })));
-                }
-                goStep(STEPS[idx + 1].id);
-              }}
+              onClick={() => void goStep(STEPS[idx + 1].id, true)}
             >
               Próximo: {STEPS[idx + 1].label} <ArrowRight className="size-5" />
             </Button>
@@ -137,7 +149,7 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
               disabled={marking}
               onClick={() => {
                 setUnmarked(null);
-                goStep(STEPS[idx + 1].id);
+                openStep(STEPS[idx + 1].id);
               }}
             >
               Não
@@ -150,14 +162,14 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
               onClick={async () => {
                 setMarking(true);
                 try {
-                  for (const p of unmarked ?? []) await markProductRupture(visitId, attendance, p.id);
+                  for (const p of unmarked ?? []) await markProductRupture(visitId, getAttendance(visitId, attendanceId) ?? attendance, p.id);
                   haptic(25);
                   toast(`${unmarked?.length ?? 0} produto(s) marcados como ruptura`, "warn");
                 } finally {
                   setMarking(false);
                   setUnmarked(null);
                 }
-                goStep(STEPS[idx + 1].id);
+                openStep(STEPS[idx + 1].id);
               }}
             >
               {marking ? "Marcando…" : "Sim, ruptura"}

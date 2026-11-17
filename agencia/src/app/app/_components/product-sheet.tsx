@@ -9,7 +9,7 @@
  *   4. Preço do KG (quando há validade).
  * Funciona sem sinal: grava no celular e sincroniza depois.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MoreHorizontal, PackageCheck, PackageX, PencilLine, Plus, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
@@ -55,6 +55,30 @@ export async function markProductRupture(visitId: string, attendance: LocalAtten
   for (const v of Object.values(attendance.validities ?? {})) if (v.productId === productId && v.location === "sales_floor") await deleteValidity(visitId, attendance.id, v.id);
 }
 
+/**
+ * Formulários de produto abertos e ainda não salvos (o promotor tocou em NÃO RUPTURA,
+ * preencheu e foi direto para a próxima etapa sem "Salvar produto"). Ao sair do
+ * estoque, os preenchidos são salvos sozinhos; os incompletos seguram a saída.
+ */
+interface OpenForm {
+  attendanceId: string;
+  productId: string;
+  name: string;
+  problem: string | null;
+  save: () => Promise<void>;
+}
+const openForms = new Map<string, OpenForm>();
+
+/** Salva os produtos abertos e preenchidos; devolve os que ainda faltam completar. */
+export async function saveOpenProductForms(attendanceId: string): Promise<{ productId: string; name: string; problem: string }[]> {
+  const blocked: { productId: string; name: string; problem: string }[] = [];
+  for (const f of [...openForms.values()].filter((x) => x.attendanceId === attendanceId)) {
+    if (f.problem) blocked.push({ productId: f.productId, name: f.name, problem: f.problem });
+    else await f.save();
+  }
+  return blocked;
+}
+
 /** Cartão do produto na lista de estoque: ruptura/não ruptura e os campos logo abaixo. */
 export function ProductCard({ visitId, visitDate, attendance, product: p, prev, editable, onMore }: CardProps) {
   const stock = attendance.stock[p.id];
@@ -84,7 +108,7 @@ export function ProductCard({ visitId, visitDate, attendance, product: p, prev, 
         : null;
 
   return (
-    <div className={clsx("px-4 py-3", savedMode === "rupture" && editing === null && "bg-bad-bg/40")}>
+    <div id={`produto-${p.id}`} className={clsx("px-4 py-3 scroll-mt-32", savedMode === "rupture" && editing === null && "bg-bad-bg/40")}>
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <p className="text-[15px] font-semibold leading-snug">{p.name}</p>
@@ -185,7 +209,7 @@ function ProductForm({ visitId, visitDate, attendance, product, mode, onDone }: 
   const needsQty = !rupture && qty === "";
   const ready = !needsQty && !incomplete.length && !needsPrice;
 
-  async function save() {
+  async function save(quiet = false) {
     if (!ready) return;
     setBusy(true);
     try {
@@ -216,12 +240,22 @@ function ProductForm({ visitId, visitDate, attendance, product, mode, onDone }: 
         });
       }
       haptic(20);
-      toast(rupture ? `Ruptura: ${product.name}` : "Produto salvo.", rupture ? "warn" : "ok");
+      if (!quiet) toast(rupture ? `Ruptura: ${product.name}` : "Produto salvo.", rupture ? "warn" : "ok");
       onDone();
     } finally {
       setBusy(false);
     }
   }
+
+  // Registra este formulário aberto (salvo sozinho ao sair do estoque).
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const formKey = `${attendance.id}:${product.id}`;
+  const problem = ready ? null : needsQty ? "informe a quantidade na área de vendas" : incomplete.length ? "complete a data e a quantidade de cada validade (ou remova a linha)" : "informe o preço do KG";
+  useEffect(() => {
+    openForms.set(formKey, { attendanceId: attendance.id, productId: product.id, name: product.name, problem, save: () => saveRef.current(true) });
+  });
+  useEffect(() => () => void openForms.delete(formKey), [formKey]);
 
   const section = (location: ValidityLocation, title: string, hint: string) => {
     const list = parsed.filter((x) => x.e.location === location);

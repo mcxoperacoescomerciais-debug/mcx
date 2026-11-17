@@ -543,6 +543,11 @@ export async function discardUnsavedPhotos(visitId: string, attendanceId: string
   for (const p of orphan) await removePhoto(visitId, attendanceId, p.id);
 }
 
+/** Atendimento como está agora no celular (depois de gravações feitas no mesmo toque). */
+export function getAttendance(visitId: string, attendanceId: string): LocalAttendance | undefined {
+  return state.visits[visitId]?.attendances[attendanceId];
+}
+
 export function getPhotoBlob(photoId: string, thumb = false): Promise<Blob | undefined> {
   return get<Blob>(thumb ? thumbKey(photoId) : blobKey(photoId), idb);
 }
