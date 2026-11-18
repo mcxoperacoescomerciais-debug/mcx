@@ -12,6 +12,7 @@ import { storeMixAction, storeProductsAction } from "../../actions";
 import { storeMixOptions } from "@/server/mixes";
 import { selectClass } from "@/components/ui";
 import { StoreForm } from "../store-form";
+import { ProductPicker } from "./product-picker";
 
 export const metadata: Metadata = { title: "Cadastro da loja" };
 
@@ -84,13 +85,7 @@ export default async function StoreAdminPage({ params }: PageProps<"/painel/cada
                     {b.name} <span className="text-[12px] text-muted font-normal">· {custom ? `${list.filter((p) => trackedSet.has(p.id)).length} de ${list.length} selecionados` : `todos os ${list.length} produtos`}</span>
                   </p>
                   <ActionForm action={storeProductsAction} hidden={{ storeId: id, brandId: b.id }} submitLabel="Salvar seleção" variant="secondary" resetOnSuccess={false}>
-                    <div className="grid sm:grid-cols-2 gap-1.5 text-[12.5px] max-h-60 overflow-y-auto">
-                      {list.map((p) => (
-                        <label key={p.id} className="inline-flex items-start gap-1.5">
-                          <input type="checkbox" name="productIds" value={p.id} defaultChecked={!custom || trackedSet.has(p.id)} className="mt-0.5" /> {p.name}
-                        </label>
-                      ))}
-                    </div>
+                    <ProductPicker products={list.map((p) => ({ id: p.id, name: p.name, checked: !custom || trackedSet.has(p.id) }))} />
                   </ActionForm>
                 </div>
               );
