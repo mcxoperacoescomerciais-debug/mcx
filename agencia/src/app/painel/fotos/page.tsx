@@ -33,11 +33,11 @@ export default async function PhotosPage({ searchParams }: PageProps<"/painel/fo
         return {
           id: p.id,
           kind: p.kind,
-          label: `${when} · ${r.brandName} · ${r.storeName}`,
+          label: `${when} · ${r.brandName} · ${r.storeName} · ${r.promoterName}`,
           takenAt: fmtDateTime(p.takenAt),
           uploaded: Boolean(p.uploadedAt),
           source: p.source,
-          caption: `${when} · ${r.storeName} · ${r.brandName} · ${fmtDate(r.date)}`,
+          caption: `${when} · ${r.storeName} · ${r.brandName} · ${r.promoterName} · ${fmtDate(r.date)}`,
         };
       }),
   );
