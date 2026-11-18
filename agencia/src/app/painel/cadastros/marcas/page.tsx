@@ -74,8 +74,6 @@ export default async function BrandsPage({ searchParams }: PageProps<"/painel/ca
                   <Td className="text-[12.5px] text-ink-2">
                     Antes ≥ {b.minBeforePhotos} · Depois ≥ {b.minAfterPhotos}
                     <br />
-                    {b.requireStock ? "Estoque obrigatório" : "Estoque opcional"}
-                    <br />
                     {b.allowGallery ? "Permite galeria" : "Só câmera"} · {b.activities.length} atividade(s)
                     {b.questions.length ? (
                       <>
@@ -127,9 +125,6 @@ function BrandForm({ brand }: { brand: Brand | null }) {
         </label>
       </div>
       <div className="flex flex-wrap gap-4 text-[13px]">
-        <label className="inline-flex items-center gap-1.5">
-          <input type="checkbox" name="requireStock" defaultChecked={brand?.requireStock ?? true} /> Estoque obrigatório
-        </label>
         <label className="inline-flex items-center gap-1.5">
           <input type="checkbox" name="allowGallery" defaultChecked={brand?.allowGallery ?? true} /> Permitir foto da galeria
         </label>

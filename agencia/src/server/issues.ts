@@ -104,7 +104,6 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
     .where(and(...attConds));
 
   // Produtos acompanhados por loja/marca (para "estoque incompleto").
-  const trackedCount = await trackedCounts(scope.agencyId);
   const href = (a: { id: string }) => `/painel/atendimentos/${a.id}`;
 
   for (const a of atts) {
@@ -112,10 +111,6 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
     const closed = a.status === "completed" || a.status === "correction_requested";
     if (closed && a.before < a.minBefore) issues.push({ ...base, key: `missing_before:${a.id}`, kind: "missing_before", priority: pr.missing_before, title: "Atendimento sem foto do antes", detail: excuse(a, "before_photo") });
     if (closed && a.after < a.minAfter) issues.push({ ...base, key: `missing_after:${a.id}`, kind: "missing_after", priority: pr.missing_after, title: "Atendimento sem foto do depois", detail: excuse(a, "after_photo") });
-    const tracked = trackedCount.get(`${a.storeId}:${a.brandId}`) ?? 0;
-    if (closed && a.requireStock && a.stockCount < tracked) {
-      issues.push({ ...base, key: `stock_incomplete:${a.id}`, kind: "stock_incomplete", priority: pr.stock_incomplete, title: "Registro de estoque incompleto", detail: `${a.stockCount} de ${tracked} produtos informados. ${excuse(a, "stock")}` });
-    }
     if (a.status === "cancelled") issues.push({ ...base, key: `exception:cancel:${a.id}`, kind: "exception", priority: pr.exception, title: "Atendimento de marca cancelado", detail: `Justificativa: “${a.cancelReason ?? ""}”` });
     if (a.unsynced > 0) issues.push({ ...base, key: `photo_unsynced:${a.id}`, kind: "photo_unsynced", priority: pr.photo_unsynced, title: "Foto aguardando sincronização", detail: `${a.unsynced} foto(s) declaradas pelo aparelho e ainda não recebidas.` });
   }

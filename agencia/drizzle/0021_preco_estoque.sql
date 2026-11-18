@@ -1,0 +1,1 @@
+ALTER TABLE "stock_entries" ADD COLUMN "price" numeric(10, 2);

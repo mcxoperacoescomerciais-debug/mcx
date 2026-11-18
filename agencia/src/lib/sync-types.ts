@@ -48,6 +48,8 @@ export const stockInput = z.object({
   /** Unidade da contagem escolhida pelo promotor (unidade, caixa…); ausente = unidade do produto. */
   unit: z.enum(UNITS).nullable().optional(),
   note: shortText(300),
+  /** Preço do produto informado pelo promotor (um por produto no atendimento). */
+  price: z.number().min(0).max(100_000).nullable().optional(),
   recordedAt: instant,
 });
 

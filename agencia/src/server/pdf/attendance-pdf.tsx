@@ -180,7 +180,6 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
   if (before.length < d.brand.minBeforePhotos) pendencies.push("Foto do antes ausente");
   if (after.length < d.brand.minAfterPhotos) pendencies.push("Foto do depois ausente");
   if (d.photos.some((p) => !p.uploadedAt)) pendencies.push("Foto(s) aguardando sincronização");
-  if (informed < d.stockRows.length) pendencies.push(`${d.stockRows.length - informed} produto(s) sem informação de estoque`);
   if (a.status === "correction_requested") pendencies.push("Correção solicitada ao promotor");
   const validityImgs = d.photos.filter((p) => p.kind === "validity" && images.has(p.id));
   const damageImgs = d.photos.filter((p) => p.kind === "damage" && images.has(p.id));
@@ -236,17 +235,18 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
       <Text style={base.h3}>Relatório de estoque {zero ? `· ${zero} com estoque zero` : ""}</Text>
       <PdfTable
         cols={[
-          { label: "Produto", width: "44%", render: (r: Detail["stockRows"][number]) => `${r.product.name} (SKU ${r.product.sku})` },
+          { label: "Produto", width: "38%", render: (r: Detail["stockRows"][number]) => `${r.product.name} (SKU ${r.product.sku})` },
           {
             label: "Situação",
-            width: "26%",
+            width: "24%",
             render: (r) => {
               const st: StockDisplayState = r.entry ? r.entry.state : "pending";
               return <Pill tone={STOCK_STATE_TONE[st] as PdfTone}>{STOCK_STATE_LABEL[st]}</Pill>;
             },
           },
           { label: "Quantidade", width: "13%", align: "right", render: (r) => (r.entry && r.entry.quantity !== null ? `${r.entry.quantity} ${r.entry.unit}` : "—") },
-          { label: "Obs.", width: "17%", render: (r) => r.entry?.note ?? "" },
+          { label: "Preço", width: "12%", align: "right", render: (r) => money(r.entry?.price ?? null) },
+          { label: "Obs.", width: "13%", render: (r) => r.entry?.note ?? "" },
         ]}
         rows={d.stockRows}
         empty="Nenhum produto acompanhado."

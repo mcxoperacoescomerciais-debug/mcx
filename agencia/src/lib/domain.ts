@@ -142,7 +142,7 @@ export const STOCK_STATE_LABEL: Record<StockDisplayState, string> = {
   zero: "Estoque zero",
   not_found: "Produto não encontrado",
   not_applicable: "Não se aplica à loja",
-  pending: "Informação pendente",
+  pending: "Sem apontamento",
   awaiting_sync: "Aguardando sincronização",
 };
 export const STOCK_STATE_SHORT: Record<StockDisplayState, string> = {

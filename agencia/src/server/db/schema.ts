@@ -618,6 +618,8 @@ export const stockEntries = pgTable(
     quantity: integer("quantity"),
     unit: text("unit").$type<Unit>().notNull(),
     note: text("note"),
+    /** Preço do produto informado pelo promotor na etapa de estoque. */
+    price: numeric("price", { precision: 10, scale: 2 }),
     recordedAt: ts("recorded_at").notNull(),
     ...timestamps,
     ...authorship,

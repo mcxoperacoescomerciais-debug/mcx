@@ -159,6 +159,7 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                   <Th>Produto</Th>
                   <Th>Situação</Th>
                   <Th align="right">Quantidade</Th>
+                  <Th align="right">Preço</Th>
                   <Th align="right">Registro anterior</Th>
                   <Th>Observação</Th>
                 </tr>
@@ -185,6 +186,7 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                         </StatusBadge>
                       </Td>
                       <Td align="right">{entry && entry.quantity !== null ? `${entry.quantity} ${entry.unit}` : "—"}</Td>
+                      <Td align="right">{entry?.price ? `R$ ${Number(entry.price).toFixed(2).replace(".", ",")}` : "—"}</Td>
                       <Td align="right" className="text-muted">
                         {prev ? (
                           <span className={divergent ? "text-warn font-semibold" : ""} title={divergent ? `Variação acima de ${pctDiv}%` : undefined}>

@@ -191,16 +191,7 @@ export function attendanceMissing(i: AttendanceCheckInput): MissingItem[] {
     const falta = i.brand.minAfterPhotos - i.afterPhotos;
     out.push({ kind: "after_photo", message: `Falta ${plural(falta, "foto", "fotos")} do DEPOIS.`, excusable: i.allowExceptions });
   }
-  if (i.brand.requireStock && !excused.has("stock")) {
-    const pending = i.trackedProductIds.filter((id) => !i.stock[id]).length;
-    if (pending > 0) {
-      out.push({
-        kind: "stock",
-        message: `Estoque: ${plural(pending, "produto", "produtos")} sem informação.`,
-        excusable: i.allowExceptions,
-      });
-    }
-  }
+  // Estoque não é mais obrigatório: produto sem apontamento significa que não havia o que informar.
   if (i.checklist) {
     const pending = i.checklist.items.filter((x) => !i.checklist!.done.includes(x)).length;
     if (pending > 0) out.push({ kind: "checklist", message: `Execução: ${plural(pending, "item", "itens")} do checklist sem OK.`, excusable: false });

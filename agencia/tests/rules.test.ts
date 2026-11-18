@@ -63,9 +63,9 @@ test("cenário 2: sem foto do depois a finalização é bloqueada e explica o qu
   assert.match(m[0].message, /DEPOIS/);
 });
 
-test("estoque pendente bloqueia; exceção justificada libera e fica registrada", () => {
+test("estoque sem apontamento não bloqueia (deixou de ser obrigatório); exceção justificada continua valendo para fotos", () => {
   const pending = attendanceMissing({ ...base, stock: { p1: "quantity" } });
-  assert.equal(pending[0].kind, "stock");
+  assert.deepEqual(pending, []);
   const excused = attendanceMissing({ ...base, stock: { p1: "quantity" }, exceptionItems: ["stock"], exceptionReason: "area_inaccessible", exceptionNote: "Câmara fria fechada" });
   assert.deepEqual(excused, []);
   const noReason = attendanceMissing({ ...base, afterPhotos: 0, exceptionItems: ["after_photo"], exceptionReason: null, exceptionNote: "x" });

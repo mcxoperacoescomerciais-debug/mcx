@@ -1,36 +1,35 @@
 "use client";
 
 /**
- * Tudo do produto direto na lista (o promotor não abre outra tela):
- *   1. RUPTURA ou NÃO RUPTURA;
- *   2. Não ruptura: quantidade na ÁREA DE VENDAS e as validades dela (pode haver
- *      várias datas diferentes no mesmo produto — sortido);
- *   3. Validades no ESTOQUE (também várias; na ruptura também, se houver no depósito);
- *   4. Preço do KG (quando há validade).
+ * Produto na lista de estoque: três botões, nenhum obrigatório.
+ *   1. RUPTURA — um toque marca, outro desfaz;
+ *   2. INFORMAR ÁREA DE VENDAS — quantidade, validades da área de vendas e preço;
+ *   3. INFORMAR ESTOQUE — quantidade por validade no estoque (depósito) e preço.
+ * Sem nada para informar, o promotor não toca em nada e segue para o próximo produto.
+ * A ruptura esconde só a área de vendas (gôndola vazia); o estoque continua disponível.
+ * O preço é um só por produto: informado numa folha, aparece na outra.
  * Funciona sem sinal: grava no celular e sincroniza depois.
  */
-import { useEffect, useRef, useState } from "react";
-import { MoreHorizontal, PackageCheck, PackageX, PencilLine, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Check, PackageX, Plus, ShoppingCart, Trash2, Warehouse } from "lucide-react";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
 import { STOCK_STATE_SHORT, STOCK_STATE_TONE, type ItemUnit, type StockState, type ValidityLocation } from "@/lib/domain";
 import { daysBetween, fmtDate } from "@/lib/dates";
 import type { BootstrapProduct } from "@/lib/sync-types";
 import { classify, DEFAULT_BANDS, describeDays, formatIsoBr, isoToDigits, maskExpiryDigits, parseExpiryDigits } from "@/lib/validity";
-import { deleteValidity, saveStock, saveValidity, toggleRupture, uuid, type LocalAttendance } from "../_lib/local-store";
+import { clearStock, deleteValidity, saveStock, saveValidity, toggleRupture, uuid, type LocalAttendance } from "../_lib/local-store";
+import { productPrice, stockSummary } from "../_lib/stock-summary";
 import { haptic, useCatalog } from "../_lib/hooks";
-import { toast } from "./primitives";
+import { Sheet, toast } from "./primitives";
 import { FieldLabel, moneyDigitsToNumber, numberToMoneyDigits, PriceField, QuantityField, SeverityPill, unitsFor } from "./item-fields";
 
 interface Entry {
   id: string;
-  location: ValidityLocation;
   digits: string;
   qty: string;
   unit: ItemUnit;
 }
-
-type Mode = "rupture" | "ok";
 
 interface CardProps {
   visitId: string;
@@ -39,91 +38,54 @@ interface CardProps {
   product: BootstrapProduct;
   prev: { state: string; quantity: number | null; unit?: string; date: string } | undefined;
   editable: boolean;
-  /** Outras situações (estoque zero, não encontrado, não se aplica). */
-  onMore: () => void;
 }
 
 /**
  * Marca o produto em ruptura (gôndola vazia): ruptura + estoque zero na área de
- * vendas, e as validades da área de vendas deixam de valer. O mesmo que tocar em
- * RUPTURA no cartão — usado também para os produtos que ficaram sem marcação.
+ * vendas, e as validades da área de vendas deixam de valer. O preço já informado fica.
  */
 export async function markProductRupture(visitId: string, attendance: LocalAttendance, productId: string) {
   const stock = attendance.stock[productId];
   if (!Object.values(attendance.ruptures).some((r) => r.productId === productId)) await toggleRupture(visitId, attendance.id, productId);
-  await saveStock(visitId, attendance.id, { productId, state: "zero", quantity: 0, unit: stock?.unit === "cx" ? "cx" : "un", note: stock?.note ?? null, recordedAt: new Date().toISOString() });
+  await saveStock(visitId, attendance.id, { productId, state: "zero", quantity: 0, unit: stock?.unit === "cx" ? "cx" : "un", note: stock?.note ?? null, price: productPrice(attendance, productId), recordedAt: new Date().toISOString() });
   for (const v of Object.values(attendance.validities ?? {})) if (v.productId === productId && v.location === "sales_floor") await deleteValidity(visitId, attendance.id, v.id);
 }
 
-/**
- * Formulários de produto abertos e ainda não salvos (o promotor tocou em NÃO RUPTURA,
- * preencheu e foi direto para a próxima etapa sem "Salvar produto"). Ao sair do
- * estoque, os preenchidos são salvos sozinhos; os incompletos seguram a saída.
- */
-interface OpenForm {
-  attendanceId: string;
-  productId: string;
-  name: string;
-  problem: string | null;
-  save: () => Promise<void>;
-}
-const openForms = new Map<string, OpenForm>();
-
-/** Salva os produtos abertos e preenchidos; devolve os que ainda faltam completar. */
-export async function saveOpenProductForms(attendanceId: string): Promise<{ productId: string; name: string; problem: string }[]> {
-  const blocked: { productId: string; name: string; problem: string }[] = [];
-  for (const f of [...openForms.values()].filter((x) => x.attendanceId === attendanceId)) {
-    if (f.problem) blocked.push({ productId: f.productId, name: f.name, problem: f.problem });
-    else await f.save();
-  }
-  return blocked;
+/** Desfaz a ruptura: o produto volta a ficar sem informação na área de vendas. */
+export async function unmarkProductRupture(visitId: string, attendance: LocalAttendance, productId: string) {
+  if (Object.values(attendance.ruptures).some((r) => r.productId === productId)) await toggleRupture(visitId, attendance.id, productId);
+  if (attendance.stock[productId]) await clearStock(visitId, attendance.id, productId);
 }
 
-/** Cartão do produto na lista de estoque: ruptura/não ruptura e os campos logo abaixo. */
-export function ProductCard({ visitId, visitDate, attendance, product: p, prev, editable, onMore }: CardProps) {
+const bigButton = "min-h-12 rounded-xl border-2 px-2 py-2 font-bold text-[13.5px] leading-tight inline-flex items-center justify-center gap-1.5 text-center disabled:opacity-60";
+
+/** Cartão do produto na lista de estoque. */
+export function ProductCard({ visitId, visitDate, attendance, product: p, prev, editable }: CardProps) {
+  const [sheet, setSheet] = useState<ValidityLocation | null>(null);
   const stock = attendance.stock[p.id];
-  const hasRupture = Object.values(attendance.ruptures).some((r) => r.productId === p.id);
-  const validities = Object.values(attendance.validities ?? {}).filter((v) => v.productId === p.id);
+  const sum = stockSummary(attendance, p.id);
   const otherState = stock && stock.state !== "quantity" && stock.state !== "zero" ? stock.state : null;
-  const savedMode: Mode | null = hasRupture ? "rupture" : stock && !otherState ? "ok" : null;
-  // Aberto: produto ainda sem resposta ou o promotor tocou em editar.
-  const [editing, setEditing] = useState<Mode | null>(null);
-  const mode = editing ?? savedMode;
 
-  async function markRupture() {
-    await markProductRupture(visitId, attendance, p.id);
-    haptic(25);
-    toast(`Ruptura: ${p.name}`, "warn");
-    setEditing(null);
+  async function onRupture() {
+    if (sum.rupture) {
+      await unmarkProductRupture(visitId, attendance, p.id);
+      haptic(10);
+      toast("Ruptura desfeita.");
+    } else {
+      await markProductRupture(visitId, attendance, p.id);
+      haptic(25);
+      toast(`Ruptura: ${p.name}`, "warn");
+    }
   }
-
-  const salesQty = stock?.state === "quantity" ? stock.quantity : stock?.state === "zero" ? 0 : null;
-  const summary =
-    savedMode === "rupture"
-      ? validities.length
-        ? `Ruptura · ${validities.length} validade(s) no estoque`
-        : "Ruptura · sem produto na gôndola"
-      : savedMode === "ok"
-        ? [`${salesQty ?? 0} ${stock?.unit === "cx" ? "CX" : "UN"} na área de vendas`, validities.length ? `${validities.length} validade(s)` : "sem validade"].join(" · ")
-        : null;
 
   return (
-    <div id={`produto-${p.id}`} className={clsx("px-4 py-3 scroll-mt-32", savedMode === "rupture" && editing === null && "bg-bad-bg/40")}>
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold leading-snug">{p.name}</p>
-          <p className="text-[12px] text-muted mt-0.5">
-            SKU {p.sku}
-            {p.package ? ` · ${p.package}` : ""}
-            {prev ? ` · última: ${prev.state === "quantity" ? `${prev.quantity} ${prev.unit ?? p.unit}` : (STOCK_STATE_SHORT[prev.state as StockState] ?? "—")} (${fmtDate(prev.date).slice(0, 5)})` : ""}
-          </p>
-        </div>
-        {editable ? (
-          <button type="button" onClick={onMore} aria-label="Outras situações" className="size-9 -mr-2 grid place-items-center rounded-lg text-muted active:bg-canvas">
-            <MoreHorizontal className="size-5" />
-          </button>
-        ) : null}
-      </div>
+    <div id={`produto-${p.id}`} className={clsx("px-4 py-3 scroll-mt-32", sum.rupture && "bg-bad-bg/40")}>
+      <p className="text-[15px] font-semibold leading-snug">{p.name}</p>
+      <p className="text-[12px] text-muted mt-0.5">
+        SKU {p.sku}
+        {p.package ? ` · ${p.package}` : ""}
+        {prev ? ` · última: ${prev.state === "quantity" ? `${prev.quantity} ${prev.unit ?? p.unit}` : (STOCK_STATE_SHORT[prev.state as StockState] ?? "—")} (${fmtDate(prev.date).slice(0, 5)})` : ""}
+      </p>
 
       {otherState ? (
         <div className="mt-2 flex items-center gap-2">
@@ -131,105 +93,110 @@ export function ProductCard({ visitId, visitDate, attendance, product: p, prev, 
             {STOCK_STATE_SHORT[otherState]}
           </StatusBadge>
           {editable ? (
-            <button type="button" onClick={onMore} className="text-[13px] font-semibold text-brand-700">
-              alterar
+            <button type="button" onClick={() => void clearStock(visitId, attendance.id, p.id)} className="text-[13px] font-semibold text-brand-700">
+              limpar
             </button>
           ) : null}
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-2 gap-2 mt-2.5" role="radiogroup" aria-label={`Situação de ${p.name}`}>
+        <div className="mt-2.5 space-y-2">
+          <button
+            type="button"
+            aria-pressed={sum.rupture}
+            disabled={!editable}
+            onClick={() => void onRupture()}
+            className={clsx(bigButton, "w-full", sum.rupture ? "bg-bad border-bad text-white" : "border-bad/40 text-bad bg-surface")}
+          >
+            <PackageX className="size-4 shrink-0" /> {sum.rupture ? "RUPTURA MARCADA" : "RUPTURA"}
+          </button>
+          {sum.rupture && editable ? <p className="text-[12px] text-muted text-center">Toque de novo para desfazer.</p> : null}
+          <div className={clsx("grid gap-2", sum.rupture ? "grid-cols-1" : "grid-cols-2")}>
+            {!sum.rupture ? (
+              <button
+                type="button"
+                disabled={!editable}
+                onClick={() => setSheet("sales_floor")}
+                className={clsx(bigButton, sum.sales ? "bg-ok-bg border-ok text-ok" : "border-line-strong text-ink-2 bg-surface")}
+              >
+                {sum.sales ? <Check className="size-4 shrink-0" /> : <ShoppingCart className="size-4 shrink-0" />}
+                {sum.sales ? `Área de vendas: ${sum.sales}` : "INFORMAR ÁREA DE VENDAS"}
+              </button>
+            ) : null}
             <button
               type="button"
-              role="radio"
-              aria-checked={mode === "rupture"}
               disabled={!editable}
-              onClick={() => void markRupture()}
-              className={clsx("h-12 rounded-xl border-2 font-bold text-[14px] inline-flex items-center justify-center gap-1.5", mode === "rupture" ? "bg-bad border-bad text-white" : "border-bad/40 text-bad bg-surface")}
+              onClick={() => setSheet("stock")}
+              className={clsx(bigButton, sum.stock ? "bg-ok-bg border-ok text-ok" : "border-line-strong text-ink-2 bg-surface")}
             >
-              <PackageX className="size-4" /> RUPTURA
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={mode === "ok"}
-              disabled={!editable}
-              onClick={() => setEditing("ok")}
-              className={clsx("h-12 rounded-xl border-2 font-bold text-[14px] inline-flex items-center justify-center gap-1.5", mode === "ok" ? "bg-ok border-ok text-white" : "border-line-strong text-ink-2 bg-surface")}
-            >
-              <PackageCheck className="size-4" /> NÃO RUPTURA
+              {sum.stock ? <Check className="size-4 shrink-0" /> : <Warehouse className="size-4 shrink-0" />}
+              {sum.stock ? `Estoque: ${sum.stock}` : "INFORMAR ESTOQUE"}
             </button>
           </div>
-
-          {editing ? (
-            <ProductForm visitId={visitId} visitDate={visitDate} attendance={attendance} product={p} mode={editing} onDone={() => setEditing(null)} />
-          ) : summary ? (
-            <div className="mt-2 flex items-center gap-2 text-[13px]">
-              <span className={clsx("flex-1 min-w-0", savedMode === "rupture" ? "text-bad font-medium" : "text-ink-2")}>{summary}</span>
-              {editable ? (
-                <button type="button" onClick={() => setEditing(savedMode)} className="shrink-0 inline-flex items-center gap-1 font-semibold text-brand-700">
-                  <PencilLine className="size-3.5" /> {savedMode === "rupture" ? "validade do estoque" : "editar"}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </>
+        </div>
       )}
+
+      {sheet ? <LocationSheet visitId={visitId} visitDate={visitDate} attendance={attendance} product={p} location={sheet} onClose={() => setSheet(null)} /> : null}
     </div>
   );
 }
 
-/** Campos do produto (abertos dentro do cartão). Salvar fecha o cartão com o resumo. */
-function ProductForm({ visitId, visitDate, attendance, product, mode, onDone }: { visitId: string; visitDate: string; attendance: LocalAttendance; product: BootstrapProduct; mode: Mode; onDone: () => void }) {
+/** Folha de uma das duas áreas (área de vendas ou estoque): quantidade, validades e preço. */
+function LocationSheet({ visitId, visitDate, attendance, product, location, onClose }: { visitId: string; visitDate: string; attendance: LocalAttendance; product: BootstrapProduct; location: ValidityLocation; onClose: () => void }) {
   const { settings } = useCatalog();
   const bands = settings?.validityBands ?? DEFAULT_BANDS;
+  const sales = location === "sales_floor";
   const stock = attendance.stock[product.id];
-  const hasRupture = Object.values(attendance.ruptures).some((r) => r.productId === product.id);
-  const existing = Object.values(attendance.validities ?? {}).filter((v) => v.productId === product.id);
-  const rupture = mode === "rupture";
-  const [qty, setQty] = useState(stock?.state === "quantity" && stock.quantity !== null ? String(stock.quantity) : "");
+  const allValidities = Object.values(attendance.validities ?? {}).filter((v) => v.productId === product.id);
+  const existing = allValidities.filter((v) => v.location === location);
+  const hadSales = Boolean(stock && (stock.state === "quantity" || stock.state === "zero"));
+  const [qty, setQty] = useState(stock?.state === "quantity" && stock.quantity !== null ? String(stock.quantity) : stock?.state === "zero" ? "0" : "");
   const [unit, setUnit] = useState<ItemUnit>(stock?.unit === "cx" ? "cx" : "un");
-  const [entries, setEntries] = useState<Entry[]>(() => existing.map((v) => ({ id: v.id, location: v.location, digits: isoToDigits(v.expiryDate), qty: String(v.quantity), unit: v.unit === "cx" ? "cx" : "un" })));
-  const [price, setPrice] = useState(numberToMoneyDigits(existing.find((v) => v.price !== null)?.price));
+  const [entries, setEntries] = useState<Entry[]>(() => {
+    const saved = existing.map((v) => ({ id: v.id, digits: isoToDigits(v.expiryDate), qty: String(v.quantity), unit: (v.unit === "cx" ? "cx" : "un") as ItemUnit }));
+    // No estoque a quantidade vai junto da validade: já abre com uma linha pronta.
+    return saved.length || sales ? saved : [{ id: uuid(), digits: "", qty: "", unit: "un" }];
+  });
+  const [price, setPrice] = useState(numberToMoneyDigits(productPrice(attendance, product.id)));
   const [busy, setBusy] = useState(false);
 
-  const add = (location: ValidityLocation) => setEntries((e) => [...e, { id: uuid(), location, digits: "", qty: "", unit: "un" }]);
+  const add = () => setEntries((e) => [...e, { id: uuid(), digits: "", qty: "", unit: "un" }]);
   const patch = (id: string, p: Partial<Entry>) => setEntries((e) => e.map((x) => (x.id === id ? { ...x, ...p } : x)));
   const remove = (id: string) => setEntries((e) => e.filter((x) => x.id !== id));
 
-  const parsed = entries.map((e) => {
+  // Linha em branco não conta (o promotor abriu e não preencheu).
+  const filled = entries.filter((e) => e.digits || e.qty);
+  const parsed = filled.map((e) => {
     const r = e.digits ? parseExpiryDigits(e.digits, visitDate) : null;
     return { e, iso: r?.ok ? r.iso : null, qty: Number(e.qty) };
   });
-  // Na ruptura, a área de vendas não conta (gôndola vazia): só o estoque.
-  const active = parsed.filter((x) => !(rupture && x.e.location === "sales_floor"));
-  const incomplete = active.filter((x) => !x.iso || !(x.qty > 0));
+  const incomplete = parsed.filter((x) => !x.iso || !(x.qty > 0));
   const priceNum = moneyDigitsToNumber(price);
-  const needsPrice = active.length > 0 && !(priceNum && priceNum > 0);
-  const needsQty = !rupture && qty === "";
-  const ready = !needsQty && !incomplete.length && !needsPrice;
+  const needsQty = sales && qty === "";
+  const nothing = !sales && !parsed.length && !existing.length;
+  // Com validade, o preço continua obrigatório (como já era); sem validade, é opcional.
+  const needsPrice = parsed.length > 0 && !(priceNum && priceNum > 0);
+  const ready = !needsQty && !incomplete.length && !nothing && !needsPrice;
 
-  async function save(quiet = false) {
+  async function save() {
     if (!ready) return;
     setBusy(true);
     try {
       const now = new Date().toISOString();
-      if (rupture) {
-        if (!hasRupture) await toggleRupture(visitId, attendance.id, product.id);
-        await saveStock(visitId, attendance.id, { productId: product.id, state: "zero", quantity: 0, unit, note: stock?.note ?? null, recordedAt: now });
-      } else {
-        if (hasRupture) await toggleRupture(visitId, attendance.id, product.id);
+      if (sales) {
         const n = Number(qty);
-        await saveStock(visitId, attendance.id, { productId: product.id, state: n === 0 ? "zero" : "quantity", quantity: n, unit, note: stock?.note ?? null, recordedAt: now });
+        await saveStock(visitId, attendance.id, { productId: product.id, state: n === 0 ? "zero" : "quantity", quantity: n, unit, note: stock?.note ?? null, price: priceNum, recordedAt: now });
+      } else if (stock) {
+        // Mesmo preço do produto na contagem já gravada (área de vendas ou ruptura).
+        await saveStock(visitId, attendance.id, { ...stock, price: priceNum });
       }
-      const keep = new Set(active.map((x) => x.e.id));
+      const keep = new Set(parsed.map((x) => x.e.id));
       for (const v of existing) if (!keep.has(v.id)) await deleteValidity(visitId, attendance.id, v.id);
-      for (const x of active) {
+      for (const x of parsed) {
         const before = existing.find((v) => v.id === x.e.id);
         await saveValidity(visitId, attendance.id, {
           id: x.e.id,
           productId: product.id,
-          location: x.e.location,
+          location,
           quantity: x.qty,
           unit: x.e.unit,
           expiryDate: x.iso!,
@@ -239,118 +206,126 @@ function ProductForm({ visitId, visitDate, attendance, product, mode, onDone }: 
           recordedAt: before?.recordedAt ?? now,
         });
       }
+      // Um preço por produto: as validades da outra área acompanham.
+      if (priceNum !== null) for (const v of allValidities) if (v.location !== location && v.price !== priceNum) await saveValidity(visitId, attendance.id, { ...v, price: priceNum });
       haptic(20);
-      if (!quiet) toast(rupture ? `Ruptura: ${product.name}` : "Produto salvo.", rupture ? "warn" : "ok");
-      onDone();
+      toast(sales ? "Área de vendas salva." : "Estoque salvo.", "ok");
+      onClose();
     } finally {
       setBusy(false);
     }
   }
 
-  // Registra este formulário aberto (salvo sozinho ao sair do estoque).
-  const saveRef = useRef(save);
-  saveRef.current = save;
-  const formKey = `${attendance.id}:${product.id}`;
-  const problem = ready ? null : needsQty ? "informe a quantidade na área de vendas" : incomplete.length ? "complete a data e a quantidade de cada validade (ou remova a linha)" : "informe o preço do KG";
-  useEffect(() => {
-    openForms.set(formKey, { attendanceId: attendance.id, productId: product.id, name: product.name, problem, save: () => saveRef.current(true) });
-  });
-  useEffect(() => () => void openForms.delete(formKey), [formKey]);
+  async function clear() {
+    setBusy(true);
+    try {
+      for (const v of existing) await deleteValidity(visitId, attendance.id, v.id);
+      if (sales && stock) await clearStock(visitId, attendance.id, product.id);
+      toast("Informação removida.");
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  }
 
-  const section = (location: ValidityLocation, title: string, hint: string) => {
-    const list = parsed.filter((x) => x.e.location === location);
-    return (
-      <div>
-        <FieldLabel hint={hint}>{title}</FieldLabel>
-        <div className="space-y-2">
-          {list.map(({ e, iso }) => {
-            const days = iso ? daysBetween(visitDate, iso) : null;
-            return (
-              <div key={e.id} className="rounded-xl border border-line-strong p-2.5 bg-surface">
-                <div className="flex items-center gap-2">
-                  <input
-                    value={maskExpiryDigits(e.digits)}
-                    onChange={(ev) => patch(e.id, { digits: ev.target.value.replace(/\D/g, "").slice(0, 8) })}
-                    inputMode="numeric"
-                    placeholder="Validade DD/MM"
-                    aria-label="Validade"
-                    className="flex-1 min-w-0 h-12 rounded-lg border border-line-strong px-2.5 text-[18px] font-semibold tnum focus:border-brand-600 focus:outline-none"
-                  />
-                  <input
-                    value={e.qty}
-                    onChange={(ev) => patch(e.id, { qty: ev.target.value.replace(/\D/g, "").slice(0, 6) })}
-                    inputMode="numeric"
-                    placeholder="Qtd."
-                    aria-label="Quantidade com esta validade"
-                    className="w-20 h-12 rounded-lg border border-line-strong px-2 text-center text-[18px] font-semibold tnum focus:border-brand-600 focus:outline-none"
-                  />
-                  <button type="button" onClick={() => remove(e.id)} aria-label="Remover validade" className="size-10 grid place-items-center text-bad shrink-0">
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-                <div className="mt-2 space-y-1.5">
-                  <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Unidade">
-                    {unitsFor(product).map((u) => (
-                      <button
-                        key={u}
-                        type="button"
-                        role="radio"
-                        aria-checked={e.unit === u}
-                        onClick={() => patch(e.id, { unit: u })}
-                        className={clsx("h-9 rounded-lg border text-[12.5px] font-bold", e.unit === u ? "bg-brand-800 text-white border-brand-800" : "border-line-strong text-ink-2")}
-                      >
-                        {u === "un" ? "UNIDADE" : "CAIXA"}
-                      </button>
-                    ))}
-                  </div>
-                  {iso && days !== null ? (
-                    <span className="flex items-center gap-1.5 text-[12px] text-ink-2 tnum">
-                      <SeverityPill severity={classify(days, bands)} /> {formatIsoBr(iso, false)} · {describeDays(days)}
-                    </span>
-                  ) : e.digits ? (
-                    <span className="text-[12px] text-warn font-medium">Data incompleta ou inválida</span>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-          <button type="button" onClick={() => add(location)} className="w-full h-11 rounded-xl border border-dashed border-line-strong bg-surface text-[13.5px] font-semibold text-ink-2 inline-flex items-center justify-center gap-1.5">
-            <Plus className="size-4" /> {list.length ? "Outra validade" : "Adicionar validade"}
-          </button>
-        </div>
-      </div>
-    );
-  };
+  const hasSaved = sales ? hadSales || existing.length > 0 : existing.length > 0;
 
   return (
-    <div className="mt-3 space-y-4 rounded-2xl bg-canvas p-3">
-      {!rupture ? (
-        <>
-          <div>
-            <p className="text-[12px] font-bold uppercase tracking-wide text-ink-2 mb-1">Área de vendas</p>
-            <QuantityField value={qty} onChange={setQty} unit={unit} onUnit={setUnit} units={unitsFor(product)} />
-          </div>
-          {section("sales_floor", "Validades na área de vendas", "uma linha por data")}
-        </>
-      ) : null}
-      {section("stock", "Validades no estoque", rupture ? "se houver produto no depósito" : "uma linha por data")}
-      {active.length ? <PriceField digits={price} onChange={setPrice} /> : null}
+    <Sheet
+      open
+      onClose={onClose}
+      title={<span className="leading-snug">{sales ? "Área de vendas" : "Estoque"}</span>}
+      footer={
+        <Button size="xl" className="w-full" disabled={!ready || busy} onClick={() => void save()}>
+          SALVAR
+        </Button>
+      }
+    >
+      <p className="text-[14px] font-semibold leading-snug">{product.name}</p>
+      <p className="text-[12.5px] text-muted mb-4">{sales ? "O que está na gôndola, onde o cliente pega o produto." : "O que está guardado no depósito ou na câmara fria da loja."}</p>
 
-      {!ready ? (
-        <p className="text-[12.5px] text-warn font-medium">
-          {needsQty ? "Informe a quantidade na área de vendas. " : ""}
-          {incomplete.length ? "Complete a data e a quantidade de cada validade (ou remova a linha). " : ""}
-          {needsPrice ? "Informe o preço do KG." : ""}
-        </p>
-      ) : null}
-      <div className="flex gap-2">
-        <Button variant="secondary" className="!h-12" onClick={onDone}>
-          Cancelar
-        </Button>
-        <Button className="flex-1 !h-12" disabled={!ready || busy} onClick={() => void save()}>
-          Salvar produto
-        </Button>
+      <div className="space-y-5">
+        {sales ? <QuantityField value={qty} onChange={setQty} unit={unit} onUnit={setUnit} units={unitsFor(product)} /> : null}
+
+        <div>
+          <FieldLabel hint={sales ? "opcional · uma linha por data" : "uma linha por data"}>{sales ? "Validades" : "Quantidade e validade"}</FieldLabel>
+          <div className="space-y-2">
+            {entries.map((e) => {
+              const r = e.digits ? parseExpiryDigits(e.digits, visitDate) : null;
+              const iso = r?.ok ? r.iso : null;
+              const days = iso ? daysBetween(visitDate, iso) : null;
+              return (
+                <div key={e.id} className="rounded-xl border border-line-strong p-2.5 bg-surface">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={e.qty}
+                      onChange={(ev) => patch(e.id, { qty: ev.target.value.replace(/\D/g, "").slice(0, 6) })}
+                      inputMode="numeric"
+                      placeholder="Qtd."
+                      aria-label="Quantidade com esta validade"
+                      className="w-20 h-12 rounded-lg border border-line-strong px-2 text-center text-[18px] font-semibold tnum focus:border-brand-600 focus:outline-none"
+                    />
+                    <input
+                      value={maskExpiryDigits(e.digits)}
+                      onChange={(ev) => patch(e.id, { digits: ev.target.value.replace(/\D/g, "").slice(0, 8) })}
+                      inputMode="numeric"
+                      placeholder="Validade DD/MM"
+                      aria-label="Validade"
+                      className="flex-1 min-w-0 h-12 rounded-lg border border-line-strong px-2.5 text-[18px] font-semibold tnum focus:border-brand-600 focus:outline-none"
+                    />
+                    <button type="button" onClick={() => remove(e.id)} aria-label="Remover linha" className="size-10 grid place-items-center text-bad shrink-0">
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Unidade">
+                      {unitsFor(product).map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          role="radio"
+                          aria-checked={e.unit === u}
+                          onClick={() => patch(e.id, { unit: u })}
+                          className={clsx("h-9 rounded-lg border text-[12.5px] font-bold", e.unit === u ? "bg-brand-800 text-white border-brand-800" : "border-line-strong text-ink-2")}
+                        >
+                          {u === "un" ? "UNIDADE" : "CAIXA"}
+                        </button>
+                      ))}
+                    </div>
+                    {iso && days !== null ? (
+                      <span className="flex items-center gap-1.5 text-[12px] text-ink-2 tnum">
+                        <SeverityPill severity={classify(days, bands)} /> {formatIsoBr(iso, false)} · {describeDays(days)}
+                      </span>
+                    ) : e.digits ? (
+                      <span className="text-[12px] text-warn font-medium">Data incompleta ou inválida</span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+            <button type="button" onClick={add} className="w-full h-11 rounded-xl border border-dashed border-line-strong bg-surface text-[13.5px] font-semibold text-ink-2 inline-flex items-center justify-center gap-1.5">
+              <Plus className="size-4" /> {entries.length ? "Outra validade" : "Adicionar validade"}
+            </button>
+          </div>
+        </div>
+
+        <PriceField digits={price} onChange={setPrice} label="Preço do produto (R$)" required={parsed.length > 0} />
+
+        {!ready ? (
+          <p className="text-[12.5px] text-warn font-medium">
+            {needsQty ? "Informe a quantidade na área de vendas. " : ""}
+            {incomplete.length ? "Complete a quantidade e a data de cada validade (ou remova a linha). " : ""}
+            {nothing ? "Informe a quantidade e a validade do que está no estoque. " : ""}
+            {needsPrice ? "Informe o preço do produto." : ""}
+          </p>
+        ) : null}
+
+        {hasSaved ? (
+          <button type="button" disabled={busy} onClick={() => void clear()} className="text-[13px] font-semibold text-muted">
+            Limpar o que foi informado aqui
+          </button>
+        ) : null}
       </div>
-    </div>
+    </Sheet>
   );
 }

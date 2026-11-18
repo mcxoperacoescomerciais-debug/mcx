@@ -148,6 +148,13 @@
       "when": 1794863346042,
       "tag": "0020_link_relatorio",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795028824906,
+      "tag": "0021_preco_estoque",
+      "breakpoints": true
     }
   ]
 }

@@ -400,7 +400,7 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
           deletedPhotoIds: [],
           stock: st
             .filter((x) => x.attendanceId === a.id)
-            .map((x) => ({ productId: x.productId, state: x.state, quantity: x.quantity, note: x.note, recordedAt: x.recordedAt.toISOString() })),
+            .map((x) => ({ productId: x.productId, state: x.state, quantity: x.quantity, unit: x.unit, note: x.note, price: x.price === null ? null : Number(x.price), recordedAt: x.recordedAt.toISOString() })),
           clearedStockProductIds: [],
           unregistered: un.filter((x) => x.attendanceId === a.id).map((x) => ({ id: x.id, description: x.description, quantity: x.quantity, note: x.note })),
           deletedUnregisteredIds: [],
@@ -804,6 +804,7 @@ async function applyAttendance(
   for (const st of a.stock) {
     const quantity = storedQuantity(st.state, st.quantity);
     const unit = st.unit ?? (await productUnit(tx, st.productId));
+    const price = st.price === null || st.price === undefined ? null : st.price.toFixed(2);
     await tx
       .insert(s.stockEntries)
       .values({
@@ -814,13 +815,14 @@ async function applyAttendance(
         quantity,
         unit,
         note: st.note,
+        price,
         recordedAt: new Date(st.recordedAt),
         createdBy: promoterId,
         updatedBy: promoterId,
       })
       .onConflictDoUpdate({
         target: [s.stockEntries.attendanceId, s.stockEntries.productId],
-        set: { state: st.state, quantity, unit, note: st.note, recordedAt: new Date(st.recordedAt), updatedAt: now, updatedBy: promoterId },
+        set: { state: st.state, quantity, unit, note: st.note, price, recordedAt: new Date(st.recordedAt), updatedAt: now, updatedBy: promoterId },
       });
   }
   if (a.clearedStockProductIds.length) {
