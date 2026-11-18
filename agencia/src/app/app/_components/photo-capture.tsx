@@ -9,6 +9,7 @@ import { addPhoto, getPhotoBlob, removePhoto, type LocalPhoto, type PhotoLink } 
 import { haptic, useObjectUrl } from "../_lib/hooks";
 import { preparePhoto } from "../_lib/photo";
 import { Sheet, toast } from "./primitives";
+import { canUseLiveCamera, LiveCamera } from "./live-camera";
 
 /**
  * Foto do atendimento. Ampliada: original do aparelho → servidor (com sinal) →
@@ -82,9 +83,16 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
   const asksPlacement = kind === "before" || kind === "after";
   const [choosing, setChoosing] = useState<"camera" | "gallery" | null>(null);
   const placementRef = useRef<PhotoPlacement | null>(null);
+  // Android: câmera dentro do app (a do celular derruba o navegador quando falta memória).
+  const [live, setLive] = useState(false);
+  const openCamera = () => {
+    if (canUseLiveCamera()) setLive(true);
+    else cameraRef.current?.click();
+  };
   const open = (source: "camera" | "gallery") => {
     if (asksPlacement) setChoosing(source);
-    else (source === "camera" ? cameraRef : galleryRef).current?.click();
+    else if (source === "camera") openCamera();
+    else galleryRef.current?.click();
   };
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>, source: "camera" | "gallery") {
@@ -99,6 +107,10 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
       toast("Escolha uma imagem.", "warn");
       return;
     }
+    await save(file, source);
+  }
+
+  async function save(file: Blob, source: "camera" | "gallery") {
     setBusy(true);
     try {
       const { full, thumb } = await preparePhoto(file);
@@ -157,7 +169,7 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
                         // Substituir mantém o local já escolhido para esta foto.
                         placementRef.current = p.placement ?? null;
                         if (asksPlacement && !p.placement) setChoosing("camera");
-                        else cameraRef.current?.click();
+                        else openCamera();
                       }}
                     >
                       <RefreshCw className="size-3.5" /> Substituir
@@ -226,7 +238,8 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
                 const source = choosing;
                 setChoosing(null);
                 // Ainda no toque do promotor: o celular só abre a câmera assim.
-                (source === "gallery" ? galleryRef : cameraRef).current?.click();
+                if (source === "gallery") galleryRef.current?.click();
+                else openCamera();
               }}
               className="w-full min-h-14 rounded-2xl border-2 border-line-strong bg-surface px-4 text-left text-[16px] font-semibold active:bg-brand-50 active:border-brand-700"
             >
@@ -235,6 +248,23 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
           ))}
         </div>
       </Sheet>
+
+      {live ? (
+        <LiveCamera
+          onShot={(photo) => {
+            setLive(false);
+            void save(photo, "camera");
+          }}
+          onClose={() => {
+            setLive(false);
+            setReplacing(null);
+          }}
+          onFallback={() => {
+            setLive(false);
+            cameraRef.current?.click();
+          }}
+        />
+      ) : null}
 
       <Sheet open={Boolean(viewing)} onClose={() => setViewing(null)} title="Foto">
         {viewing ? (
