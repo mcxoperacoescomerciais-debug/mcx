@@ -138,7 +138,7 @@ export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGa
               {photos.length}/{min} obrigatória{min > 1 ? "s" : ""}
             </span>
           ) : (
-            <span className="text-[12px] text-muted">{photos.length} foto(s)</span>
+            <span className="text-[12px] text-muted">Opcional · {photos.length} foto(s)</span>
           )}
         </div>
       ) : null}

@@ -284,8 +284,11 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
 
 function firstOpenStep(a: LocalAttendance, brand: { minBeforePhotos: number }, _tracked: number): StepId {
   void _tracked;
-  if (a.photos.filter((p) => p.kind === "before").length < brand.minBeforePhotos) return "antes";
-  if (a.photos.some((p) => p.kind === "after")) return "estoque";
+  const before = a.photos.filter((p) => p.kind === "before").length;
+  const hasAfter = a.photos.some((p) => p.kind === "after");
+  // Sempre começa pelo antes: mesmo sem foto obrigatória (mínimo 0), o promotor pode tirar se quiser.
+  if (before < brand.minBeforePhotos || (!before && !hasAfter)) return "antes";
+  if (hasAfter) return "estoque";
   return "depois";
 }
 
