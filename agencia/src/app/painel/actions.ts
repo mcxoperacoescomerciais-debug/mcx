@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getScope } from "@/server/auth";
 import * as m from "@/server/manager";
+import * as c from "@/server/manager-corrections";
 import type { ActionResult } from "@/server/manager";
 import type { IssueReviewStatus } from "@/lib/domain";
 
@@ -17,6 +18,18 @@ function done(r: ActionResult): FormState {
 
 export async function requestCorrectionAction(_: FormState, fd: FormData): Promise<FormState> {
   return done(await m.requestCorrection(await getScope(), str(fd, "id"), str(fd, "reason")));
+}
+
+export async function correctValidityAction(_: FormState, fd: FormData): Promise<FormState> {
+  return done(await c.correctValidity(await getScope(), str(fd, "id"), { expiryDate: str(fd, "expiryDate"), quantity: str(fd, "quantity"), price: str(fd, "price") }, str(fd, "reason")));
+}
+
+export async function correctStockAction(_: FormState, fd: FormData): Promise<FormState> {
+  return done(await c.correctStock(await getScope(), str(fd, "attendanceId"), str(fd, "productId"), { quantity: str(fd, "quantity"), unit: str(fd, "unit"), price: str(fd, "price") }, str(fd, "reason")));
+}
+
+export async function removeRuptureAction(_: FormState, fd: FormData): Promise<FormState> {
+  return done(await c.removeRuptureByManager(await getScope(), str(fd, "id"), str(fd, "reason")));
 }
 
 export async function undoMistakenVisitAction(_: FormState, fd: FormData): Promise<FormState> {

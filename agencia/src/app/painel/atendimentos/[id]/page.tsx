@@ -34,7 +34,8 @@ import { describeDays, formatIsoBr } from "@/lib/validity";
 import { SectionCard, Table, Td, Th } from "../../_components/widgets";
 import { BeforeAfter, Gallery, type ViewerPhoto } from "../../_components/photo-viewer";
 import { ActionForm, Disclosure } from "../../_components/action-form";
-import { cancelCorrectionAction, occurrenceAction, requestCorrectionAction, reviewAttendanceAction } from "../../actions";
+import { cancelCorrectionAction, correctStockAction, correctValidityAction, occurrenceAction, removeRuptureAction, requestCorrectionAction, reviewAttendanceAction } from "../../actions";
+import { CorrectDialog } from "./correct-dialog";
 
 export const metadata: Metadata = { title: "Atendimento" };
 
@@ -45,6 +46,7 @@ const ACTION_LABEL: Record<string, string> = {
   finished: "Visita encerrada",
   status_changed: "Status alterado",
   correction_requested: "Correção solicitada",
+  item_corrected: "Corrigido pelo gestor",
   correction_answered: "Correção enviada pelo promotor",
   correction_cancelled: "Pedido de correção cancelado",
   approved: "Aprovado",
@@ -72,6 +74,10 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
   const before = d.photos.filter((p) => p.kind === "before").map((p) => toViewer(p, `Antes · ${d.brand.name} · ${d.store.name}`));
   const after = d.photos.filter((p) => p.kind === "after").map((p) => toViewer(p, `Depois · ${d.brand.name} · ${d.store.name}`));
   const informed = d.stockRows.filter((r) => r.entry).length;
+  // Correção direta pelo gestor: só admin/gestor e só com o atendimento concluído.
+  const canCorrect = (scope.role === "admin" || scope.role === "manager") && a.status === "completed";
+  const priceInput = (n: string | null) => (n === null ? "" : Number(n).toFixed(2).replace(".", ","));
+  const reasonField = <input name="reason" required minLength={5} maxLength={300} placeholder="Motivo da correção (ex.: promotor digitou o ano errado)" className={inputClass} />;
   const openCorrection = d.corrections.find((c) => c.c.status === "open");
   const pctDiv = scope.settings.stockDivergencePct;
   // Tempo nesta marca × médias (30 dias até a visita): do promotor e da equipe.
@@ -162,6 +168,7 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                   <Th align="right">Preço</Th>
                   <Th align="right">Registro anterior</Th>
                   <Th>Observação</Th>
+                  {canCorrect ? <Th>{null}</Th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -197,6 +204,35 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                         )}
                       </Td>
                       <Td className="text-muted">{entry?.note ?? ""}</Td>
+                      {canCorrect ? (
+                        <Td>
+                          {entry && (entry.state === "quantity" || entry.state === "zero") ? (
+                            <CorrectDialog title={`Corrigir estoque · ${product.name}`}>
+                              <ActionForm action={correctStockAction} hidden={{ attendanceId: a.id, productId: product.id }} submitLabel="Salvar correção" resetOnSuccess={false}>
+                                <div className="grid grid-cols-3 gap-3">
+                                  <label className="block text-[12.5px] text-muted">
+                                    Quantidade
+                                    <input name="quantity" inputMode="numeric" required defaultValue={entry.quantity ?? 0} className={inputClass} />
+                                  </label>
+                                  <label className="block text-[12.5px] text-muted">
+                                    Unidade
+                                    <select name="unit" defaultValue={entry.unit} className={inputClass}>
+                                      <option value="un">Unidade</option>
+                                      <option value="cx">Caixa</option>
+                                      {entry.unit !== "un" && entry.unit !== "cx" ? <option value={entry.unit}>{entry.unit}</option> : null}
+                                    </select>
+                                  </label>
+                                  <label className="block text-[12.5px] text-muted">
+                                    Preço (R$)
+                                    <input name="price" inputMode="decimal" placeholder="sem preço" defaultValue={priceInput(entry.price)} className={inputClass} />
+                                  </label>
+                                </div>
+                                {reasonField}
+                              </ActionForm>
+                            </CorrectDialog>
+                          ) : null}
+                        </Td>
+                      ) : null}
                     </tr>
                   );
                 })}
@@ -231,6 +267,7 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                     <Th align="right">Qtd.</Th>
                     <Th align="right">Preço</Th>
                     <Th>Lote</Th>
+                    {canCorrect ? <Th>{null}</Th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -258,6 +295,29 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                         {((n: string | null) => (n === null ? "—" : `R$ ${Number(n).toFixed(2).replace(".", ",")}`))(v.price)}
                       </Td>
                       <Td>{v.lot ?? "—"}</Td>
+                      {canCorrect ? (
+                        <Td>
+                          <CorrectDialog title={`Corrigir validade · ${productName}`}>
+                            <ActionForm action={correctValidityAction} hidden={{ id: v.id }} submitLabel="Salvar correção" resetOnSuccess={false}>
+                              <div className="grid grid-cols-3 gap-3">
+                                <label className="block text-[12.5px] text-muted">
+                                  Validade
+                                  <input type="date" name="expiryDate" required defaultValue={v.expiryDate} className={inputClass} />
+                                </label>
+                                <label className="block text-[12.5px] text-muted">
+                                  Quantidade ({v.unit})
+                                  <input name="quantity" inputMode="numeric" required defaultValue={v.quantity} className={inputClass} />
+                                </label>
+                                <label className="block text-[12.5px] text-muted">
+                                  Preço (R$)
+                                  <input name="price" inputMode="decimal" placeholder="sem preço" defaultValue={priceInput(v.price)} className={inputClass} />
+                                </label>
+                              </div>
+                              {reasonField}
+                            </ActionForm>
+                          </CorrectDialog>
+                        </Td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -285,6 +345,16 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
                         {r.fromStockSuggestion ? " · sugerida pelo estoque" : ""}
                       </span>
                     </span>
+                    {canCorrect ? (
+                      <span className="ml-auto">
+                        <CorrectDialog title={`Remover ruptura · ${productName}`} label="Remover">
+                          <ActionForm action={removeRuptureAction} hidden={{ id: r.id }} submitLabel="Remover ruptura" variant="danger" resetOnSuccess={false}>
+                            <p className="text-[13px] text-ink-2">A ruptura sai do atendimento, do relatório e dos indicadores. O registro original fica guardado no histórico.</p>
+                            {reasonField}
+                          </ActionForm>
+                        </CorrectDialog>
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>

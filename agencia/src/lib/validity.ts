@@ -117,6 +117,17 @@ export function plausibilityWarning(iso: string, referenceIso: string): Plausibi
   return null;
 }
 
+/** Validade anterior à data da visita e ainda não confirmada pelo promotor: pede confirmação antes de salvar. */
+export function expiredNeedsConfirm(iso: string, referenceIso: string, confirmed: boolean): boolean {
+  return !confirmed && daysBetween(referenceIso, iso) < 0;
+}
+
+/** A mesma data no ano seguinte (sugestão para ano digitado errado); null em 29/02 sem ano bissexto. */
+export function nextYearIso(iso: string): string | null {
+  const [y, m, d] = iso.split("-").map(Number);
+  return isValidDate(y + 1, m, d) ? `${y + 1}-${pad(m)}-${pad(d)}` : null;
+}
+
 export function formatIsoBr(iso: string | null | undefined, withYear = true): string {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");

@@ -17,7 +17,7 @@ import { Button, StatusBadge } from "@/components/ui";
 import { STOCK_STATE_SHORT, STOCK_STATE_TONE, type ItemUnit, type StockState, type ValidityLocation } from "@/lib/domain";
 import { daysBetween, fmtDate } from "@/lib/dates";
 import type { BootstrapProduct } from "@/lib/sync-types";
-import { classify, DEFAULT_BANDS, describeDays, formatIsoBr, isoToDigits, maskExpiryDigits, parseExpiryDigits } from "@/lib/validity";
+import { classify, DEFAULT_BANDS, describeDays, expiredNeedsConfirm, formatIsoBr, isoToDigits, maskExpiryDigits, nextYearIso, parseExpiryDigits } from "@/lib/validity";
 import { clearStock, deleteValidity, saveStock, saveValidity, toggleRupture, uuid, type LocalAttendance } from "../_lib/local-store";
 import { productPrice, stockSummary } from "../_lib/stock-summary";
 import { haptic, useCatalog } from "../_lib/hooks";
@@ -29,6 +29,8 @@ interface Entry {
   digits: string;
   qty: string;
   unit: ItemUnit;
+  /** Data já vencida: o promotor confirmou que está certa (evita ano digitado errado). */
+  confirmed: boolean;
 }
 
 interface CardProps {
@@ -152,14 +154,14 @@ function LocationSheet({ visitId, visitDate, attendance, product, location, onCl
   const [qty, setQty] = useState(stock?.state === "quantity" && stock.quantity !== null ? String(stock.quantity) : stock?.state === "zero" ? "0" : "");
   const [unit, setUnit] = useState<ItemUnit>(stock?.unit === "cx" ? "cx" : "un");
   const [entries, setEntries] = useState<Entry[]>(() => {
-    const saved = existing.map((v) => ({ id: v.id, digits: isoToDigits(v.expiryDate), qty: String(v.quantity), unit: (v.unit === "cx" ? "cx" : "un") as ItemUnit }));
+    const saved = existing.map((v) => ({ id: v.id, digits: isoToDigits(v.expiryDate), qty: String(v.quantity), unit: (v.unit === "cx" ? "cx" : "un") as ItemUnit, confirmed: true }));
     // No estoque a quantidade vai junto da validade: já abre com uma linha pronta.
-    return saved.length || sales ? saved : [{ id: uuid(), digits: "", qty: "", unit: "un" }];
+    return saved.length || sales ? saved : [{ id: uuid(), digits: "", qty: "", unit: "un", confirmed: false }];
   });
   const [price, setPrice] = useState(numberToMoneyDigits(productPrice(attendance, product.id)));
   const [busy, setBusy] = useState(false);
 
-  const add = () => setEntries((e) => [...e, { id: uuid(), digits: "", qty: "", unit: "un" }]);
+  const add = () => setEntries((e) => [...e, { id: uuid(), digits: "", qty: "", unit: "un", confirmed: false }]);
   const patch = (id: string, p: Partial<Entry>) => setEntries((e) => e.map((x) => (x.id === id ? { ...x, ...p } : x)));
   const remove = (id: string) => setEntries((e) => e.filter((x) => x.id !== id));
 
@@ -170,12 +172,14 @@ function LocationSheet({ visitId, visitDate, attendance, product, location, onCl
     return { e, iso: r?.ok ? r.iso : null, qty: Number(e.qty) };
   });
   const incomplete = parsed.filter((x) => !x.iso || !(x.qty > 0));
+  // Data já vencida pede confirmação: o erro mais comum é o ano digitado errado.
+  const unconfirmed = parsed.filter((x) => x.iso && expiredNeedsConfirm(x.iso, visitDate, x.e.confirmed));
   const priceNum = moneyDigitsToNumber(price);
   const needsQty = sales && qty === "";
   const nothing = !sales && !parsed.length && !existing.length;
   // Com validade, o preço continua obrigatório (como já era); sem validade, é opcional.
   const needsPrice = parsed.length > 0 && !(priceNum && priceNum > 0);
-  const ready = !needsQty && !incomplete.length && !nothing && !needsPrice;
+  const ready = !needsQty && !incomplete.length && !unconfirmed.length && !nothing && !needsPrice;
 
   async function save() {
     if (!ready) return;
@@ -267,7 +271,7 @@ function LocationSheet({ visitId, visitDate, attendance, product, location, onCl
                     />
                     <input
                       value={maskExpiryDigits(e.digits)}
-                      onChange={(ev) => patch(e.id, { digits: ev.target.value.replace(/\D/g, "").slice(0, 8) })}
+                      onChange={(ev) => patch(e.id, { digits: ev.target.value.replace(/\D/g, "").slice(0, 8), confirmed: false })}
                       inputMode="numeric"
                       placeholder="Validade DD/MM"
                       aria-label="Validade"
@@ -299,6 +303,21 @@ function LocationSheet({ visitId, visitDate, attendance, product, location, onCl
                     ) : e.digits ? (
                       <span className="text-[12px] text-warn font-medium">Data incompleta ou inválida</span>
                     ) : null}
+                    {iso && expiredNeedsConfirm(iso, visitDate, e.confirmed) ? (
+                      <div className="rounded-xl bg-warn-bg text-warn px-3 py-2.5 text-[13px] font-medium">
+                        <p>Esta data já venceu ({formatIsoBr(iso)}). Está certa?</p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {nextYearIso(iso) ? (
+                            <button type="button" onClick={() => patch(e.id, { digits: isoToDigits(nextYearIso(iso)), confirmed: false })} className="h-10 px-3 rounded-lg bg-warn text-white text-[13px] font-semibold">
+                              Usar {formatIsoBr(nextYearIso(iso))}
+                            </button>
+                          ) : null}
+                          <button type="button" onClick={() => patch(e.id, { confirmed: true })} className="h-10 px-3 rounded-lg border border-warn text-[13px] font-semibold">
+                            Sim, já venceu
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -315,6 +334,7 @@ function LocationSheet({ visitId, visitDate, attendance, product, location, onCl
           <p className="text-[12.5px] text-warn font-medium">
             {needsQty ? "Informe a quantidade na área de vendas. " : ""}
             {incomplete.length ? "Complete a quantidade e a data de cada validade (ou remova a linha). " : ""}
+            {unconfirmed.length ? "Confirme a data que já venceu. " : ""}
             {nothing ? "Informe a quantidade e a validade do que está no estoque. " : ""}
             {needsPrice ? "Informe o preço do produto." : ""}
           </p>

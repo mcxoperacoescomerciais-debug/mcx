@@ -470,6 +470,57 @@ describe("fluxos críticos", () => {
     assert.equal(again.ok, false);
   });
 
+  test("correção do gestor: validade com ano errado, estoque e ruptura — recalcula, registra quem alterou e respeita permissão", async () => {
+    const fix = await import("../src/server/manager-corrections");
+    const [att] = await db.select().from(s.attendances).where(eq(s.attendances.id, ids.bravoAtt));
+    assert.equal(att.status, "completed");
+    const [visit] = await db.select().from(s.visits).where(eq(s.visits.id, att.visitId));
+    const [v] = await db.select().from(s.validities).where(and(eq(s.validities.attendanceId, ids.bravoAtt), isNull(s.validities.deletedAt)));
+    const nextYear = `${Number(v.expiryDate.slice(0, 4)) + 1}${v.expiryDate.slice(4)}`;
+    const input = { expiryDate: nextYear, quantity: String(v.quantity), price: "15,50" };
+
+    // Promotor não corrige; motivo é obrigatório; data precisa existir.
+    assert.equal((await fix.correctValidity(scopes.lucas, v.id, input, "ano digitado errado")).ok, false);
+    assert.equal((await fix.correctValidity(scopes.gestor, v.id, input, "x")).ok, false);
+    assert.equal((await fix.correctValidity(scopes.gestor, v.id, { ...input, expiryDate: "2027-02-30" }, "ano digitado errado")).ok, false);
+
+    const ok = await fix.correctValidity(scopes.gestor, v.id, input, "ano digitado errado");
+    assert.deepEqual(ok, { ok: true, message: "Validade corrigida." });
+    const [after] = await db.select().from(s.validities).where(eq(s.validities.id, v.id));
+    assert.equal(after.expiryDate, nextYear);
+    assert.equal(after.price, "15.50");
+    assert.ok(after.daysToExpiry > 300, `dias recalculados sobre a data da visita (${visit.visitDate}): ${after.daysToExpiry}`);
+    assert.equal(after.severity, "normal");
+    assert.equal(after.updatedBy, scopes.gestor.userId);
+
+    // Reenviar os mesmos valores não grava nada de novo.
+    assert.deepEqual(await fix.correctValidity(scopes.gestor, v.id, input, "ano digitado errado"), { ok: true, message: "Nada foi alterado." });
+
+    const [st] = await db.select().from(s.stockEntries).where(and(eq(s.stockEntries.attendanceId, ids.bravoAtt), eq(s.stockEntries.state, "quantity")));
+    const stockFix = await fix.correctStock(scopes.gestor, ids.bravoAtt, st.productId, { quantity: "0", unit: "cx", price: "" }, "contagem errada");
+    assert.equal(stockFix.ok, true);
+    const [stAfter] = await db.select().from(s.stockEntries).where(eq(s.stockEntries.id, st.id));
+    assert.deepEqual([stAfter.state, stAfter.quantity, stAfter.unit, stAfter.price], ["zero", 0, "cx", null]);
+
+    const [rup] = await db.select().from(s.ruptures).where(and(eq(s.ruptures.attendanceId, ids.bravoAtt), isNull(s.ruptures.deletedAt)));
+    if (rup) {
+      assert.equal((await fix.removeRuptureByManager(scopes.gestor, rup.id, "marcada por engano")).ok, true);
+      const [gone] = await db.select().from(s.ruptures).where(eq(s.ruptures.id, rup.id));
+      assert.ok(gone.deletedAt);
+    }
+
+    const logs = await db.select().from(s.auditLogs).where(and(eq(s.auditLogs.entity, "attendance"), eq(s.auditLogs.entityId, ids.bravoAtt), eq(s.auditLogs.action, "item_corrected")));
+    assert.equal(logs.length, rup ? 3 : 2);
+    assert.ok(logs.every((l) => l.userId === scopes.gestor.userId));
+    const valLog = logs.find((l) => l.reason?.startsWith("Validade de"));
+    assert.match(valLog?.reason ?? "", /validade \d{2}\/\d{2}\/\d{4} → \d{2}\/\d{2}\/\d{4}.*Motivo: ano digitado errado/);
+
+    // Atendimento em correção com o promotor não aceita correção direta (o celular sobrescreveria).
+    await db.update(s.attendances).set({ status: "correction_requested" }).where(eq(s.attendances.id, ids.bravoAtt));
+    assert.equal((await fix.correctValidity(scopes.gestor, v.id, { ...input, price: "16,00" }, "ajuste de preço")).ok, false);
+    await db.update(s.attendances).set({ status: "completed" }).where(eq(s.attendances.id, ids.bravoAtt));
+  });
+
   test("desativar usuário preserva o histórico e encerra o acesso", async () => {
     const admin = await import("../src/server/admin");
     const [ana] = await db.select().from(s.users).where(eq(s.users.username, "ana"));
