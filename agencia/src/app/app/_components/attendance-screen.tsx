@@ -21,7 +21,7 @@ import {
 import { fmtDate, fmtDuration, fmtTime } from "@/lib/dates";
 import { exceptionIsValid } from "@/lib/rules";
 import { pendingQuestions, QUESTION_NOTE_MIN, type QuestionAnswer } from "@/lib/domain";
-import { attendanceDisplayStatus, cancelAttendance, finishAttendance, requestShare, updateAttendance, type LocalAttendance } from "../_lib/local-store";
+import { attendanceDisplayStatus, cancelAttendance, finishAttendance, finishVisitIfDone, requestShare, updateAttendance, type LocalAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useLocal, useVisit } from "../_lib/hooks";
 import { missingFor } from "../_lib/derive";
 import { Chip, Notice, Screen, Sheet, TextArea, toast, TopBar } from "./primitives";
@@ -38,8 +38,9 @@ import { PHOTOS_ONLY_HINT } from "../_lib/share-mode";
 
 const STEPS = [
   { id: "antes", label: "Antes" },
-  { id: "depois", label: "Depois" },
+  // Estoque e validade são contados com a gôndola ainda como estava, antes da foto do depois.
   { id: "estoque", label: "Estoque, ruptura e validade" },
+  { id: "depois", label: "Depois" },
   { id: "avaria", label: "Avaria" },
   { id: "ocorrencias", label: "Ocorrências" },
   // Checklist final: o promotor confere tudo antes da revisão.
@@ -214,8 +215,8 @@ function firstOpenStep(a: LocalAttendance, brand: { minBeforePhotos: number }, _
   const hasAfter = a.photos.some((p) => p.kind === "after");
   // Sempre começa pelo antes: mesmo sem foto obrigatória (mínimo 0), o promotor pode tirar se quiser.
   if (before < brand.minBeforePhotos || (!before && !hasAfter)) return "antes";
-  if (hasAfter) return "estoque";
-  return "depois";
+  if (hasAfter) return "avaria";
+  return "estoque";
 }
 
 function ExecutionStep({ visitId, attendance, activities, questions, editable }: { visitId: string; attendance: LocalAttendance; activities: string[]; questions: string[]; editable: boolean }) {
@@ -528,9 +529,13 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
           attendance={attendance}
           brandIds={report?.brandIds}
           onBack={() => setAskReport(false)}
-          onDone={(sent) => {
+          onDone={async (sent) => {
             setAskReport(false);
-            if (sent) go(`visita/${visitId}`, true);
+            // Enviou no grupo e todas as marcas da loja estão resolvidas: a visita encerra sozinha.
+            if (sent && (await finishVisitIfDone(visitId, cat.scheduleById.get(visit.scheduleId ?? "")?.brandIds ?? []))) {
+              toast("Relatório enviado. Visita encerrada.");
+              go("", true);
+            } else if (sent) go(`visita/${visitId}`, true);
             else backToStore();
           }}
         />

@@ -20,7 +20,7 @@ import { useCatalog, useLocal, useObjectUrl } from "../_lib/hooks";
 import { PHOTOS_ONLY_HINT } from "../_lib/share-mode";
 import { BEFORE_IN_REPORT_NOTE, GROUP_MAX_FILES, groupPhotos, groupSendHint } from "../_lib/group-photos";
 
-export function SharePdf({ attendance, storeId, visitDate }: { attendance: LocalAttendance; storeId: string; visitDate: string }) {
+export function SharePdf({ attendance, storeId, visitDate, onShared }: { attendance: LocalAttendance; storeId: string; visitDate: string; /** Chamado quando o WhatsApp recebeu o envio. */ onShared?: () => void }) {
   const { bootstrap, sync } = useLocal();
   const cat = useCatalog();
   const store = cat.storeById.get(storeId);
@@ -145,6 +145,7 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
     try {
       if (split && all.length && navigator.canShare?.({ files: all })) {
         await navigator.share({ files: all, title: "Relatório de atendimento" });
+        onShared?.();
         return;
       }
       if (all.length && navigator.canShare?.({ files: all, text: message })) await navigator.share({ files: all, text: message, title: "Relatório de atendimento" });
@@ -158,6 +159,7 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
         a.download = file.name;
         a.click();
       }
+      onShared?.();
     } catch (e) {
       const n = (e as Error)?.name;
       if (n === "NotAllowedError") setMsg("O celular bloqueou a janela de compartilhar. Toque de novo.");

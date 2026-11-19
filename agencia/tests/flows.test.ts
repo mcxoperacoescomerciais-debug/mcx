@@ -271,8 +271,16 @@ describe("fluxos críticos", () => {
     assert.equal(res.code, "forbidden");
     // Loja não autorizada.
     const [other] = await db.select().from(s.stores).where(eq(s.stores.name, "Verdemar Sion"));
-    const [res2] = await promoter.applySync(scopes.lucas, [visitPayload({ storeId: other.id, origin: "extra", extraReason: "tentativa", attendances: [] })]);
-    assert.equal(res2.code, "forbidden");
+    // Loja fora da atribuição: o trabalho entra e vira pendência para o gestor (não é recusado).
+    const outside = visitPayload({ storeId: other.id, origin: "extra", extraReason: "tentativa", attendances: [] });
+    const [res2] = await promoter.applySync(scopes.lucas, [outside]);
+    assert.ok(res2.ok, JSON.stringify(res2));
+    const flags = await db.select().from(s.auditLogs).where(and(eq(s.auditLogs.entityId, outside.id), eq(s.auditLogs.action, "accepted_outside_rule")));
+    assert.ok(flags.some((f) => /fora da atribuição/.test(f.reason ?? "")));
+    await promoter.applySync(scopes.lucas, [{ ...outside, status: "cancelled", closeReason: "teste", finishedAt: new Date().toISOString() }]);
+    // Loja de outra agência continua recusada.
+    const [res3] = await promoter.applySync(scopes.lucas, [visitPayload({ storeId: randomUUID(), origin: "extra", extraReason: "tentativa", attendances: [] })]);
+    assert.equal(res3.code, "forbidden");
     // Gestor restrito à Bravo não vê atendimento da Fofinho, só o da Bravo.
     assert.equal(await details.getAttendanceDetail(scopes.bravo, ids.fofAtt), null);
     assert.ok(await details.getAttendanceDetail(scopes.bravo, ids.bravoAtt));
@@ -460,11 +468,23 @@ describe("fluxos críticos", () => {
     // João já tem uma visita em andamento (dados de demonstração).
     const [store] = await db.select().from(s.stores).where(eq(s.stores.name, "Super BH Formiga"));
     const [sch] = await db.select().from(s.schedules).where(and(eq(s.schedules.storeId, store.id), eq(s.schedules.date, todayIso())));
-    const [res] = await promoter.applySync(scopes.joao, [visitPayload({ storeId: store.id, scheduleId: sch.id, attendances: [], startedAt: new Date().toISOString() })]);
-    assert.equal(res.code, "conflict");
-    // Segunda visita para a mesma programação (outro aparelho) é recusada.
-    const [dup] = await promoter.applySync(scopes.lucas, [visitPayload({ storeId: ids.store, scheduleId: ids.schedule, attendances: [] })]);
-    assert.equal(dup.code, "conflict");
+    // A visita anterior que ficou aberta no servidor é encerrada pelo sistema; a nova entra.
+    const [openBefore] = await db.select().from(s.visits).where(and(eq(s.visits.promoterId, scopes.joao.userId), eq(s.visits.status, "in_progress")));
+    const joaoNew = visitPayload({ storeId: store.id, scheduleId: sch.id, attendances: [], startedAt: new Date().toISOString() });
+    const [res] = await promoter.applySync(scopes.joao, [joaoNew]);
+    assert.ok(res.ok, JSON.stringify(res));
+    if (openBefore && openBefore.id !== joaoNew.id) {
+      const [closed] = await db.select().from(s.visits).where(eq(s.visits.id, openBefore.id));
+      assert.notEqual(closed.status, "in_progress");
+    }
+    await promoter.applySync(scopes.joao, [{ ...joaoNew, status: "cancelled", closeReason: "teste", finishedAt: new Date().toISOString() }]);
+    // Segunda visita para a mesma programação (outro aparelho): entra fora da programação, com pendência.
+    const second = visitPayload({ storeId: ids.store, scheduleId: ids.schedule, attendances: [] });
+    const [dup] = await promoter.applySync(scopes.lucas, [second]);
+    assert.ok(dup.ok, JSON.stringify(dup));
+    const [secondRow] = await db.select().from(s.visits).where(eq(s.visits.id, second.id));
+    assert.equal(secondRow.scheduleId, null);
+    await promoter.applySync(scopes.lucas, [{ ...second, status: "cancelled", closeReason: "teste", finishedAt: new Date().toISOString() }]);
     // Mesma loja duas vezes no mesmo dia para o mesmo promotor é recusada.
     const again = await schedules.createSchedule(scopes.gestor, { promoterId: scopes.lucas.userId, storeId: ids.store, date: todayIso(), plannedStart: null, brandIds: [], notes: null });
     assert.equal(again.ok, false);

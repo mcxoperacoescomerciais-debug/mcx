@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtDuration, fmtTime } from "@/lib/dates";
-import { addPlannedBrand, cancelAttendance, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, retryBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
+import { addPlannedBrand, cancelAttendance, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, finishVisitIfDone, peekShareRequest, pendingPhotos, retryBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useVisit } from "../_lib/hooks";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
 import { Notice, Screen, SectionTitle, Sheet, TextArea, toast, TopBar } from "./primitives";
@@ -226,7 +226,19 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
             <p className="text-[14px] text-muted mb-3">
               {cat.brandById.get(shareAttendance.brandId)?.name}: o relatório em PDF vai junto com as fotos do antes e do depois. Escolha o grupo no WhatsApp.
             </p>
-            <SharePdf attendance={shareAttendance} storeId={visit.storeId} visitDate={visit.visitDate} />
+            <SharePdf
+              attendance={shareAttendance}
+              storeId={visit.storeId}
+              visitDate={visit.visitDate}
+              onShared={async () => {
+                closeShare();
+                // Todas as marcas resolvidas: a visita encerra sozinha depois do envio.
+                if (await finishVisitIfDone(visitId, schedule?.brandIds ?? [])) {
+                  toast("Relatório enviado. Visita encerrada.");
+                  go("", true);
+                }
+              }}
+            />
             <button type="button" onClick={closeShare} className="w-full text-center text-[13px] text-muted font-medium py-3">
               Enviar depois
             </button>
@@ -242,11 +254,10 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
 }
 
 function BlockedVisit({ visitId }: { visitId: string }) {
-  const [open, setOpen] = useState(false);
   const [retrying, setRetrying] = useState(false);
   return (
     <>
-      <p className="text-[13px] text-ink-2">O servidor recusou esta visita. Não apague: fale com o gestor e, depois que ele ajustar, toque em “Tentar enviar de novo”. O app também tenta de novo sozinho cada vez que é aberto.</p>
+      <p className="text-[13px] text-ink-2">Esta visita ainda não chegou ao sistema. Ela fica guardada neste celular e é reenviada sozinha; se quiser, toque abaixo para tentar agora. Avise o gestor se continuar.</p>
       <Button
         className="w-full"
         disabled={retrying}
@@ -258,30 +269,6 @@ function BlockedVisit({ visitId }: { visitId: string }) {
       >
         {retrying ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Tentar enviar de novo
       </Button>
-      <Button variant="secondary" className="w-full" onClick={() => setOpen(true)}>
-        <Trash2 className="size-4" /> Remover visita recusada deste celular
-      </Button>
-      <Sheet
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Remover visita recusada?"
-        footer={
-          <Button
-            size="lg"
-            variant="danger"
-            className="w-full"
-            onClick={async () => {
-              await removeBlockedVisit(visitId);
-              toast("Visita recusada removida do celular.");
-              go("", true);
-            }}
-          >
-            Remover definitivamente
-          </Button>
-        }
-      >
-        <p className="text-[14px] text-ink-2">Os registros desta visita existem só neste celular e foram recusados pelo servidor. Esta ação não pode ser desfeita.</p>
-      </Sheet>
     </>
   );
 }

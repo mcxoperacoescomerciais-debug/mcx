@@ -328,6 +328,7 @@ export const ISSUE_KINDS = [
   "visit_missed",
   "checkin_far",
   "checkin_no_location",
+  "outside_rule",
 ] as const;
 export type IssueKind = (typeof ISSUE_KINDS)[number];
 export const ISSUE_KIND_LABEL: Record<IssueKind, string> = {
@@ -343,6 +344,7 @@ export const ISSUE_KIND_LABEL: Record<IssueKind, string> = {
   visit_missed: "Visita não realizada",
   checkin_far: "Check-in fora da loja",
   checkin_no_location: "Check-in sem localização",
+  outside_rule: "Aceito fora da regra",
 };
 /** Prioridade padrão (1 = mais urgente). Configurável em Configurações. */
 export const DEFAULT_ISSUE_PRIORITY: Record<IssueKind, number> = {
@@ -358,6 +360,7 @@ export const DEFAULT_ISSUE_PRIORITY: Record<IssueKind, number> = {
   photo_unsynced: 6,
   checkin_far: 2,
   checkin_no_location: 3,
+  outside_rule: 3,
 };
 
 export const ISSUE_REVIEW_STATUSES = ["analyzed", "concluded"] as const;

@@ -13,7 +13,7 @@ import { getDb, schema as s } from "./db";
 import type { Scope } from "./auth";
 import { brandFilter, promoterFilter } from "./scope";
 import { getDayBoard } from "./operations";
-import { EXCEPTION_ITEM_LABEL, OCCURRENCE_CATEGORY_LABEL, type ExceptionItem, type IssueKind, type IssueReviewStatus } from "@/lib/domain";
+import { DEFAULT_ISSUE_PRIORITY, EXCEPTION_ITEM_LABEL, OCCURRENCE_CATEGORY_LABEL, type ExceptionItem, type IssueKind, type IssueReviewStatus } from "@/lib/domain";
 import { addDays, fmtDateTime, hhmmToMinutes, minutesOfDay, todayIso } from "@/lib/dates";
 import type { PanelFilters } from "@/lib/filters";
 import { checkinPresence, fmtDistance } from "@/lib/rules";
@@ -165,6 +165,34 @@ export async function listIssues(scope: Scope, f: F, opts: { includeConcluded?: 
       // Esquecida aberta depois do fim do dia: sempre no topo (prioridade 1).
       if (v.status === "in_progress") issues.push({ ...base, at: v.startedAt, key: `visit_open:${v.id}`, kind: "visit_open", priority: 1, title: "Esqueceu de encerrar a visita no fim do dia", detail: `Aberta desde ${fmtDateTime(v.startedAt)} e não encerrada: o aplicativo ficou com a visita aberta.` });
       else issues.push({ ...base, at: v.finishedAt, key: `exception:visit:${v.id}`, kind: "exception", priority: pr.exception, title: "Visita encerrada com marca pendente", detail: `Justificativa: “${v.closeReason ?? ""}”` });
+    }
+  }
+
+  // Aceito fora da regra: o servidor não recusa trabalho feito na loja (programação trocada,
+  // loja ou marca fora do roteiro, visita fora da programação); cada caso fica aqui para o gestor.
+  if (!f.brand) {
+    const flagged = await db
+      .select({ id: s.auditLogs.id, reason: s.auditLogs.reason, at: s.auditLogs.createdAt, visitId: s.visits.id, date: s.visits.visitDate, storeName: s.stores.name, promoterName: s.users.name })
+      .from(s.auditLogs)
+      .innerJoin(s.visits, eq(s.auditLogs.entityId, sql`${s.visits.id}::text`))
+      .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+      .innerJoin(s.users, eq(s.users.id, s.visits.promoterId))
+      .where(
+        and(
+          eq(s.auditLogs.agencyId, scope.agencyId),
+          eq(s.auditLogs.entity, "visit"),
+          eq(s.auditLogs.action, "accepted_outside_rule"),
+          gte(s.visits.visitDate, f.from),
+          lte(s.visits.visitDate, f.to),
+          promoterFilter(scope, s.visits.promoterId),
+          f.store ? filterIn(s.visits.storeId, f.store) : undefined,
+          f.promoter ? filterIn(s.visits.promoterId, f.promoter) : undefined,
+          f.chain ? filterIn(s.stores.chainId, f.chain) : undefined,
+          f.city ? filterIn(s.stores.city, f.city) : undefined,
+        ),
+      );
+    for (const r of flagged) {
+      issues.push({ key: `outside_rule:${r.id}`, kind: "outside_rule", priority: pr.outside_rule ?? DEFAULT_ISSUE_PRIORITY.outside_rule, title: "Aceito fora da regra", detail: r.reason ?? "", date: r.date, at: r.at, storeName: r.storeName, brandName: null, promoterName: r.promoterName, href: `/painel/visitas/${r.visitId}`, review: null });
     }
   }
 

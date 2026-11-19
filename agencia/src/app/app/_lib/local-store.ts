@@ -691,6 +691,23 @@ export async function finishVisit(visitId: string, closeReason: string | null) {
   void syncNow();
 }
 
+/**
+ * Depois do envio no grupo: se todas as marcas da loja já estão finalizadas ou marcadas
+ * como não atendidas (e pelo menos uma foi atendida), a visita encerra sozinha — o
+ * promotor não precisa lembrar de tocar em "Encerrar visita".
+ */
+export async function finishVisitIfDone(visitId: string, scheduleBrandIds: string[]): Promise<boolean> {
+  const v = state.visits[visitId];
+  if (!v || v.status !== "in_progress" || v.blocked) return false;
+  const atts = Object.values(v.attendances);
+  const done = (st: string) => st === "completed" || st === "cancelled";
+  if (!atts.some((a) => a.status === "completed") || atts.some((a) => !done(a.status))) return false;
+  const planned = v.plannedBrandIds.length ? v.plannedBrandIds : scheduleBrandIds;
+  if (planned.some((b) => !atts.some((a) => a.brandId === b))) return false;
+  await finishVisit(visitId, null);
+  return true;
+}
+
 /** Visita aberta por engano, sem nada registrado: some do aparelho; se já foi ao servidor, é cancelada lá. */
 export async function discardVisit(visitId: string, reason: string): Promise<boolean> {
   const v = state.visits[visitId];
@@ -704,23 +721,6 @@ export async function discardVisit(visitId: string, reason: string): Promise<boo
   await bumpVisit(visitId, (x) => ({ ...x, status: "cancelled", closeReason: reason, finishedAt: new Date().toISOString() }));
   void syncNow();
   return true;
-}
-
-/**
- * Remove do aparelho uma visita que o servidor recusou definitivamente (ex.: loja
- * desautorizada, programação já atendida em outro aparelho). Só com confirmação
- * explícita do promotor — nada some sozinho.
- */
-export async function removeBlockedVisit(visitId: string): Promise<void> {
-  const v = state.visits[visitId];
-  if (!v?.blocked) return;
-  for (const a of Object.values(v.attendances)) for (const p of a.photos) {
-    await del(blobKey(p.id), idb);
-    await del(thumbKey(p.id), idb);
-  }
-  const rest = { ...state.visits };
-  delete rest[visitId];
-  await persistVisits(rest);
 }
 
 /** Promotor pede para reenviar uma visita recusada (ex.: depois que o gestor acertou o roteiro). */

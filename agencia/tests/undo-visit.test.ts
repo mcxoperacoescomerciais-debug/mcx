@@ -60,10 +60,6 @@ describe("desfazer visita aberta por engano", () => {
     const [r] = await promoter.applySync(lucas, [wrong]);
     assert.ok(r.ok, JSON.stringify(r));
 
-    // Antes de desfazer: o promotor não consegue abrir outra visita na mesma programação.
-    const [blocked] = await promoter.applySync(lucas, [visitOf(sch.storeId, sch.id, [], "in_progress")]);
-    assert.equal(blocked.ok, false);
-
     const res = await manager.undoMistakenVisit(admin, wrong.id, "Promotor abriu a loja errada");
     assert.ok(res.ok, JSON.stringify(res));
     const [row] = await db.select().from(s.visits).where(eq(s.visits.id, wrong.id));

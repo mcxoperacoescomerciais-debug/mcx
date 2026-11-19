@@ -120,11 +120,15 @@ describe("carteira com meta semanal", () => {
     assert.equal(week.totals.counted, 1);
   });
 
-  test("promotor de roteiro não abre visita de carteira", async () => {
+  test("promotor de roteiro em visita de carteira: aceita e vira pendência para o gestor", async () => {
     const lucas = await scopeOf("lucas");
     const boot = await promoter.buildBootstrap(lucas);
-    const [res] = await promoter.applySync(lucas, [visit(boot.stores[0].id, [])]);
-    assert.equal(res.ok, false);
+    const v = visit(boot.stores[0].id, []);
+    const [res] = await promoter.applySync(lucas, [v]);
+    assert.ok(res.ok, JSON.stringify(res));
+    const flags = await db.select().from(s.auditLogs).where(and(eq(s.auditLogs.entityId, v.id), eq(s.auditLogs.action, "accepted_outside_rule")));
+    assert.match(flags[0]?.reason ?? "", /roteiro/);
+    await promoter.applySync(lucas, [{ ...v, status: "cancelled", closeReason: "teste", finishedAt: new Date().toISOString() }]);
   });
 
   test("gestor cadastra meta; ela autoriza loja e marca ao promotor", async () => {

@@ -521,11 +521,11 @@ async function closeLeftBehindVisits(tx: Tx, actor: { agencyId: string; userId: 
   for (const o of open) {
     if (o.startedAt >= newStart) continue;
     const atts = await tx.select({ brandId: s.attendances.brandId, status: s.attendances.status, finishedAt: s.attendances.finishedAt }).from(s.attendances).where(eq(s.attendances.visitId, o.id));
-    if (atts.some((a) => a.status !== "completed" && a.status !== "cancelled")) continue;
     const statusByBrand = Object.fromEntries(atts.map((a) => [a.brandId, a.status]));
     const planned = o.scheduleId ? (await tx.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, o.scheduleId))).map((r) => r.brandId) : [];
     const pending = pendingBrandsForClose({ plannedBrandIds: planned.length ? planned : atts.map((a) => a.brandId), attendanceStatus: statusByBrand });
-    const status = pending.length || !atts.some((a) => a.status === "completed") ? ("closed_incomplete" as const) : ("completed" as const);
+    const unfinished = atts.some((a) => a.status !== "completed" && a.status !== "cancelled");
+    const status = unfinished || pending.length || !atts.some((a) => a.status === "completed") ? ("closed_incomplete" as const) : ("completed" as const);
     const lastAtt = atts.map((a) => a.finishedAt).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0];
     const finishedAt = lastAtt && lastAtt <= newStart && lastAtt >= o.startedAt ? lastAtt : newStart;
     const reason = "Encerrada pelo sistema: o promotor iniciou a loja seguinte sem o encerramento desta chegar ao servidor.";
@@ -539,8 +539,17 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
   const promoterId = scope.userId;
   const actor = { agencyId: scope.agencyId, userId: promoterId };
   const access = await promoterAccess(db, promoterId, scope.agencyId);
-  const allowedBrands = access.get(input.storeId);
-  if (!allowedBrands) throw new SyncError("forbidden", "Loja não autorizada para você.");
+  // Trabalho feito na loja nunca é recusado: o que estiver fora da regra entra e vira
+  // pendência para o gestor ("Aceito fora da regra"). Só a agência é verificada.
+  let allowedBrands = access.get(input.storeId);
+  const outsideStore = !allowedBrands;
+  if (!allowedBrands) {
+    const [st] = await db.select({ id: s.stores.id }).from(s.stores).where(and(eq(s.stores.id, input.storeId), eq(s.stores.agencyId, scope.agencyId)));
+    if (!st) throw new SyncError("forbidden", "Loja não encontrada.");
+    allowedBrands = new Set();
+  }
+  const brandsInStore = allowedBrands;
+  const flags: string[] = [];
 
   const postCommit: { address?: { lat: number; lng: number } } = {};
   const result = await db.transaction(async (tx): Promise<VisitSyncResult> => {
@@ -549,6 +558,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
       throw new SyncError("forbidden", "Visita de outro usuário.");
     }
     if (existing && existing.storeId !== input.storeId) throw new SyncError("invalid", "A loja da visita não pode ser alterada.");
+    if (outsideStore && !existing) flags.push("Loja fora da atribuição do promotor.");
 
     // Programação (ou visita extraordinária justificada).
     // Visita já gravada: vale o que está no servidor (a programação pode ter sido encaixada abaixo).
@@ -562,13 +572,14 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
       }
     } else if (input.scheduleId) {
       const [sch] = await tx.select().from(s.schedules).where(eq(s.schedules.id, input.scheduleId));
-      const usable = sch && sch.promoterId === promoterId && sch.storeId === input.storeId && sch.status === "active";
-      if (usable) {
-        const [dup] = await tx
-          .select({ id: s.visits.id })
-          .from(s.visits)
-          .where(and(eq(s.visits.scheduleId, input.scheduleId), ne(s.visits.id, input.id), ne(s.visits.status, "cancelled")));
-        if (dup) throw new SyncError("conflict", "Esta loja já tem uma visita registrada para a programação de hoje.");
+      const owned = sch && sch.promoterId === promoterId && sch.storeId === input.storeId && sch.status === "active";
+      const [dup] = owned
+        ? await tx
+            .select({ id: s.visits.id })
+            .from(s.visits)
+            .where(and(eq(s.visits.scheduleId, input.scheduleId), ne(s.visits.id, input.id), ne(s.visits.status, "cancelled")))
+        : [];
+      if (owned && !dup) {
         plannedBrandIds = (await tx.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, sch.id))).map((r) => r.brandId);
       } else {
         // A programação do celular mudou no servidor (roteiro alterado, recarga, programação cancelada)
@@ -586,9 +597,12 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
             break;
           }
         }
-        remapReason = scheduleId
-          ? "Programação do celular alterada no servidor; visita encaixada na programação do dia desta loja."
-          : "Programação do celular alterada no servidor durante a visita; registrada fora da programação.";
+        remapReason = dup
+          ? "A programação desta loja já tinha outra visita; esta foi registrada fora da programação."
+          : scheduleId
+            ? "Programação do celular alterada no servidor; visita encaixada na programação do dia desta loja."
+            : "Programação do celular alterada no servidor durante a visita; registrada fora da programação.";
+        flags.push(remapReason);
       }
     } else if (input.origin === "portfolio") {
       // Carteira com meta: o promotor escolhe o dia; não é visita extraordinária.
@@ -596,16 +610,14 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
       if (effectiveWorkMode(u?.workMode, scope.settings.defaultWorkMode) !== "portfolio") {
         // Promotor de roteiro: vale se a loja tem atribuição sem dia fixo (só a quantidade).
         const free = await tx.select({ weekdays: s.visitTargets.weekdays }).from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.storeId, input.storeId)));
-        if (!free.some((t) => t.weekdays.length === 0)) throw new SyncError("forbidden", "Você trabalha por roteiro: inicie a visita pela programação do dia.");
+        if (!free.some((t) => t.weekdays.length === 0)) flags.push("Visita sem programação de promotor que trabalha por roteiro.");
       }
     } else {
-      if (!scope.settings.allowExtraVisits) throw new SyncError("forbidden", "Visitas fora da programação não estão liberadas.");
-      if (input.origin !== "extra" || (input.extraReason ?? "").length < 5) {
-        throw new SyncError("invalid", "Visita fora da programação precisa de justificativa.");
-      }
+      if (!scope.settings.allowExtraVisits) flags.push("Visita fora da programação (não liberada nas Configurações).");
+      if ((input.extraReason ?? "").trim().length < 5) flags.push("Visita fora da programação sem justificativa.");
     }
     const origin = existing ? existing.origin : scheduleId ? "scheduled" : input.scheduleId || input.origin !== "portfolio" ? "extra" : "portfolio";
-    const extraReason = origin === "extra" ? (remapReason ?? input.extraReason) : null;
+    const extraReason = origin === "extra" ? (remapReason ?? (input.extraReason?.trim() || "Sem justificativa informada no celular.")) : null;
 
     // Formato da loja escolhido no aparelho (1ª visita): vale se a loja ainda não tem.
     await applyPromoterMixChoices(tx, input.storeId, input.mixChoices ?? [], allowedBrands, promoterId, scope.agencyId);
@@ -652,7 +664,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
     const visitRow = existing ?? { visitDate: input.visitDate, storeId: input.storeId };
     const attResults: AttendanceSyncResult[] = [];
     for (const a of input.attendances) {
-      attResults.push(await applyAttendance(tx, scope, input.id, visitRow.storeId, visitRow.visitDate, allowedBrands, a));
+      attResults.push(await applyAttendance(tx, scope, input.id, visitRow.storeId, visitRow.visitDate, brandsInStore, a, flags));
     }
 
     // Encerramento da visita (validado com o estado JÁ gravado dos atendimentos).
@@ -663,19 +675,19 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
       const planned = plannedBrandIds.length ? plannedBrandIds : atts.map((x) => x.brandId);
       const open = openAttendances({ plannedBrandIds: planned, attendanceStatus: statusByBrand });
       const pending = pendingBrandsForClose({ plannedBrandIds: planned, attendanceStatus: statusByBrand });
-      if (input.status === "cancelled") {
-        if (atts.some((x) => x.status === "completed")) visitError = "Visita com atendimento concluído não pode ser cancelada.";
-        else if ((input.closeReason ?? "").length < 5) visitError = "Informe o motivo do cancelamento.";
-      } else if (open.length) {
+      let wanted = input.status;
+      let closeReason = input.closeReason?.trim() || null;
+      if (wanted === "cancelled" && atts.some((x) => x.status === "completed")) wanted = "completed"; // atendimento feito não some
+      if (wanted === "cancelled") closeReason ??= "Sem motivo informado no celular.";
+      if (open.length) {
         visitError = "Há atendimento de marca em andamento: finalize ou cancele antes de encerrar a visita.";
-      } else if (input.status === "completed" && pending.length) {
-        visitError = `${pending.length} marca(s) prevista(s) ainda pendente(s).`;
-      } else if (input.status === "closed_incomplete") {
-        if (!scope.settings.allowIncompleteVisit) visitError = "A operação não permite encerrar visita incompleta.";
-        else if ((input.closeReason ?? "").length < 5) visitError = "Informe a justificativa para encerrar com marca pendente.";
+      } else if (wanted !== "cancelled" && pending.length) {
+        if (wanted === "closed_incomplete" && !scope.settings.allowIncompleteVisit) flags.push("Visita encerrada incompleta (não liberado nas Configurações).");
+        wanted = "closed_incomplete";
+        if (!closeReason || closeReason.length < 5) closeReason = `Encerrada com ${pending.length} marca(s) prevista(s) sem atendimento.`;
       }
       if (!visitError) {
-        const finalStatus = input.status === "closed_incomplete" && !pending.length ? "completed" : input.status;
+        const finalStatus = wanted === "closed_incomplete" && !pending.length ? "completed" : wanted;
         const finishedRaw = input.finishedAt ? new Date(input.finishedAt) : new Date();
         const visitStart = existing?.startedAt ?? new Date(input.startedAt);
         const finishedAt = finishedRaw < visitStart ? visitStart : finishedRaw;
@@ -683,7 +695,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
           .update(s.visits)
           .set({
             status: finalStatus,
-            closeReason: finalStatus === "completed" ? null : input.closeReason,
+            closeReason: finalStatus === "completed" ? null : closeReason,
             finishedAt,
             updatedAt: new Date(),
             updatedBy: promoterId,
@@ -691,10 +703,13 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
           .where(eq(s.visits.id, input.id));
         await audit(actor, "visit", input.id, finalStatus === "cancelled" ? "cancelled" : "finished", {
           after: { status: finalStatus, finishedAt: finishedAt.toISOString(), pendingBrands: pending },
-          reason: input.closeReason,
+          reason: closeReason ?? undefined,
         }, tx);
       }
     }
+
+    // Aceito fora da regra: cada caso vira pendência para o gestor (Central de pendências).
+    for (const reason of flags) await audit(actor, "visit", input.id, "accepted_outside_rule", { reason }, tx);
 
     return {
       visitId: input.id,
@@ -730,13 +745,18 @@ async function applyAttendance(
   visitDate: string,
   allowedBrands: Set<string>,
   a: AttendanceInput,
+  flags: string[],
 ): Promise<AttendanceSyncResult> {
   const promoterId = scope.userId;
   const actor = { agencyId: scope.agencyId, userId: promoterId };
   const fail = (code: AttendanceSyncResult["code"], error: string): AttendanceSyncResult => ({ attendanceId: a.id, ok: false, code, error });
 
-  if (!allowedBrands.has(a.brandId)) return fail("forbidden", "Marca não autorizada para você nesta loja.");
   const [existing] = await tx.select().from(s.attendances).where(eq(s.attendances.id, a.id));
+  if (!allowedBrands.has(a.brandId)) {
+    const [b] = await tx.select({ name: s.brands.name }).from(s.brands).where(and(eq(s.brands.id, a.brandId), eq(s.brands.agencyId, scope.agencyId)));
+    if (!b) return fail("forbidden", "Marca não encontrada.");
+    if (!existing) flags.push(`Marca ${b.name} fora do roteiro do promotor nesta loja.`);
+  }
   if (existing && existing.visitId !== visitId) return fail("invalid", "Atendimento pertence a outra visita.");
   if (!existing) {
     const [dup] = await tx
