@@ -34,7 +34,7 @@ import { OccurrenceStep } from "./occurrence-step";
 import { SharePdf } from "./share-pdf";
 import { visitReportText, whatsappLink } from "../_lib/visit-report";
 import { GROUP_MAX_FILES } from "../_lib/group-photos";
-import { readSplitShare, SPLIT_SHARE_HINT, SPLIT_SHARE_LABEL, SPLIT_SHARE_NEXT, writeSplitShare } from "../_lib/share-mode";
+import { readSplitShare, SPLIT_SHARE_HINT, SPLIT_SHARE_LABEL, writeSplitShare } from "../_lib/share-mode";
 
 const STEPS = [
   { id: "antes", label: "Antes" },
@@ -589,7 +589,6 @@ function ReportShareSheet({
   const [msg, setMsg] = useState<string | null>(null);
   // Texto separado das fotos (celulares em que o WhatsApp repete o texto em cada foto do grupo).
   const [split, setSplit] = useState(readSplitShare);
-  const [textPending, setTextPending] = useState(false);
   // Antes e depois marcados de início; as demais fotos (ruptura, validade, avaria…) vão sempre.
   const [kinds, setKinds] = useState<{ before: boolean; after: boolean }>({ before: true, after: true });
   const kindOf = (f: File) => (/_Antes_/.test(f.name) ? "before" : /_Depois_/.test(f.name) ? "after" : "other");
@@ -638,15 +637,9 @@ function ReportShareSheet({
     );
     const all = files ?? [];
     try {
-      if (textPending) {
-        window.open(whatsappLink(text, null), "_blank");
-        onDone(true);
-        return;
-      }
       if (split && all.length && navigator.canShare?.({ files: all })) {
         await navigator.share({ files: all, title: "Relatório do atendimento" });
-        setTextPending(true);
-        setMsg(SPLIT_SHARE_NEXT);
+        onDone(true);
         return;
       }
       if (all.length && navigator.canShare?.({ files: all, text })) {
@@ -682,7 +675,7 @@ function ReportShareSheet({
             Não
           </Button>
           <Button size="xl" className="flex-[2]" disabled={files === null} onClick={() => void send()}>
-            <Send className="size-5" /> {files === null ? "Preparando fotos…" : textPending ? "Enviar o texto" : "Sim, enviar"}
+            <Send className="size-5" /> {files === null ? "Preparando fotos…" : "Sim, enviar"}
           </Button>
         </div>
       }
@@ -715,7 +708,7 @@ function ReportShareSheet({
       ) : null}
       {files?.length ? (
         <label className="mt-3 flex items-start gap-2.5 text-[13.5px]">
-          <input type="checkbox" className="mt-0.5 size-5" checked={split} disabled={textPending} onChange={(ev) => { setSplit(ev.target.checked); writeSplitShare(ev.target.checked); }} />
+          <input type="checkbox" className="mt-0.5 size-5" checked={split} onChange={(ev) => { setSplit(ev.target.checked); writeSplitShare(ev.target.checked); }} />
           <span>
             <span className="font-semibold">{SPLIT_SHARE_LABEL}</span>
             <span className="block text-[12.5px] text-muted">{SPLIT_SHARE_HINT}</span>

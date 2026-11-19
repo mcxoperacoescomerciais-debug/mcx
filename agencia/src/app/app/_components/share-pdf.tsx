@@ -34,7 +34,6 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
   const [localPdf, setLocalPdf] = useState<{ source: LocalAttendance; file: File | null } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [split, setSplit] = useState(readSplitShare);
-  const [textPending, setTextPending] = useState(false);
   const url = `/api/promoter/attendance/${attendance.id}/pdf`;
   const products = useMemo(() => new Map(cat.products.map((p) => [p.id, p])), [cat.products]);
 
@@ -145,7 +144,6 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
     try {
       if (split && all.length && navigator.canShare?.({ files: all })) {
         await navigator.share({ files: all, title: "Relatório de atendimento" });
-        setTextPending(true);
         setMsg(SPLIT_SHARE_NEXT);
         return;
       }
@@ -178,11 +176,6 @@ export function SharePdf({ attendance, storeId, visitDate }: { attendance: Local
         <p className="text-[12.5px] text-muted text-center">
           {count ? `${groupSendHint(count, group.afterLeft + (group.sent.length - count), group.hasBefore)} ` : ""}No WhatsApp, escolha o grupo da loja.
         </p>
-      ) : null}
-      {textPending ? (
-        <Button size="xl" className="w-full" onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank"); setTextPending(false); setMsg(null); }}>
-          <Share2 className="size-5" /> ENVIAR O TEXTO
-        </Button>
       ) : null}
       {ready && count ? (
         <label className="flex items-start gap-2.5 text-[13.5px] text-left">
