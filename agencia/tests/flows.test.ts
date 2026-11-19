@@ -521,6 +521,48 @@ describe("fluxos críticos", () => {
     await db.update(s.attendances).set({ status: "completed" }).where(eq(s.attendances.id, ids.bravoAtt));
   });
 
+  test("programação do celular trocada no servidor: a visita é encaixada na programação do dia, sem perder nada", async () => {
+    // Promotor sem visita aberta e com programação de hoje ainda sem visita.
+    let pick: { scope: Scope; storeId: string; scheduleId: string } | null = null;
+    for (const scope of [scopes.lucas, scopes.ana, scopes.joao]) {
+      const [open] = await db.select({ id: s.visits.id }).from(s.visits).where(and(eq(s.visits.promoterId, scope.userId), eq(s.visits.status, "in_progress")));
+      if (open) continue;
+      const rows = await db.select().from(s.schedules).where(and(eq(s.schedules.promoterId, scope.userId), eq(s.schedules.date, todayIso()), eq(s.schedules.status, "active")));
+      for (const r of rows) {
+        const [used] = await db.select({ id: s.visits.id }).from(s.visits).where(eq(s.visits.scheduleId, r.id));
+        if (!used) {
+          pick = { scope, storeId: r.storeId, scheduleId: r.id };
+          break;
+        }
+      }
+      if (pick) break;
+    }
+    assert.ok(pick, "dados de demonstração têm programação livre hoje");
+    const stale = randomUUID(); // programação que o celular guardou e não existe mais no servidor
+    const visit = visitPayload({ storeId: pick.storeId, scheduleId: stale, attendances: [] });
+    const [r1] = await promoter.applySync(pick.scope, [visit]);
+    assert.ok(r1.ok, JSON.stringify(r1));
+    const [v1] = await db.select().from(s.visits).where(eq(s.visits.id, visit.id));
+    assert.equal(v1.scheduleId, pick.scheduleId);
+    assert.equal(v1.origin, "scheduled");
+
+    // Reenvios seguintes (o celular ainda manda a programação antiga) continuam aceitos e encerram a visita.
+    const [r2] = await promoter.applySync(pick.scope, [{ ...visit, status: "completed", finishedAt: new Date().toISOString() }]);
+    assert.ok(r2.ok, JSON.stringify(r2));
+    const [v2] = await db.select().from(s.visits).where(eq(s.visits.id, visit.id));
+    assert.equal(v2.status, "completed");
+
+    // Sem programação livre na loja: fica registrada como fora da programação, com o motivo.
+    const other = visitPayload({ storeId: pick.storeId, scheduleId: randomUUID(), attendances: [] });
+    const [r3] = await promoter.applySync(pick.scope, [other]);
+    assert.ok(r3.ok, JSON.stringify(r3));
+    const [v3] = await db.select().from(s.visits).where(eq(s.visits.id, other.id));
+    assert.equal(v3.scheduleId, null);
+    assert.equal(v3.origin, "extra");
+    assert.match(v3.extraReason ?? "", /Programação do celular alterada/);
+    await promoter.applySync(pick.scope, [{ ...other, status: "cancelled", closeReason: "teste de encaixe", finishedAt: new Date().toISOString() }]);
+  });
+
   test("desativar usuário preserva o histórico e encerra o acesso", async () => {
     const admin = await import("../src/server/admin");
     const [ana] = await db.select().from(s.users).where(eq(s.users.username, "ana"));

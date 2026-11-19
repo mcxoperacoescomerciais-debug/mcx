@@ -723,7 +723,20 @@ export async function removeBlockedVisit(visitId: string): Promise<void> {
   await persistVisits(rest);
 }
 
+/** Promotor pede para reenviar uma visita recusada (ex.: depois que o gestor acertou o roteiro). */
+export function retryBlockedVisit(visitId: string): Promise<void> {
+  retriedBlocked.delete(visitId);
+  return syncNow();
+}
+
 // ───────────────────────────── Sincronização ─────────────────────────────
+
+/**
+ * Visita recusada é reenviada uma vez a cada abertura do app (o servidor pode ter
+ * passado a aceitar: roteiro corrigido, programação encaixada). Se continuar
+ * recusada, espera a próxima abertura ou o botão "Tentar enviar de novo".
+ */
+const retriedBlocked = new Set<string>();
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncing: Promise<void> | null = null;
@@ -813,7 +826,8 @@ export function syncNow(): Promise<void> {
 }
 
 async function doSync(): Promise<void> {
-  const dirty = Object.values(state.visits).filter((v) => isVisitDirty(v) && !v.blocked);
+  const dirty = Object.values(state.visits).filter((v) => isVisitDirty(v) && (!v.blocked || !retriedBlocked.has(v.id)));
+  for (const v of dirty) if (v.blocked) retriedBlocked.add(v.id);
   const withPhotos = Object.values(state.visits).filter((v) => pendingPhotos(v) > 0);
   if (!dirty.length && !withPhotos.length) return;
   emit({ sync: { ...state.sync, syncing: true } });
@@ -841,6 +855,11 @@ async function doSync(): Promise<void> {
           lastError = r.error ?? "Visita recusada pelo servidor.";
           visits[r.visitId] = next;
           continue;
+        }
+        if (next.blocked) {
+          // Recusada antes, aceita agora: some o aviso e a lista do dia é atualizada.
+          next.blocked = undefined;
+          needsRefresh = true;
         }
         next.syncedRev = sentInfo.rev;
         if (r.closeRejected) {

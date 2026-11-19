@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Ban, CheckCircle2, ChevronRight, CloudUpload, Flag, Loader2, MapPin, MapPinOff, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ChevronRight, CloudUpload, Flag, Loader2, MapPin, MapPinOff, RefreshCw, Send, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { Button, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtDuration, fmtTime } from "@/lib/dates";
-import { addPlannedBrand, cancelAttendance, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
+import { addPlannedBrand, cancelAttendance, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, peekShareRequest, pendingPhotos, removeBlockedVisit, retryBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
 import { go, haptic, useCatalog, useVisit } from "../_lib/hooks";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
 import { Notice, Screen, SectionTitle, Sheet, TextArea, toast, TopBar } from "./primitives";
@@ -243,9 +243,21 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
 
 function BlockedVisit({ visitId }: { visitId: string }) {
   const [open, setOpen] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   return (
     <>
-      <p className="text-[13px] text-ink-2">O servidor recusou esta visita e ela não será enviada. Fale com o gestor; depois, se ele orientar, remova-a deste celular.</p>
+      <p className="text-[13px] text-ink-2">O servidor recusou esta visita. Não apague: fale com o gestor e, depois que ele ajustar, toque em “Tentar enviar de novo”. O app também tenta de novo sozinho cada vez que é aberto.</p>
+      <Button
+        className="w-full"
+        disabled={retrying}
+        onClick={async () => {
+          setRetrying(true);
+          await retryBlockedVisit(visitId);
+          setRetrying(false);
+        }}
+      >
+        {retrying ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Tentar enviar de novo
+      </Button>
       <Button variant="secondary" className="w-full" onClick={() => setOpen(true)}>
         <Trash2 className="size-4" /> Remover visita recusada deste celular
       </Button>

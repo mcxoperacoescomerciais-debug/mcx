@@ -524,32 +524,61 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
     if (existing && existing.storeId !== input.storeId) throw new SyncError("invalid", "A loja da visita não pode ser alterada.");
 
     // Programação (ou visita extraordinária justificada).
+    // Visita já gravada: vale o que está no servidor (a programação pode ter sido encaixada abaixo).
     let plannedBrandIds: string[] = [];
-    if (input.scheduleId) {
+    let scheduleId: string | null = existing ? existing.scheduleId : (input.scheduleId ?? null);
+    let remapReason: string | null = null;
+    if (existing) {
+      // Programação trocada no encaixe: não cobra marcas que o promotor não viu no celular.
+      if (existing.scheduleId && existing.scheduleId === input.scheduleId) {
+        plannedBrandIds = (await tx.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, existing.scheduleId))).map((r) => r.brandId);
+      }
+    } else if (input.scheduleId) {
       const [sch] = await tx.select().from(s.schedules).where(eq(s.schedules.id, input.scheduleId));
-      if (!sch || sch.promoterId !== promoterId || sch.storeId !== input.storeId) throw new SyncError("forbidden", "Programação não pertence a você.");
-      if (!existing && sch.status !== "active") throw new SyncError("invalid", "Esta programação foi cancelada pelo gestor.");
-      const [dup] = await tx
-        .select({ id: s.visits.id })
-        .from(s.visits)
-        .where(and(eq(s.visits.scheduleId, input.scheduleId), ne(s.visits.id, input.id), ne(s.visits.status, "cancelled")));
-      if (dup) throw new SyncError("conflict", "Esta loja já tem uma visita registrada para a programação de hoje.");
-      plannedBrandIds = (await tx.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, sch.id))).map((r) => r.brandId);
+      const usable = sch && sch.promoterId === promoterId && sch.storeId === input.storeId && sch.status === "active";
+      if (usable) {
+        const [dup] = await tx
+          .select({ id: s.visits.id })
+          .from(s.visits)
+          .where(and(eq(s.visits.scheduleId, input.scheduleId), ne(s.visits.id, input.id), ne(s.visits.status, "cancelled")));
+        if (dup) throw new SyncError("conflict", "Esta loja já tem uma visita registrada para a programação de hoje.");
+        plannedBrandIds = (await tx.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, sch.id))).map((r) => r.brandId);
+      } else {
+        // A programação do celular mudou no servidor (roteiro alterado, recarga, programação cancelada)
+        // depois que o promotor começou a visita. O trabalho feito na loja não se perde: a visita entra
+        // na programação ativa do mesmo dia nesta loja ou, se não houver, fica registrada como fora da programação.
+        const candidates = await tx
+          .select({ id: s.schedules.id })
+          .from(s.schedules)
+          .where(and(eq(s.schedules.promoterId, promoterId), eq(s.schedules.storeId, input.storeId), eq(s.schedules.date, input.visitDate), eq(s.schedules.status, "active")));
+        scheduleId = null;
+        for (const c of candidates) {
+          const [taken] = await tx.select({ id: s.visits.id }).from(s.visits).where(and(eq(s.visits.scheduleId, c.id), ne(s.visits.id, input.id), ne(s.visits.status, "cancelled")));
+          if (!taken) {
+            scheduleId = c.id;
+            break;
+          }
+        }
+        remapReason = scheduleId
+          ? "Programação do celular alterada no servidor; visita encaixada na programação do dia desta loja."
+          : "Programação do celular alterada no servidor durante a visita; registrada fora da programação.";
+      }
     } else if (input.origin === "portfolio") {
       // Carteira com meta: o promotor escolhe o dia; não é visita extraordinária.
       const [u] = await tx.select({ workMode: s.users.workMode }).from(s.users).where(eq(s.users.id, promoterId));
-      if (!existing && effectiveWorkMode(u?.workMode, scope.settings.defaultWorkMode) !== "portfolio") {
+      if (effectiveWorkMode(u?.workMode, scope.settings.defaultWorkMode) !== "portfolio") {
         // Promotor de roteiro: vale se a loja tem atribuição sem dia fixo (só a quantidade).
         const free = await tx.select({ weekdays: s.visitTargets.weekdays }).from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.storeId, input.storeId)));
         if (!free.some((t) => t.weekdays.length === 0)) throw new SyncError("forbidden", "Você trabalha por roteiro: inicie a visita pela programação do dia.");
       }
     } else {
-      if (!existing && !scope.settings.allowExtraVisits) throw new SyncError("forbidden", "Visitas fora da programação não estão liberadas.");
+      if (!scope.settings.allowExtraVisits) throw new SyncError("forbidden", "Visitas fora da programação não estão liberadas.");
       if (input.origin !== "extra" || (input.extraReason ?? "").length < 5) {
         throw new SyncError("invalid", "Visita fora da programação precisa de justificativa.");
       }
     }
-    const origin = input.scheduleId ? "scheduled" : input.origin === "portfolio" ? "portfolio" : "extra";
+    const origin = existing ? existing.origin : scheduleId ? "scheduled" : input.scheduleId || input.origin !== "portfolio" ? "extra" : "portfolio";
+    const extraReason = origin === "extra" ? (remapReason ?? input.extraReason) : null;
 
     // Formato da loja escolhido no aparelho (1ª visita): vale se a loja ainda não tem.
     await applyPromoterMixChoices(tx, input.storeId, input.mixChoices ?? [], allowedBrands, promoterId, scope.agencyId);
@@ -561,11 +590,11 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
         agencyId: scope.agencyId,
         promoterId,
         storeId: input.storeId,
-        scheduleId: input.scheduleId,
+        scheduleId,
         visitDate: input.visitDate,
         status: "in_progress",
         origin,
-        extraReason: origin === "extra" ? input.extraReason : null,
+        extraReason,
         startedAt: new Date(input.startedAt),
         lat: input.geo?.lat ?? null,
         lng: input.geo?.lng ?? null,
@@ -575,7 +604,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
         createdBy: promoterId,
         updatedBy: promoterId,
       });
-      await audit(actor, "visit", input.id, "started", { after: { storeId: input.storeId, scheduleId: input.scheduleId, origin } }, tx);
+      await audit(actor, "visit", input.id, "started", { after: { storeId: input.storeId, scheduleId, origin }, ...(remapReason ? { before: { scheduleId: input.scheduleId }, reason: remapReason } : {}) }, tx);
       // Loja sem posição (ou só aproximada): o 1º check-in com GPS bom define onde ela fica.
       const learned = await learnStoreLocation(tx, input.storeId, input.geo);
       if (learned.learned) {
