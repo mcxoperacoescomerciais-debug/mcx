@@ -102,6 +102,7 @@ export async function saveUserAction(_: FormState, fd: FormData): Promise<FormSt
     internalCode: str(fd, "internalCode") || null,
     employment: (str(fd, "employment") || null) as Employment | null,
     workMode: str(fd, "workMode") === "route" ? "route" : str(fd, "workMode") === "portfolio" ? "portfolio" : null,
+    photosOnlyShare: str(fd, "photosOnlyShare") === "1",
     region: str(fd, "region") || null,
     managerId: str(fd, "managerId") || null,
     status: str(fd, "status") === "inactive" ? "inactive" : "active",

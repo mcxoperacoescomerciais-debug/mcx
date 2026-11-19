@@ -34,7 +34,7 @@ import { OccurrenceStep } from "./occurrence-step";
 import { SharePdf } from "./share-pdf";
 import { visitReportText, whatsappLink } from "../_lib/visit-report";
 import { GROUP_MAX_FILES } from "../_lib/group-photos";
-import { readSplitShare, SPLIT_SHARE_HINT, SPLIT_SHARE_LABEL, writeSplitShare } from "../_lib/share-mode";
+import { PHOTOS_ONLY_HINT } from "../_lib/share-mode";
 
 const STEPS = [
   { id: "antes", label: "Antes" },
@@ -588,7 +588,7 @@ function ReportShareSheet({
   const [allFiles, setFiles] = useState<File[] | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   // Texto separado das fotos (celulares em que o WhatsApp repete o texto em cada foto do grupo).
-  const [split, setSplit] = useState(readSplitShare);
+  const split = Boolean(local.bootstrap?.user.photosOnlyShare);
   // Antes e depois marcados de início; as demais fotos (ruptura, validade, avaria…) vão sempre.
   const [kinds, setKinds] = useState<{ before: boolean; after: boolean }>({ before: true, after: true });
   const kindOf = (f: File) => (/_Antes_/.test(f.name) ? "before" : /_Depois_/.test(f.name) ? "after" : "other");
@@ -706,15 +706,7 @@ function ReportShareSheet({
           </div>
         </div>
       ) : null}
-      {files?.length ? (
-        <label className="mt-3 flex items-start gap-2.5 text-[13.5px]">
-          <input type="checkbox" className="mt-0.5 size-5" checked={split} onChange={(ev) => { setSplit(ev.target.checked); writeSplitShare(ev.target.checked); }} />
-          <span>
-            <span className="font-semibold">{SPLIT_SHARE_LABEL}</span>
-            <span className="block text-[12.5px] text-muted">{SPLIT_SHARE_HINT}</span>
-          </span>
-        </label>
-      ) : null}
+      {split && files?.length ? <p className="mt-3 rounded-xl bg-warn-bg text-warn px-3 py-2.5 text-[13px] font-semibold">{PHOTOS_ONLY_HINT}</p> : null}
       {msg ? <p className="mt-2 text-[13px] font-medium text-warn">{msg}</p> : null}
     </Sheet>
   );

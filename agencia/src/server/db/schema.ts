@@ -148,6 +148,8 @@ export const users = pgTable(
     /** Última vez que o app do promotor falou com o servidor (atualização ou envio): "online" no mapa. */
     lastSeenAt: ts("last_seen_at"),
     /** Promotor autorizado a usar foto da galeria (quando a agência libera só para autorizados). */
+    /** Promotor: o envio ao WhatsApp leva só as fotos; o relatório vai copiado para colar na legenda. */
+    photosOnlyShare: boolean("photos_only_share").notNull().default(false),
     galleryAllowed: boolean("gallery_allowed").notNull().default(false),
     /** Permissão de localização do celular (granted | denied | prompt | unsupported), informada pelo app. */
     geoPermission: text("geo_permission"),

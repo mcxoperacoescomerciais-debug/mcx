@@ -278,7 +278,8 @@ export interface BootstrapPortfolio {
 }
 
 export interface BootstrapPayload {
-  user: { id: string; name: string; employment: string | null; mustChangePassword: boolean };
+  /** photosOnlyShare: envio ao WhatsApp só com as fotos (relatório copiado para colar na legenda). */
+  user: { id: string; name: string; employment: string | null; mustChangePassword: boolean; photosOnlyShare?: boolean };
   /** "route" = programação por dia; "portfolio" = carteira com meta semanal. */
   workMode: "route" | "portfolio";
   portfolio: BootstrapPortfolio | null;

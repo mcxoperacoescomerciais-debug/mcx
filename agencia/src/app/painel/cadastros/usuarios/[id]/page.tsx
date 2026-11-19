@@ -67,6 +67,12 @@ export default async function UserPage({ params }: PageProps<"/painel/cadastros/
                 <option value="portfolio">{WORK_MODE_LABEL.portfolio}</option>
               </select>
             </Labeled>
+            <Labeled label="Envio no WhatsApp (promotor)">
+              <select name="photosOnlyShare" defaultValue={user?.photosOnlyShare ? "1" : ""} className={selectClass}>
+                <option value="">Fotos e relatório juntos (padrão)</option>
+                <option value="1">Só as fotos; o relatório vai copiado para colar na legenda</option>
+              </select>
+            </Labeled>
             <Labeled label="Região / roteiro">
               <input name="region" defaultValue={user?.region ?? ""} className={inputClass} />
             </Labeled>

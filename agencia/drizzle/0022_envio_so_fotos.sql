@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "photos_only_share" boolean DEFAULT false NOT NULL;

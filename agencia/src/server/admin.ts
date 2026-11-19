@@ -276,6 +276,8 @@ export interface UserInput {
   employment: Employment | null;
   /** undefined = não altera (importação de planilha). */
   workMode?: WorkMode | null;
+  /** Promotor: envio ao WhatsApp só com as fotos; undefined = não altera. */
+  photosOnlyShare?: boolean;
   region: string | null;
   managerId: string | null;
   status: "active" | "inactive";
@@ -306,6 +308,7 @@ export async function saveUser(scope: Scope, i: UserInput): Promise<ActionResult
     internalCode: clean(i.internalCode),
     employment: i.role === "promoter" ? i.employment ?? "freelancer" : null,
     workMode: i.role === "promoter" ? i.workMode : null,
+    photosOnlyShare: i.role === "promoter" ? i.photosOnlyShare : false,
     region: clean(i.region),
     managerId: i.role === "promoter" ? i.managerId : null,
     status: i.status,

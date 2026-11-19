@@ -106,7 +106,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
   const db = await getDb();
   const promoterId = scope.userId;
   const today = todayIso();
-  const [user] = await db.select({ id: s.users.id, name: s.users.name, employment: s.users.employment, mustChangePassword: s.users.mustChangePassword, workMode: s.users.workMode, galleryAllowed: s.users.galleryAllowed }).from(s.users).where(eq(s.users.id, promoterId));
+  const [user] = await db.select({ id: s.users.id, name: s.users.name, employment: s.users.employment, mustChangePassword: s.users.mustChangePassword, workMode: s.users.workMode, galleryAllowed: s.users.galleryAllowed, photosOnlyShare: s.users.photosOnlyShare }).from(s.users).where(eq(s.users.id, promoterId));
   void touchLastSeen(promoterId);
   const gallery = galleryAllowedFor(scope.settings.galleryPolicy, user.galleryAllowed);
   const workMode = effectiveWorkMode(user.workMode, scope.settings.defaultWorkMode);
@@ -199,7 +199,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
   const portfolio = await portfolioForPromoter(db, promoterId, scope.agencyId, today, access, workMode);
 
   return {
-    user: { id: user.id, name: user.name, employment: user.employment, mustChangePassword: user.mustChangePassword },
+    user: { id: user.id, name: user.name, employment: user.employment, mustChangePassword: user.mustChangePassword, photosOnlyShare: user.photosOnlyShare },
     workMode,
     portfolio,
     agency: { name: scope.agencyName, logoUrl: scope.agencyLogoUrl },
