@@ -560,7 +560,16 @@ describe("fluxos críticos", () => {
     assert.equal(v3.scheduleId, null);
     assert.equal(v3.origin, "extra");
     assert.match(v3.extraReason ?? "", /Programação do celular alterada/);
-    await promoter.applySync(pick.scope, [{ ...other, status: "cancelled", closeReason: "teste de encaixe", finishedAt: new Date().toISOString() }]);
+
+    // A visita anterior ficou aberta no servidor (encerramento não chegou) e o promotor começou outra loja:
+    // a anterior é encerrada pelo sistema e a nova entra, em vez de ser recusada.
+    const next = visitPayload({ storeId: pick.storeId, scheduleId: randomUUID(), attendances: [], startedAt: new Date().toISOString() });
+    const [r4] = await promoter.applySync(pick.scope, [next]);
+    assert.ok(r4.ok, JSON.stringify(r4));
+    const [prev] = await db.select().from(s.visits).where(eq(s.visits.id, other.id));
+    assert.equal(prev.status, "closed_incomplete");
+    assert.match(prev.closeReason ?? "", /Encerrada pelo sistema/);
+    await promoter.applySync(pick.scope, [{ ...next, status: "cancelled", closeReason: "teste de encaixe", finishedAt: new Date().toISOString() }]);
   });
 
   test("desativar usuário preserva o histórico e encerra o acesso", async () => {

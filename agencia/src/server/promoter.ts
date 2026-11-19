@@ -507,6 +507,33 @@ export async function applySync(scope: Scope, visits: VisitInput[]): Promise<Vis
   return results;
 }
 
+/**
+ * Só existe uma visita aberta por promotor. Se o servidor ainda tem aberta uma visita
+ * anterior (o encerramento não chegou ou foi recusado) e o promotor já começou a loja
+ * seguinte, a anterior é encerrada pelo sistema — desde que nenhuma marca esteja em
+ * andamento nela. Assim a loja nova não é recusada e nada feito na anterior se perde.
+ */
+async function closeLeftBehindVisits(tx: Tx, actor: { agencyId: string; userId: string }, promoterId: string, newVisitId: string, newStart: Date) {
+  const open = await tx
+    .select({ id: s.visits.id, startedAt: s.visits.startedAt, scheduleId: s.visits.scheduleId })
+    .from(s.visits)
+    .where(and(eq(s.visits.promoterId, promoterId), eq(s.visits.status, "in_progress"), ne(s.visits.id, newVisitId)));
+  for (const o of open) {
+    if (o.startedAt >= newStart) continue;
+    const atts = await tx.select({ brandId: s.attendances.brandId, status: s.attendances.status, finishedAt: s.attendances.finishedAt }).from(s.attendances).where(eq(s.attendances.visitId, o.id));
+    if (atts.some((a) => a.status !== "completed" && a.status !== "cancelled")) continue;
+    const statusByBrand = Object.fromEntries(atts.map((a) => [a.brandId, a.status]));
+    const planned = o.scheduleId ? (await tx.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, o.scheduleId))).map((r) => r.brandId) : [];
+    const pending = pendingBrandsForClose({ plannedBrandIds: planned.length ? planned : atts.map((a) => a.brandId), attendanceStatus: statusByBrand });
+    const status = pending.length || !atts.some((a) => a.status === "completed") ? ("closed_incomplete" as const) : ("completed" as const);
+    const lastAtt = atts.map((a) => a.finishedAt).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0];
+    const finishedAt = lastAtt && lastAtt <= newStart && lastAtt >= o.startedAt ? lastAtt : newStart;
+    const reason = "Encerrada pelo sistema: o promotor iniciou a loja seguinte sem o encerramento desta chegar ao servidor.";
+    await tx.update(s.visits).set({ status, closeReason: status === "completed" ? null : reason, finishedAt, updatedAt: new Date(), updatedBy: actor.userId }).where(eq(s.visits.id, o.id));
+    await audit(actor, "visit", o.id, "finished", { after: { status, finishedAt: finishedAt.toISOString(), pendingBrands: pending }, reason }, tx);
+  }
+}
+
 async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncResult> {
   const db = await getDb();
   const promoterId = scope.userId;
@@ -584,6 +611,7 @@ async function applyVisit(scope: Scope, input: VisitInput): Promise<VisitSyncRes
     await applyPromoterMixChoices(tx, input.storeId, input.mixChoices ?? [], allowedBrands, promoterId, scope.agencyId);
 
     const visitLocked = existing && existing.status !== "in_progress";
+    if (!existing) await closeLeftBehindVisits(tx, actor, promoterId, input.id, new Date(input.startedAt));
     if (!existing) {
       await tx.insert(s.visits).values({
         id: input.id,
