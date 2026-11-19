@@ -339,20 +339,22 @@ export function PanelShell({
         {sidebar()}
       </aside>
 
-      <header className="lg:hidden sticky top-0 z-30 bg-brand-900 h-14 flex items-center justify-between px-3 no-print">
-        <button type="button" onClick={() => setOpen(true)} className="size-10 grid place-items-center text-white" aria-label="Abrir menu">
+      <header className="lg:hidden sticky top-0 z-30 bg-brand-900 no-print" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+        <div className="h-14 flex items-center justify-between px-3">
+        <button type="button" onClick={() => setOpen(true)} className="size-12 -ml-1 grid place-items-center text-white rounded-lg active:bg-white/10" aria-label="Abrir menu">
           <Menu className="size-6" />
         </button>
         <div className="min-w-0">{brand}</div>
         <span className="w-10" />
+        </div>
       </header>
       {open ? (
         <div className="lg:hidden fixed inset-0 z-50">
           <button type="button" aria-label="Fechar menu" className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[280px] bg-brand-900 px-3 py-4 flex flex-col">
+          <div className="absolute inset-y-0 left-0 w-[min(300px,85vw)] bg-brand-900 px-3 flex flex-col overflow-y-auto overscroll-contain" style={{ paddingTop: "calc(16px + env(safe-area-inset-top, 0px))", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}>
             <div className="flex items-center justify-between px-2 mb-5">
               {brand}
-              <button type="button" onClick={() => setOpen(false)} className="size-9 grid place-items-center text-white" aria-label="Fechar">
+              <button type="button" onClick={() => setOpen(false)} className="size-11 shrink-0 grid place-items-center text-white rounded-lg active:bg-white/10" aria-label="Fechar">
                 <X className="size-5" />
               </button>
             </div>
@@ -361,7 +363,7 @@ export function PanelShell({
         </div>
       ) : null}
 
-      <main className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1480px]">
+      <main className="px-4 sm:px-6 lg:px-8 pt-6 lg:py-8 max-w-[1480px] pb-[calc(24px+env(safe-area-inset-bottom,0px))]">
         <Suspense fallback={null}>
           <PanelOffline agencyId={mcx || !agency ? "mcx" : agency.id} />
         </Suspense>
