@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, CloudUpload, Download, ImageOff, X, ZoomIn } from "lucide-react";
 import clsx from "clsx";
+import { ZoomImage } from "./zoom-image";
 
 export interface ViewerPhoto {
   id: string;
@@ -141,15 +142,14 @@ export function Lightbox({ photos, index, onIndex, onClose }: { photos: ViewerPh
           <X className="size-5" />
         </button>
       </div>
-      <div className="flex-1 relative grid place-items-center px-14 pb-6 min-h-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/api/photos/${p.id}`} alt={p.label} className="max-h-full max-w-full object-contain rounded-lg" />
+      <div className="flex-1 relative min-h-0 mx-14 mb-4">
+        <ZoomImage key={p.id} src={`/api/photos/${p.id}`} alt={p.label} />
         {photos.length > 1 ? (
           <>
-            <button type="button" onClick={() => step(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 size-11 rounded-full bg-white/10 hover:bg-white/20 text-white grid place-items-center" aria-label="Anterior">
+            <button type="button" onClick={() => step(-1)} className="absolute -left-12 top-1/2 -translate-y-1/2 size-11 rounded-full bg-white/10 hover:bg-white/20 text-white grid place-items-center" aria-label="Anterior">
               <ChevronLeft className="size-6" />
             </button>
-            <button type="button" onClick={() => step(1)} className="absolute right-2 top-1/2 -translate-y-1/2 size-11 rounded-full bg-white/10 hover:bg-white/20 text-white grid place-items-center" aria-label="Próxima">
+            <button type="button" onClick={() => step(1)} className="absolute -right-12 top-1/2 -translate-y-1/2 size-11 rounded-full bg-white/10 hover:bg-white/20 text-white grid place-items-center" aria-label="Próxima">
               <ChevronRight className="size-6" />
             </button>
           </>
