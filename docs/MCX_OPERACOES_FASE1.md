@@ -62,3 +62,7 @@ Campo (sem alterar nada): ver resultado no fim deste arquivo.
 2. Autorizar o envio da branch ao GitHub e criar o projeto Supabase e o serviço Render (passo a passo na seção 4 do diagnóstico da Fase 0).
 3. Senha inicial em produção: o endereço é público; sugiro definir OPS_INITIAL_PASSWORD no Render com uma senha forte temporária, em vez da senha combinada.
 4. Para a Fase 2: lista das atividades diárias da Tainara (rotinas), itens do kit de degustação do Helvécio e custo/hora (pode ficar vazio).
+
+## Regressão do Campo (20/11/2026, sem alterar nada)
+
+Rodado em agencia/ nesta branch: typecheck ok, 167 de 167 testes, build ok. git status de agencia/: nenhum arquivo alterado.
