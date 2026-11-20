@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"],
+      "server-only": ["./scripts/shims/empty.ts"]
+    }
+  }
+}

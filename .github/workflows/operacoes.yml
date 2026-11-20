@@ -1,0 +1,51 @@
+# MCX Operações — guarda do MCX Campo + suíte do Operações.
+# Roda só na branch do Operações; não publica nada e não toca no mcx-campo.
+name: MCX Operações
+
+on:
+  push:
+    branches: [feat/mcx-operacoes]
+  workflow_dispatch:
+
+jobs:
+  guarda-campo:
+    name: Nenhum arquivo de agencia/ alterado
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Falha se a branch alterar agencia/
+        run: |
+          git fetch origin main
+          changed="$(git diff --name-only origin/main...HEAD -- agencia)"
+          if [ -n "$changed" ]; then
+            echo "Arquivos do MCX Campo alterados nesta branch:"
+            echo "$changed"
+            exit 1
+          fi
+          echo "agencia/ intacta."
+
+  operacoes:
+    name: typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: operacoes
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: operacoes/package-lock.json
+      - run: git fetch origin main
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/* MCX Operações — azul-marinho da marca MCX, neutros claros e cores de estado
+   sempre acompanhadas de texto (estado nunca é comunicado só por cor). */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-950: #0a1526;
+  --color-brand-900: #0f2038;
+  --color-brand-800: #162d4d;
+  --color-brand-700: #1e3d66;
+  --color-brand-600: #295285;
+  --color-brand-500: #3a6aa6;
+  --color-brand-200: #c3d3e8;
+  --color-brand-100: #e0e9f4;
+  --color-brand-50: #f1f5fa;
+
+  --color-canvas: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-subtle: #f9fafb;
+  --color-line: #e3e5e9;
+  --color-line-strong: #cdd1d8;
+  --color-ink: #131a24;
+  --color-ink-2: #3a4452;
+  --color-muted: #667080;
+
+  --color-ok: #1d7348;
+  --color-ok-bg: #e5f3eb;
+  --color-info: #1d5ea6;
+  --color-info-bg: #e7f0fb;
+  --color-warn: #8f5200;
+  --color-warn-bg: #fcf0dc;
+  --color-bad: #b42318;
+  --color-bad-bg: #fdebe9;
+  --color-wait: #6447ad;
+  --color-wait-bg: #efeafb;
+
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgb(19 26 36 / 0.05);
+  --shadow-pop: 0 12px 32px rgb(19 26 36 / 0.2);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .card {
+    @apply rounded-[var(--radius-card)] border border-line bg-surface shadow-[var(--shadow-card)];
+  }
+  .btn-primary {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors disabled:opacity-50 bg-brand-800 text-white hover:bg-brand-700;
+  }
+  .btn-ghost {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors disabled:opacity-50 border border-line-strong bg-surface text-ink-2 hover:bg-subtle;
+  }
+  .btn-danger {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors disabled:opacity-50 border border-bad/30 bg-surface text-bad hover:bg-bad-bg;
+  }
+  .field {
+    @apply min-h-10 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+  .label {
+    @apply mb-1 block text-xs font-semibold text-ink-2;
+  }
+  .chip {
+    @apply inline-flex min-h-9 items-center rounded-full border border-line-strong bg-surface px-3 text-sm font-medium text-ink-2;
+  }
+  .chip-on {
+    border-color: var(--color-brand-800);
+    background: var(--color-brand-800);
+    color: #fff;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}

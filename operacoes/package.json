@@ -1,0 +1,48 @@
+{
+  "name": "mcx-operacoes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "next dev -p 3700",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint src tests scripts",
+    "test": "tsx --tsconfig tsconfig.scripts.json --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --tsconfig tsconfig.scripts.json scripts/migrate.ts",
+    "db:bootstrap": "tsx --tsconfig tsconfig.scripts.json scripts/bootstrap.ts",
+    "start:render": "npm run db:migrate && npm run db:bootstrap && next start",
+    "start:demo": "node scripts/start-demo.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.3",
+    "jose": "^6.2.12",
+    "lucide-react": "^1.52.0",
+    "next": "16.3.8",
+    "postgres": "^3.4.9",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.8",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
