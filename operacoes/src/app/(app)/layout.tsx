@@ -34,7 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <NavLinks items={items} />
       </aside>
-      <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 lg:px-8 lg:pt-8">
+      <main className="mx-auto w-full min-w-0 max-w-6xl px-4 pb-28 pt-5 lg:px-8 lg:pt-8">
         {timer && (
           <p className="mb-4 rounded-lg bg-info-bg px-3 py-2 text-sm text-info">
             Cronômetro rodando em{" "}

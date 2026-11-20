@@ -8,6 +8,9 @@
 import { revalidatePath } from "next/cache";
 import type { ClientKind, Role, Status } from "@/lib/domain";
 import { actionUser } from "@/server/auth";
+import type { Outcome, InteractionKind } from "@/lib/crm";
+import * as crm from "@/server/crm";
+import type { LeadInput, MoveExtra } from "@/server/crm";
 import * as demands from "@/server/demands";
 import type { DemandInput, DemandPatch, Result } from "@/server/demands";
 import * as registry from "@/server/registry";
@@ -214,4 +217,88 @@ export async function saveRoutineAction(id: string | null, input: RoutineInput) 
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await routines.saveRoutine(user, id, input));
+}
+
+export async function createLeadAction(input: LeadInput, confirmDuplicate = false) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.createLead(user, input, { confirmDuplicate }));
+}
+
+export async function updateLeadAction(id: string, input: LeadInput) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.updateLead(user, id, input));
+}
+
+export async function setNextActionAction(id: string, nextAction: string, nextActionDate: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.setNextAction(user, id, nextAction, nextActionDate));
+}
+
+export async function moveLeadAction(id: string, stageId: string, extra: MoveExtra = {}) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.moveLead(user, id, stageId, extra));
+}
+
+export async function addInteractionAction(leadId: string, input: { kind: InteractionKind; summary: string; outcome: Outcome; nextAction?: string | null; nextActionDate?: string | null }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.addInteraction(user, leadId, input));
+}
+
+export async function openWhatsappAction(leadId: string, input: { contactId: string; templateId?: string | null; text: string; nextAction?: string | null; nextActionDate?: string | null }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.openWhatsapp(user, leadId, input));
+}
+
+export async function addLeadContactAction(leadId: string, input: { name: string; role?: string | null; whatsapp?: string | null; email?: string | null }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.addLeadContact(user, leadId, input));
+}
+
+export async function setContactOptOutAction(contactId: string, optOut: boolean) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.setContactOptOut(user, contactId, optOut));
+}
+
+export async function removeLeadContactAction(contactId: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.removeLeadContact(user, contactId));
+}
+
+export async function deleteLeadAction(id: string, reason: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.deleteLead(user, id, reason));
+}
+
+export async function importLeadsAction(csv: string, dryRun: boolean, ownerId?: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.importLeads(user, csv, { dryRun, ownerId }));
+}
+
+export async function saveMessageTemplateAction(id: string | null, input: { name: string; stageId?: string | null; body: string; status?: "draft" | "approved" | "archived" }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.saveMessageTemplate(user, id, input));
+}
+
+export async function saveStageAction(id: string | null, input: { name: string; probability: number; active?: boolean }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.saveStage(user, id, input));
+}
+
+export async function setDailyGoalAction(goal: number) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await crm.setDailyGoal(user, goal));
 }

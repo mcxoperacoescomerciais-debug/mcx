@@ -20,10 +20,12 @@ export const ACTIONS = [
   "cost.view", // custo/hora e valor de contrato
   "routine.manage",
   "template.manage",
+  "crm.view", // Comercial: leads, funil e follow-up (dono e gestor)
+  "crm.manage", // etapas do funil, meta diária e aprovação de modelos de mensagem (dono)
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
-const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage"];
+const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage", "crm.view"];
 
 export const ROLE_ACTIONS: Record<Role, readonly Action[]> = {
   owner: ACTIONS,

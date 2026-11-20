@@ -3,6 +3,7 @@
  * Nunca roda em produção (o bootstrap de produção chama apenas ensureBaseData).
  */
 import { eq } from "drizzle-orm";
+import { companyKey, phoneDigits, potentialValue } from "../../lib/crm";
 import { addDays, todayIso } from "../../lib/dates";
 import type { Priority, Status } from "../../lib/domain";
 import * as s from "./schema";
@@ -44,5 +45,46 @@ export async function seedDemoIfEmpty(db: DB): Promise<void> {
       followUpDate: r.followUp === undefined ? null : addDays(today, r.followUp),
       createdBy: user("maria").id,
     });
+  }
+
+  // Leads de demonstração (nomes fictícios, claramente de exemplo).
+  const stages = await db.select().from(s.crmStages);
+  const stage = (key: string) => stages.find((st) => st.key === key)!;
+  const demo: { company: string; type: string; city: string; stage: string; products: string[]; promoters?: number; next: string; nextIn: number; contact: string; phone: string; contacted?: number; responded?: boolean; proposal?: number }[] = [
+    { company: "Agência Exemplo Alfa", type: "Agência de promotoria", city: "Belo Horizonte", stage: "prospect", products: ["App"], promoters: 30, next: "Fazer o primeiro contato", nextIn: 0, contact: "Contato Alfa", phone: "31900000001" },
+    { company: "Agência Exemplo Beta", type: "Agência de promotoria", city: "Contagem", stage: "contacted", products: ["App", "Backoffice"], promoters: 15, next: "Follow-up D+3", nextIn: -1, contact: "Contato Beta", phone: "31900000002", contacted: -4 },
+    { company: "Agência Exemplo Gama", type: "Agência de degustação/ação", city: "Divinópolis", stage: "talking", products: ["Degustação"], next: "Agendar a demonstração", nextIn: 0, contact: "Contato Gama", phone: "37900000003", contacted: -6, responded: true },
+    { company: "Marca Exemplo Delta", type: "Marca/Indústria", city: "Betim", stage: "proposal", products: ["App"], promoters: 60, next: "Cobrar retorno da proposta", nextIn: 2, contact: "Contato Delta", phone: "31900000004", contacted: -15, responded: true, proposal: -8 },
+  ];
+  for (const d of demo) {
+    const st = stage(d.stage);
+    const at = (days: number) => new Date(Date.now() + days * 86_400_000);
+    const potential = potentialValue(d.products, d.promoters, null).cents;
+    const [lead] = await db
+      .insert(s.leads)
+      .values({
+        company: d.company,
+        companyKey: companyKey(d.company),
+        type: d.type,
+        city: d.city,
+        source: "Prospecção ativa",
+        dataSource: "Exemplo de demonstração",
+        products: d.products,
+        promoters: d.promoters ?? null,
+        potentialCents: potential,
+        ownerId: user("eduardo").id,
+        stageId: st.id,
+        nextAction: d.next,
+        nextActionDate: addDays(today, d.nextIn),
+        firstContactAt: d.contacted === undefined ? null : at(d.contacted),
+        respondedAt: d.responded ? at((d.contacted ?? 0) + 1) : null,
+        proposalValueCents: d.proposal === undefined ? null : potential,
+        proposalDate: d.proposal === undefined ? null : addDays(today, d.proposal),
+        proposalValidUntil: d.proposal === undefined ? null : addDays(today, d.proposal + 10),
+        createdBy: user("eduardo").id,
+      })
+      .returning({ id: s.leads.id });
+    await db.insert(s.leadContacts).values({ leadId: lead.id, name: d.contact, whatsapp: d.phone, whatsappDigits: phoneDigits(d.phone), isPrimary: true });
+    for (const st2 of stages.filter((x) => x.kind === "open" && x.position <= st.position)) await db.insert(s.leadStageHistory).values({ leadId: lead.id, toStageId: st2.id, userId: user("eduardo").id });
   }
 }

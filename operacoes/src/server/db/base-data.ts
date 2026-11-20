@@ -4,6 +4,7 @@
  * Nada aqui é inventado: nomes e marcas vêm da especificação aprovada.
  */
 import bcrypt from "bcryptjs";
+import { DEFAULT_STAGES, type StageKey } from "../../lib/crm";
 import { DEFAULT_CATEGORIES, INTERNAL_CLIENT_NAME, type ClientKind, type Role } from "../../lib/domain";
 import * as s from "./schema";
 import type { DB } from "./index";
@@ -78,7 +79,33 @@ const DRAFT_TEMPLATES: { name: string; client?: string; category: string; type?:
   },
 ];
 
+/**
+ * Modelos de mensagem iniciais — RASCUNHO "a validar". O dono ficou de enviar os
+ * textos definitivos; estes só refletem o processo descrito na especificação
+ * (abordagem pela dor, demonstração com dados reais, proposta com validade de
+ * 10 dias, teste sem taxa de implantação). Nenhum preço ou promessa é inventado.
+ */
+const DRAFT_MESSAGES: { stage: StageKey; name: string; body: string }[] = [
+  { stage: "prospect", name: "Primeiro contato — abordagem pela dor", body: "Olá, {nome}! Tudo bem? Falo da MCX. Trabalhamos com operações de promotoria como a da {empresa} e queria entender como vocês acompanham hoje as visitas e as fotos dos promotores. Posso te mostrar em 10 minutos como fazemos isso?" },
+  { stage: "contacted", name: "Follow-up D+3", body: "Oi, {nome}! Passando para saber se você conseguiu ver minha mensagem sobre o acompanhamento dos promotores da {empresa}. Se fizer sentido, te mostro o painel funcionando em uma conversa rápida." },
+  { stage: "contacted", name: "Follow-up D+7", body: "{nome}, é meu último contato por agora para não te incomodar. Se o acompanhamento da equipe de campo da {empresa} virar prioridade, é só me chamar por aqui. Abraço!" },
+  { stage: "talking", name: "Convite para a demonstração", body: "{nome}, obrigado pelo retorno! Que tal uma demonstração do painel com dados reais de operação? Leva uns 20 minutos. Qual horário fica melhor para você nesta semana?" },
+  { stage: "demo", name: "Depois da demonstração", body: "{nome}, obrigado pelo tempo na demonstração! Ficou alguma dúvida sobre {produto}? Se estiver tudo certo, preparo a proposta para a {empresa}." },
+  { stage: "proposal", name: "Proposta enviada", body: "{nome}, enviei a proposta de {produto} para a {empresa}. Ela tem validade de 10 dias. Fico à disposição para tirar qualquer dúvida." },
+  { stage: "proposal", name: "Proposta perto de vencer", body: "Oi, {nome}! A proposta que enviei para a {empresa} vence nos próximos dias. Quer conversar sobre algum ponto antes de decidir?" },
+  { stage: "trial", name: "Acompanhamento do teste", body: "Oi, {nome}! Como está o teste na {empresa}? Lembrando que não há taxa de implantação. Se precisar de ajuste ou de apoio com a equipe, me avise." },
+  { stage: "nurture", name: "Retomada", body: "Olá, {nome}! Conversamos há um tempo sobre {produto} para a {empresa}. Queria saber se agora é um bom momento para retomar." },
+];
+
 export async function ensureBaseData(db: DB): Promise<void> {
+  const [anyStage] = await db.select({ id: s.crmStages.id }).from(s.crmStages).limit(1);
+  if (!anyStage) await db.insert(s.crmStages).values(DEFAULT_STAGES.map((st, position) => ({ ...st, position })));
+  const [anyMessage] = await db.select({ id: s.messageTemplates.id }).from(s.messageTemplates).limit(1);
+  if (!anyMessage) {
+    const stages = await db.select().from(s.crmStages);
+    await db.insert(s.messageTemplates).values(DRAFT_MESSAGES.map((m) => ({ name: m.name, body: m.body, stageId: stages.find((st) => st.key === m.stage)?.id ?? null, status: "draft" as const, toValidate: true })));
+  }
+
   const [anyCategory] = await db.select({ id: s.categories.id }).from(s.categories).limit(1);
   if (!anyCategory) {
     await db.insert(s.categories).values(DEFAULT_CATEGORIES.map((name, position) => ({ name, position })));

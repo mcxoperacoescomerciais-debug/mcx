@@ -14,6 +14,7 @@ export const NAV: NavItem[] = [
   { href: "/demandas", label: "Lista da equipe" },
   { href: "/kanban", label: "Kanban" },
   { href: "/meu-dia", label: "Meu dia" },
+  { href: "/comercial", label: "Comercial", needs: "crm.view" },
   { href: "/equipe", label: "Equipe", needs: "team.view" },
   { href: "/relatorios", label: "Relatórios", needs: "report.view" },
   { href: "/rotinas", label: "Rotinas", needs: "routine.manage" },

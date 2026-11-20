@@ -359,6 +359,158 @@ export const routineRuns = pgTable(
   (t) => [primaryKey({ columns: [t.routineId, t.occurrence] })],
 );
 
+// ---------------------------------------------------------------------------
+// Fase 3 — Comercial (CRM): funil, leads, interações e modelos de mensagem
+// ---------------------------------------------------------------------------
+
+/** Etapas do funil. `key` identifica as etapas com regra própria; etapas criadas depois ficam sem key. */
+export const crmStages = pgTable(
+  "crm_stages",
+  {
+    id: id(),
+    key: text("key"),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    kind: text("kind").$type<"open" | "won" | "lost" | "nurture">().notNull().default("open"),
+    /** Chance de fechar (0–100) — pondera o pipeline. */
+    probability: integer("probability").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("crm_stages_key_uq").on(t.key), check("crm_stages_kind_ck", sql`${t.kind} in ('open','won','lost','nurture')`)],
+);
+
+export const leads = pgTable(
+  "leads",
+  {
+    id: id(),
+    number: serial("number").notNull(),
+    company: text("company").notNull(),
+    /** Nome sem acento/pontuação, para achar duplicata. */
+    companyKey: text("company_key").notNull(),
+    type: text("type").notNull(),
+    city: text("city"),
+    region: text("region"),
+    source: text("source").notNull(),
+    referredBy: text("referred_by"),
+    /** LGPD: de onde veio o dado de contato. */
+    dataSource: text("data_source"),
+    products: jsonb("products").$type<string[]>().notNull().default([]),
+    promoters: integer("promoters"),
+    actionsPerMonth: integer("actions_per_month"),
+    /** Valor mensal potencial em centavos (calculado pelo porte ou informado). */
+    potentialCents: integer("potential_cents"),
+    potentialManual: boolean("potential_manual").notNull().default(false),
+    /** Oportunidade de expansão num contratante que já existe. */
+    clientId: uuid("client_id").references(() => clients.id),
+    ownerId: uuid("owner_id").notNull().references(() => users.id),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    notes: text("notes"),
+    stageId: uuid("stage_id").notNull().references(() => crmStages.id),
+    stageSince: timestamp("stage_since", { withTimezone: true }).notNull().defaultNow(),
+    nextAction: text("next_action"),
+    nextActionDate: date("next_action_date"),
+    proposalValueCents: integer("proposal_value_cents"),
+    proposalDate: date("proposal_date"),
+    proposalValidUntil: date("proposal_valid_until"),
+    lossReason: text("loss_reason"),
+    lossNote: text("loss_note"),
+    firstContactAt: timestamp("first_contact_at", { withTimezone: true }),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    wonAt: timestamp("won_at", { withTimezone: true }),
+    lostAt: timestamp("lost_at", { withTimezone: true }),
+    wonClientId: uuid("won_client_id").references(() => clients.id),
+    wonDemandId: uuid("won_demand_id").references(() => demands.id),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("leads_stage_idx").on(t.stageId), index("leads_next_idx").on(t.nextActionDate), index("leads_company_idx").on(t.companyKey)],
+);
+
+export const leadContacts = pgTable(
+  "lead_contacts",
+  {
+    id: id(),
+    leadId: uuid("lead_id").notNull().references(() => leads.id),
+    name: text("name").notNull(),
+    role: text("role"),
+    whatsapp: text("whatsapp"),
+    /** Só dígitos, com 55 — para o link do WhatsApp e para achar duplicata. */
+    whatsappDigits: text("whatsapp_digits"),
+    email: text("email"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    /** O contato pediu para não receber mensagens. */
+    optOut: boolean("opt_out").notNull().default(false),
+    optOutAt: timestamp("opt_out_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("lead_contacts_lead_idx").on(t.leadId), index("lead_contacts_wa_idx").on(t.whatsappDigits)],
+);
+
+/** Toda mudança de etapa, com data: mede ciclo e conversão. */
+export const leadStageHistory = pgTable(
+  "lead_stage_history",
+  {
+    id: id(),
+    leadId: uuid("lead_id").notNull().references(() => leads.id),
+    fromStageId: uuid("from_stage_id").references(() => crmStages.id),
+    toStageId: uuid("to_stage_id").notNull().references(() => crmStages.id),
+    userId: uuid("user_id").references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("lead_stage_history_lead_idx").on(t.leadId)],
+);
+
+export const leadInteractions = pgTable(
+  "lead_interactions",
+  {
+    id: id(),
+    leadId: uuid("lead_id").notNull().references(() => leads.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    kind: text("kind").notNull(),
+    summary: text("summary").notNull(),
+    outcome: text("outcome").notNull(),
+    templateId: uuid("template_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("lead_interactions_lead_idx").on(t.leadId)],
+);
+
+/** Modelos de mensagem por etapa, com status de aprovação. */
+export const messageTemplates = pgTable("message_templates", {
+  id: id(),
+  name: text("name").notNull(),
+  stageId: uuid("stage_id").references(() => crmStages.id),
+  channel: text("channel").notNull().default("whatsapp"),
+  body: text("body").notNull(),
+  status: text("status").$type<"draft" | "approved" | "archived">().notNull().default("draft"),
+  /** Texto sugerido pelo sistema, ainda não validado pelo dono. */
+  toValidate: boolean("to_validate").notNull().default(false),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * Fila para automação futura (API oficial do WhatsApp). Nesta fase NADA é
+ * enviado sozinho: a tabela existe só para o envio automático entrar depois.
+ */
+export const outboundMessages = pgTable(
+  "outbound_messages",
+  {
+    id: id(),
+    leadId: uuid("lead_id").notNull().references(() => leads.id),
+    contactId: uuid("contact_id").references(() => leadContacts.id),
+    templateId: uuid("template_id").references(() => messageTemplates.id),
+    channel: text("channel").notNull().default("whatsapp"),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+    status: text("status").$type<"queued" | "sent" | "cancelled" | "failed">().notNull().default("queued"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("outbound_messages_status_idx").on(t.status, t.scheduledFor)],
+);
+
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),

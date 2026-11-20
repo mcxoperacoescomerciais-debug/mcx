@@ -71,7 +71,7 @@ export function Board({ demands, today, canReopen }: { demands: CardDemand[]; to
   return (
     <>
       {error && <p role="alert" className="mb-3 rounded-lg bg-bad-bg px-3 py-2 text-sm text-bad">{error}</p>}
-      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 lg:mx-0 lg:grid lg:grid-cols-5 lg:overflow-visible lg:px-0">
+      <div className="relative -mx-4 flex gap-3 overflow-x-auto px-4 pb-4 lg:mx-0 lg:grid lg:grid-cols-5 lg:overflow-visible lg:px-0">
         {COLUMNS.map((status) => {
           const column = items.filter((d) => d.status === status);
           return (
