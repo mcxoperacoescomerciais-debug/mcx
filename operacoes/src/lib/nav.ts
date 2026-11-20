@@ -19,6 +19,7 @@ export const NAV: NavItem[] = [
   { href: "/relatorios", label: "Relatórios", needs: "report.view" },
   { href: "/rotinas", label: "Rotinas", needs: "routine.manage" },
   { href: "/checklists", label: "Checklists" },
+  { href: "/estoque", label: "Estoque", needs: "stock.view" },
   { href: "/contratantes", label: "Contratantes", needs: "client.view" },
   { href: "/config/categorias", label: "Categorias e tipos", needs: "category.edit" },
   { href: "/config/usuarios", label: "Usuários", needs: "user.manage" },

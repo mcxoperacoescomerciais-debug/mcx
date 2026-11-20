@@ -15,6 +15,9 @@ import * as demands from "@/server/demands";
 import type { DemandInput, DemandPatch, Result } from "@/server/demands";
 import * as registry from "@/server/registry";
 import * as routines from "@/server/routines";
+import * as stock from "@/server/stock";
+import type { MovementInput, StockItemInput } from "@/server/stock";
+import type { UnitStatus } from "@/lib/stock";
 import type { RoutineInput } from "@/server/routines";
 import * as templates from "@/server/templates";
 import type { TemplateInput } from "@/server/templates";
@@ -301,4 +304,58 @@ export async function setDailyGoalAction(goal: number) {
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await crm.setDailyGoal(user, goal));
+}
+
+export async function saveStockItemAction(id: string | null, input: StockItemInput) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.saveStockItem(user, id, input));
+}
+
+export async function addMovementAction(itemId: string, input: MovementInput) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.addMovement(user, itemId, input));
+}
+
+export async function recordCountAction(itemId: string, counted: number, note: string | null) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.recordCount(user, itemId, counted, note));
+}
+
+export async function decideCountAction(countId: string, apply: boolean, reason: string | null) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.decideCount(user, countId, apply, reason));
+}
+
+export async function addStockUnitAction(itemId: string, label: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.addStockUnit(user, itemId, label));
+}
+
+export async function setUnitStatusAction(unitId: string, input: { status: UnitStatus; holder?: string | null; dueBack?: string | null; note?: string | null }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.setUnitStatus(user, unitId, input));
+}
+
+export async function linkChecklistItemAction(checklistItemId: string, stockItemId: string | null) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.linkChecklistItem(user, checklistItemId, stockItemId));
+}
+
+export async function registerDemandOutputsAction(demandId: string, lines: { checklistItemId: string; quantity: number }[], dest: { counterpart: string; city?: string | null; store?: string | null; promoter?: string | null }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.registerDemandOutputs(user, demandId, lines, dest));
+}
+
+export async function setInventoryDayAction(day: number) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await stock.setInventoryDay(user, day));
 }

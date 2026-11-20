@@ -5,6 +5,7 @@
  */
 import { timingSafeEqual } from "node:crypto";
 import { generateRoutines } from "@/server/routines";
+import { generateStockAlerts } from "@/server/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -19,5 +20,6 @@ function authorized(request: Request): boolean {
 export async function GET(request: Request) {
   if (!authorized(request)) return Response.json({ ok: false }, { status: 401 });
   const result = await generateRoutines();
-  return Response.json({ ok: true, ...result });
+  const stock = await generateStockAlerts();
+  return Response.json({ ok: true, ...result, stockAlerts: stock.created });
 }

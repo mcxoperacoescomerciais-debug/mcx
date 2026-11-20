@@ -139,8 +139,8 @@ describe("visibilidade e papéis", () => {
     assert.equal((await registry.updateUser(eduardo, eduardo.id, { status: "inactive" })).ok, false, "dono não se desativa");
   });
 
-  test("mapa de papéis: dono tem tudo; operacional só cria demanda e vê contratantes", () => {
-    assert.deepEqual([...ROLE_ACTIONS.operacional].sort(), ["client.view", "demand.create"]);
+  test("mapa de papéis: dono tem tudo; operacional só cria demanda, vê contratantes e movimenta estoque", () => {
+    assert.deepEqual([...ROLE_ACTIONS.operacional].sort(), ["client.view", "demand.create", "stock.move", "stock.view"]);
     for (const a of ["time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage"] as const) {
       assert.equal(can("operacional", a), false, a);
       assert.equal(can("gestor", a), true, a);

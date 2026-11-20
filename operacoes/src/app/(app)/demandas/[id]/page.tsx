@@ -7,6 +7,8 @@ import { can } from "@/lib/permissions";
 import { isOverdue } from "@/lib/queue";
 import { requireUser } from "@/server/auth";
 import { formOptions, getDemand } from "@/server/demands";
+import { DemandStock } from "@/components/stock/demand-panel";
+import { demandStock } from "@/server/stock";
 import { demandMisses, listTemplates } from "@/server/templates";
 import { demandTime, timerMinutes } from "@/server/time";
 import { Comments, DeleteDemand, EditDemand, Shares, StatusControl } from "./controls";
@@ -19,7 +21,7 @@ export default async function DemandPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const d = await getDemand(user, id);
   if (!d) notFound();
-  const [options, time, templates, misses] = await Promise.all([formOptions(), demandTime(user, id), listTemplates(user), demandMisses(id)]);
+  const [options, time, templates, misses, stock] = await Promise.all([formOptions(), demandTime(user, id), listTemplates(user), demandMisses(id), demandStock(user, id)]);
   const published = templates.filter((tpl) => tpl.status === "published");
   const applied = templates.find((tpl) => tpl.id === d.templateId) ?? null;
   // Pré-preenche "Quanto tempo levou?" com o que já foi apontado + o cronômetro em andamento.
@@ -78,6 +80,14 @@ export default async function DemandPage({ params }: { params: Promise<{ id: str
               items={d.checklist.map((c) => ({ id: c.id, text: c.text, section: c.section, quantity: c.quantity, unit: c.unit, required: c.required, note: c.note, checked: c.checked, by: c.checkedByName, notApplicable: c.notApplicable, naReason: c.naReason, verified: c.verified, verifiedBy: c.verifiedByName }))}
             />
           </section>
+
+          {stock && stock.options.length > 0 && stock.lines.length > 0 && (
+            <section className="card p-4" aria-labelledby="s-estoque">
+              <h2 id="s-estoque" className="mb-1 text-sm font-bold text-ink-2">Estoque do contratante</h2>
+              <p className="mb-3 text-xs text-muted">Ligue cada item do checklist ao estoque para ver o saldo na hora de separar e registrar as saídas de uma vez.</p>
+              <DemandStock key={stock.lines.map((l) => `${l.id}${l.stockItemId}${l.registered}${l.checked}`).join("|")} demandId={d.id} lines={stock.lines} options={stock.options} done={stock.done} defaultDestination={d.title} />
+            </section>
+          )}
 
           <section className="card p-4" aria-labelledby="s-tempo">
             <h2 id="s-tempo" className="mb-3 text-sm font-bold text-ink-2">Tempo</h2>

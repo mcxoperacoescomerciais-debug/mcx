@@ -21,16 +21,19 @@ export const ACTIONS = [
   "routine.manage",
   "template.manage",
   "crm.view", // Comercial: leads, funil e follow-up (dono e gestor)
+  "stock.view", // estoque dos clientes: saldos e extratos
+  "stock.move", // registrar entrada, saída, devolução e contagem
+  "stock.manage", // itens, mínimos, ajustes, perdas e equipamentos
   "crm.manage", // etapas do funil, meta diária e aprovação de modelos de mensagem (dono)
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
-const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage", "crm.view"];
+const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage", "crm.view", "stock.view", "stock.move", "stock.manage"];
 
 export const ROLE_ACTIONS: Record<Role, readonly Action[]> = {
   owner: ACTIONS,
   gestor: GESTOR,
-  operacional: ["demand.create", "client.view"],
+  operacional: ["demand.create", "client.view", "stock.view", "stock.move"],
 };
 
 export function can(role: Role, action: Action): boolean {

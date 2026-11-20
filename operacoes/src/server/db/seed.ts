@@ -87,4 +87,19 @@ export async function seedDemoIfEmpty(db: DB): Promise<void> {
     await db.insert(s.leadContacts).values({ leadId: lead.id, name: d.contact, whatsapp: d.phone, whatsappDigits: phoneDigits(d.phone), isPrimary: true });
     for (const st2 of stages.filter((x) => x.kind === "open" && x.position <= st.position)) await db.insert(s.leadStageHistory).values({ leadId: lead.id, toStageId: st2.id, userId: user("eduardo").id });
   }
+
+  // Estoque de demonstração (quantidades fictícias, só no banco embutido).
+  const helvecio = client("Helvécio");
+  const maria = user("maria");
+  const stockDemo: { name: string; category: "product" | "disposable" | "equipment"; unit: string; min: number; expiry?: boolean; moves?: { delta: number; day: number; kind: "in" | "out"; counterpart: string; city?: string; lot?: string; expires?: number }[]; units?: string[] }[] = [
+    { name: "Café (exemplo)", category: "product", unit: "pct", min: 10, expiry: true, moves: [{ delta: 20, day: -20, kind: "in", counterpart: "Recebido do cliente", lot: "L1", expires: 20 }, { delta: 12, day: -5, kind: "in", counterpart: "Recebido do cliente", lot: "L2", expires: 150 }, { delta: -8, day: -3, kind: "out", counterpart: "Degustação de exemplo", city: "Itaúna", lot: "L1", expires: 20 }] },
+    { name: "Copos descartáveis (exemplo)", category: "disposable", unit: "un", min: 500, moves: [{ delta: 600, day: -20, kind: "in", counterpart: "Recebido do cliente" }, { delta: -300, day: -3, kind: "out", counterpart: "Degustação de exemplo", city: "Itaúna" }] },
+    { name: "Colheres (exemplo)", category: "disposable", unit: "un", min: 200, moves: [{ delta: 1000, day: -20, kind: "in", counterpart: "Recebido do cliente" }] },
+    { name: "Garrafa térmica (exemplo)", category: "equipment", unit: "un", min: 0, units: ["Garrafa térmica 1", "Garrafa térmica 2"] },
+  ];
+  for (const d of stockDemo) {
+    const [item] = await db.insert(s.stockItems).values({ clientId: helvecio.id, name: d.name, category: d.category, unit: d.unit, minQuantity: d.min, tracksExpiry: !!d.expiry, location: "Escritório — prateleira de exemplo" }).returning({ id: s.stockItems.id });
+    for (const m of d.moves ?? []) await db.insert(s.stockMovements).values({ itemId: item.id, kind: m.kind, delta: m.delta, day: addDays(today, m.day), counterpart: m.counterpart, city: m.city ?? null, lot: m.lot ?? null, expiresOn: m.expires === undefined ? null : addDays(today, m.expires), userId: maria.id });
+    for (const label of d.units ?? []) await db.insert(s.stockUnits).values({ itemId: item.id, label });
+  }
 }

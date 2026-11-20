@@ -83,3 +83,27 @@ body {
   outline: 2px solid var(--color-brand-500);
   outline-offset: 2px;
 }
+
+/* Impressão (relatório de estoque para o cliente): só o conteúdo, sem menu nem botões. */
+@media print {
+  aside,
+  nav,
+  .no-print,
+  button {
+    display: none !important;
+  }
+  .min-h-dvh {
+    display: block !important;
+  }
+  body {
+    background: #fff;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .card {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}

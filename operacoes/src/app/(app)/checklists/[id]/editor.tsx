@@ -16,6 +16,7 @@ interface Item {
   required: boolean;
   note: string;
   toValidate: boolean;
+  stockItemId: string;
 }
 
 interface Template {
@@ -29,10 +30,10 @@ interface Template {
   items: Item[];
 }
 
-const blankItem = (section = ""): Item => ({ section, text: "", quantity: "", unit: "", perAction: false, required: false, note: "", toValidate: false });
+const blankItem = (section = ""): Item => ({ section, text: "", quantity: "", unit: "", perAction: false, required: false, note: "", toValidate: false, stockItemId: "" });
 const UNITS = ["", "un", "pct", "cx", "kg", "L"];
 
-export function TemplateEditor({ template, options }: { template?: Template; options: FormOptions }) {
+export function TemplateEditor({ template, options, stockItems = [] }: { template?: Template; options: FormOptions; stockItems?: { id: string; clientId: string; name: string; unit: string }[] }) {
   const router = useRouter();
   const { run, pending, message } = useRun();
   const [name, setName] = useState(template?.name ?? "");
@@ -43,6 +44,7 @@ export function TemplateEditor({ template, options }: { template?: Template; opt
   const [status, setStatus] = useState(template?.status ?? "draft");
   const [items, setItems] = useState<Item[]>(template?.items.length ? template.items : [blankItem()]);
   const types = options.types.filter((t) => t.categoryId === categoryId);
+  const stockOptions = stockItems.filter((s) => s.clientId === clientId);
   const pendingValidation = items.filter((i) => i.toValidate).length;
 
   const update = (index: number, patch: Partial<Item>) => setItems((cur) => cur.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -64,7 +66,7 @@ export function TemplateEditor({ template, options }: { template?: Template; opt
         typeId: types.some((t) => t.id === typeId) ? typeId : null,
         doubleCheck,
         status,
-        items: items.filter((i) => i.text.trim()).map((i) => ({ section: i.section, text: i.text, quantity: i.quantity.trim() === "" ? null : Number(i.quantity), unit: i.unit, perAction: i.perAction, required: i.required, note: i.note, toValidate: i.toValidate })),
+        items: items.filter((i) => i.text.trim()).map((i) => ({ section: i.section, text: i.text, quantity: i.quantity.trim() === "" ? null : Number(i.quantity), unit: i.unit, perAction: i.perAction, required: i.required, note: i.note, toValidate: i.toValidate, stockItemId: stockOptions.some((s) => s.id === i.stockItemId) ? i.stockItemId : null })),
       });
       if (r.ok && !template && "id" in r) router.push(`/checklists/${r.id}`);
       return r;
@@ -138,6 +140,12 @@ export function TemplateEditor({ template, options }: { template?: Template; opt
                 </select>
               </div>
               <input aria-label={`Observação do item ${index + 1}`} className="field mt-2" placeholder="Observação (opcional)" value={item.note} onChange={(e) => update(index, { note: e.target.value })} />
+              {stockOptions.length > 0 && (
+                <select aria-label={`Item do estoque ligado ao item ${index + 1}`} className="field mt-2" value={stockOptions.some((s) => s.id === item.stockItemId) ? item.stockItemId : ""} onChange={(e) => update(index, { stockItemId: e.target.value })}>
+                  <option value="">Sem vínculo com o estoque</option>
+                  {stockOptions.map((s) => <option key={s.id} value={s.id}>Estoque: {s.name} ({s.unit})</option>)}
+                </select>
+              )}
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-2">
                 <label className="flex min-h-9 items-center gap-2"><input type="checkbox" className="size-4" checked={item.perAction} onChange={(e) => update(index, { perAction: e.target.checked })} /> Quantidade por ação</label>
                 <label className="flex min-h-9 items-center gap-2"><input type="checkbox" className="size-4" checked={item.required} onChange={(e) => update(index, { required: e.target.checked })} /> Obrigatório</label>

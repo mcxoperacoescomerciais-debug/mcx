@@ -24,6 +24,7 @@ export interface TemplateItemInput {
   required?: boolean;
   note?: string | null;
   toValidate?: boolean;
+  stockItemId?: string | null;
 }
 
 export interface TemplateInput {
@@ -66,6 +67,7 @@ async function insertItems(tx: Tx | DB, templateId: string, version: number, ite
       required: !!i.required,
       note: clean(i.note),
       toValidate: !!i.toValidate,
+      stockItemId: i.stockItemId && UUID.test(i.stockItemId) ? i.stockItemId : null,
       position,
     })),
   );
@@ -166,7 +168,7 @@ export async function copyTemplateInto(tx: Tx | DB, demandId: string, templateId
   const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(s.demandChecklistItems).where(eq(s.demandChecklistItems.demandId, demandId));
   if (items.length) {
     await tx.insert(s.demandChecklistItems).values(
-      items.map((i, idx) => ({ demandId, text: i.text, position: n + idx, section: i.section, quantity: appliedQuantity(i, actions), unit: i.unit, required: i.required, note: i.note })),
+      items.map((i, idx) => ({ demandId, text: i.text, position: n + idx, section: i.section, quantity: appliedQuantity(i, actions), unit: i.unit, required: i.required, note: i.note, stockItemId: i.stockItemId })),
     );
   }
   await tx.update(s.demands).set({ templateId, templateVersion: tpl.version, actionsCount: Math.max(1, actions), updatedAt: new Date() }).where(eq(s.demands.id, demandId));
@@ -194,7 +196,7 @@ export async function saveAsTemplate(actor: Actor, demandId: string, name: strin
   if (!d) return fail("Demanda não encontrada.");
   const items = await db.select().from(s.demandChecklistItems).where(eq(s.demandChecklistItems.demandId, demandId)).orderBy(asc(s.demandChecklistItems.position));
   if (!items.length) return fail("Esta demanda não tem checklist.");
-  return saveTemplate(actor, null, { name, clientId: d.clientId, categoryId: d.categoryId, typeId: d.typeId, status: "draft", items: items.map((i) => ({ section: i.section, text: i.text, quantity: i.quantity, unit: i.unit, required: i.required, note: i.note })) });
+  return saveTemplate(actor, null, { name, clientId: d.clientId, categoryId: d.categoryId, typeId: d.typeId, status: "draft", items: items.map((i) => ({ section: i.section, text: i.text, quantity: i.quantity, unit: i.unit, required: i.required, note: i.note, stockItemId: i.stockItemId })) });
 }
 
 async function visibleItem(db: DB, actor: Actor, itemId: string) {

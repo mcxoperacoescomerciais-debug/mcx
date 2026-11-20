@@ -174,6 +174,8 @@ export const demandChecklistItems = pgTable(
     verified: boolean("verified").notNull().default(false),
     verifiedBy: uuid("verified_by").references(() => users.id),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    /** Vínculo opcional com um item do estoque do contratante (Fase 4). */
+    stockItemId: uuid("stock_item_id"),
     createdAt: createdAt(),
   },
   (t) => [index("demand_checklist_demand_idx").on(t.demandId)],
@@ -299,6 +301,8 @@ export const checklistTemplateItems = pgTable(
     note: text("note"),
     /** Item sugerido, ainda não confirmado pela gestora. */
     toValidate: boolean("to_validate").notNull().default(false),
+    /** Vínculo opcional com um item do estoque do contratante (Fase 4). */
+    stockItemId: uuid("stock_item_id"),
     position: integer("position").notNull().default(0),
   },
   (t) => [index("checklist_template_items_tpl_idx").on(t.templateId, t.version)],
@@ -509,6 +513,112 @@ export const outboundMessages = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("outbound_messages_status_idx").on(t.status, t.scheduledFor)],
+);
+
+// ---------------------------------------------------------------------------
+// Fase 4 — Estoque de materiais dos clientes
+// ---------------------------------------------------------------------------
+
+export const stockItems = pgTable(
+  "stock_items",
+  {
+    id: id(),
+    clientId: uuid("client_id").notNull().references(() => clients.id),
+    brand: text("brand"),
+    name: text("name").notNull(),
+    category: text("category").$type<"product" | "disposable" | "pdv" | "equipment">().notNull(),
+    unit: text("unit").notNull().default("un"),
+    minQuantity: integer("min_quantity").notNull().default(0),
+    location: text("location"),
+    tracksExpiry: boolean("tracks_expiry").notNull().default(false),
+    note: text("note"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("stock_items_client_idx").on(t.clientId), check("stock_items_category_ck", sql`${t.category} in ('product','disposable','pdv','equipment')`)],
+);
+
+/**
+ * Movimentações: o saldo é SEMPRE a soma de `delta` — nunca é editado à mão e
+ * nenhuma movimentação é alterada ou apagada (erro se corrige com outra).
+ */
+export const stockMovements = pgTable(
+  "stock_movements",
+  {
+    id: id(),
+    itemId: uuid("item_id").notNull().references(() => stockItems.id),
+    kind: text("kind").$type<"in" | "out" | "return" | "adjust" | "loss">().notNull(),
+    /** Positivo entra, negativo sai. */
+    delta: integer("delta").notNull(),
+    day: date("day").notNull(),
+    /** Entrada: origem. Saída/devolução: destino (ação, degustação). */
+    counterpart: text("counterpart"),
+    reference: text("reference"),
+    lot: text("lot"),
+    expiresOn: date("expires_on"),
+    city: text("city"),
+    store: text("store"),
+    promoter: text("promoter"),
+    reason: text("reason"),
+    demandId: uuid("demand_id").references(() => demands.id),
+    checklistItemId: uuid("checklist_item_id"),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("stock_movements_item_idx").on(t.itemId, t.day), index("stock_movements_demand_idx").on(t.demandId), check("stock_movements_kind_ck", sql`${t.kind} in ('in','out','return','adjust','loss')`), check("stock_movements_delta_ck", sql`${t.delta} <> 0`)],
+);
+
+/** Equipamentos: controle por unidade (garrafa térmica 1, mesa 2…). */
+export const stockUnits = pgTable(
+  "stock_units",
+  {
+    id: id(),
+    itemId: uuid("item_id").notNull().references(() => stockItems.id),
+    label: text("label").notNull(),
+    status: text("status").$type<"available" | "in_use" | "maintenance">().notNull().default("available"),
+    holder: text("holder"),
+    dueBack: date("due_back"),
+    demandId: uuid("demand_id").references(() => demands.id),
+    note: text("note"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("stock_units_item_idx").on(t.itemId), check("stock_units_status_ck", sql`${t.status} in ('available','in_use','maintenance')`)],
+);
+
+/** Contagem feita pelo operacional: vira ajuste só depois que o gestor aprova. */
+export const stockCounts = pgTable(
+  "stock_counts",
+  {
+    id: id(),
+    itemId: uuid("item_id").notNull().references(() => stockItems.id),
+    counted: integer("counted").notNull(),
+    balanceAtCount: integer("balance_at_count").notNull(),
+    note: text("note"),
+    status: text("status").$type<"pending" | "applied" | "discarded">().notNull().default("pending"),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    decidedBy: uuid("decided_by").references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("stock_counts_item_idx").on(t.itemId, t.status)],
+);
+
+/** Alertas que viraram demanda. A chave única evita abrir a mesma demanda duas vezes. */
+export const stockAlerts = pgTable(
+  "stock_alerts",
+  {
+    id: id(),
+    kind: text("kind").$type<"low" | "expiry" | "overdue" | "inventory">().notNull(),
+    /** O que disparou (item, item+lote+validade, unidade ou contratante+mês). */
+    refKey: text("ref_key").notNull(),
+    demandId: uuid("demand_id").notNull().references(() => demands.id),
+    day: date("day").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("stock_alerts_day_uq").on(t.kind, t.refKey, t.day)],
 );
 
 export const settings = pgTable("settings", {

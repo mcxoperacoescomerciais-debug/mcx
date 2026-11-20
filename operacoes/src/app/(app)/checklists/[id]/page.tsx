@@ -5,6 +5,7 @@ import { formatDateTime } from "@/lib/dates";
 import { can } from "@/lib/permissions";
 import { requireUser } from "@/server/auth";
 import { formOptions } from "@/server/demands";
+import { stockItemOptions } from "@/server/stock";
 import { getTemplate } from "@/server/templates";
 import { TemplateEditor } from "./editor";
 
@@ -14,13 +15,13 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
   const user = await requireUser();
   const { id } = await params;
   const manage = can(user.role, "template.manage");
-  const options = await formOptions();
+  const [options, stockItems] = await Promise.all([formOptions(), stockItemOptions()]);
   if (id === "novo") {
     if (!manage) redirect("/checklists");
     return (
       <>
         <PageHeader title="Novo modelo de checklist" />
-        <TemplateEditor options={options} />
+        <TemplateEditor options={options} stockItems={stockItems} />
       </>
     );
   }
@@ -36,8 +37,9 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
       <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
         {manage ? (
           <TemplateEditor
+            stockItems={stockItems}
             options={options}
-            template={{ id: tpl.id, name: tpl.name, clientId: tpl.clientId, categoryId: tpl.categoryId, typeId: tpl.typeId, doubleCheck: tpl.doubleCheck, status: tpl.status, items: tpl.items.map((i) => ({ section: i.section ?? "", text: i.text, quantity: i.quantity === null ? "" : String(i.quantity), unit: i.unit ?? "", perAction: i.perAction, required: i.required, note: i.note ?? "", toValidate: i.toValidate })) }}
+            template={{ id: tpl.id, name: tpl.name, clientId: tpl.clientId, categoryId: tpl.categoryId, typeId: tpl.typeId, doubleCheck: tpl.doubleCheck, status: tpl.status, items: tpl.items.map((i) => ({ section: i.section ?? "", text: i.text, quantity: i.quantity === null ? "" : String(i.quantity), unit: i.unit ?? "", perAction: i.perAction, required: i.required, note: i.note ?? "", toValidate: i.toValidate, stockItemId: i.stockItemId ?? "" })) }}
           />
         ) : (
           <section className="card p-4">
