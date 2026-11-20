@@ -58,3 +58,7 @@ Campo (sem alterar nada): resultado no fim deste arquivo.
 2. A Maria revisar e publicar os 4 modelos de checklist.
 3. Informar custo/hora e valor mensal dos contratos, se quiser o relatório de margem.
 4. Aprovar a Fase 3 (Comercial/CRM) — vou precisar dos modelos de mensagem por etapa (lacuna 8); posso começar com textos em rascunho "a validar".
+
+## Regressão do Campo (20/11/2026, sem alterar nada)
+
+Rodado em agencia/ nesta branch: build ok, typecheck ok, 167 de 167 testes. git status de agencia/: nenhum arquivo alterado.
