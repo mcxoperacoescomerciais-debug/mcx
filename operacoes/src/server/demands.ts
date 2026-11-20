@@ -59,6 +59,8 @@ const listColumns = {
   clientName: s.clients.name,
   categoryId: s.demands.categoryId,
   categoryName: s.categories.name,
+  typeId: s.demands.typeId,
+  estimateMinutes: s.demands.estimateMinutes,
   brand: s.demands.brand,
   createdBy: s.demands.createdBy,
   completedAt: s.demands.completedAt,
@@ -121,7 +123,7 @@ export async function getDemand(actor: Actor, id: string) {
     assigneeName: demand.assigneeId ? (names.get(demand.assigneeId) ?? "") : null,
     createdByName: names.get(demand.createdBy) ?? "",
     completedByName: demand.completedBy ? (names.get(demand.completedBy) ?? "") : null,
-    checklist: checklist.map((c) => ({ ...c, checkedByName: c.checkedBy ? (names.get(c.checkedBy) ?? "") : null })),
+    checklist: checklist.map((c) => ({ ...c, checkedByName: c.checkedBy ? (names.get(c.checkedBy) ?? "") : null, verifiedByName: c.verifiedBy ? (names.get(c.verifiedBy) ?? "") : null })),
     comments: comments.map((c) => ({ ...c, userName: names.get(c.userId) ?? "" })),
     history: history.map((h) => ({ ...h, userName: h.userId ? (names.get(h.userId) ?? "") : "Sistema" })),
     sharedWith: shares.map((x) => x.userId),
@@ -132,6 +134,7 @@ export interface DemandInput {
   title: string;
   clientId: string;
   categoryId: string;
+  typeId?: string | null;
   assigneeId: string;
   priority?: Priority;
   dueDate: string | null;
@@ -152,7 +155,7 @@ export function checkDueRule(dueDate: string | null, priority: Priority): string
   return null;
 }
 
-async function checkRefs(db: DB | Tx, i: { clientId?: string; categoryId?: string; assigneeId?: string | null }): Promise<string | null> {
+async function checkRefs(db: DB | Tx, i: { clientId?: string; categoryId?: string; typeId?: string | null; assigneeId?: string | null }): Promise<string | null> {
   if (i.clientId !== undefined) {
     const [c] = await db.select({ id: s.clients.id }).from(s.clients).where(and(eq(s.clients.id, i.clientId), isNull(s.clients.deletedAt)));
     if (!c) return "Escolha o contratante.";
@@ -160,6 +163,10 @@ async function checkRefs(db: DB | Tx, i: { clientId?: string; categoryId?: strin
   if (i.categoryId !== undefined) {
     const [c] = await db.select({ id: s.categories.id }).from(s.categories).where(eq(s.categories.id, i.categoryId));
     if (!c) return "Escolha a categoria.";
+  }
+  if (i.typeId) {
+    const [ty] = await db.select({ categoryId: s.demandTypes.categoryId }).from(s.demandTypes).where(eq(s.demandTypes.id, i.typeId));
+    if (!ty || (i.categoryId !== undefined && ty.categoryId !== i.categoryId)) return "O tipo escolhido não pertence a esta categoria.";
   }
   if (i.assigneeId) {
     const [u] = await db.select({ id: s.users.id }).from(s.users).where(and(eq(s.users.id, i.assigneeId), eq(s.users.status, "active")));
@@ -205,6 +212,7 @@ export async function createDemand(actor: Actor, input: DemandInput, opts: { con
         title,
         clientId: input.clientId,
         categoryId: input.categoryId,
+        typeId: input.typeId || null,
         assigneeId: input.assigneeId,
         priority,
         dueDate: input.dueDate,
@@ -240,13 +248,17 @@ export async function updateDemand(actor: Actor, id: string, patch: DemandPatch)
       set.title = title;
     }
     if (patch.clientId !== undefined && patch.clientId !== d.clientId) set.clientId = patch.clientId;
-    if (patch.categoryId !== undefined && patch.categoryId !== d.categoryId) set.categoryId = patch.categoryId;
+    if (patch.categoryId !== undefined && patch.categoryId !== d.categoryId) {
+      set.categoryId = patch.categoryId;
+      if (patch.typeId === undefined) set.typeId = null; // o tipo antigo era da outra categoria
+    }
+    if (patch.typeId !== undefined && (patch.typeId || null) !== d.typeId) set.typeId = patch.typeId || null;
     if (patch.assigneeId !== undefined && patch.assigneeId !== d.assigneeId) {
       if (!can(actor.role, "demand.assign")) return fail("Só o gestor troca o responsável de uma demanda.");
       if (!UUID.test(patch.assigneeId)) return fail("Escolha o responsável.");
       set.assigneeId = patch.assigneeId;
     }
-    const refError = await checkRefs(tx, { clientId: set.clientId, categoryId: set.categoryId, assigneeId: set.assigneeId });
+    const refError = await checkRefs(tx, { clientId: set.clientId, categoryId: set.typeId ? (set.categoryId ?? d.categoryId) : set.categoryId, typeId: set.typeId, assigneeId: set.assigneeId });
     if (refError) return fail(refError);
 
     const priority = patch.priority ?? d.priority;
@@ -295,7 +307,7 @@ export async function updateDemand(actor: Actor, id: string, patch: DemandPatch)
  * Mudança de status (lista, detalhe e kanban). "Aguardando retorno" exige de
  * quem se espera e a data de cobrança; reabrir é só para gestor e dono.
  */
-export async function changeStatus(actor: Actor, id: string, status: Status, extra: { waitingFor?: string | null; followUpDate?: string | null } = {}, source?: string): Promise<Result> {
+export async function changeStatus(actor: Actor, id: string, status: Status, extra: { waitingFor?: string | null; followUpDate?: string | null; minutes?: number | null } = {}, source?: string): Promise<Result> {
   if (!STATUSES.includes(status)) return fail("Status inválido.");
   const db = await getDb();
   return db.transaction(async (tx) => {
@@ -317,9 +329,27 @@ export async function changeStatus(actor: Actor, id: string, status: Status, ext
       set.waitingFor = null;
       set.followUpDate = null;
     }
-    if (status === "done") {
+    if (status === "done" && d.status !== "done") {
+      // Conferência antes de fechar: item obrigatório sem marcar bloqueia a conclusão.
+      const items = await tx.select().from(s.demandChecklistItems).where(eq(s.demandChecklistItems.demandId, id));
+      const missing = items.filter((i) => i.required && !i.checked && !i.notApplicable);
+      if (missing.length) return fail(`Falta marcar ${missing.length} item(ns) obrigatório(s) do checklist: ${missing.slice(0, 3).map((i) => i.text).join(", ")}${missing.length > 3 ? "…" : ""}.`);
+      // "Quanto tempo levou?" — obrigatório. O valor é o tempo TOTAL de quem conclui nesta demanda;
+      // o que já foi apontado (cronômetro, lançamentos) é descontado para não contar duas vezes.
+      const [timer] = await tx.select().from(s.timers).where(and(eq(s.timers.userId, actor.id), eq(s.timers.demandId, id)));
+      const total = extra.minutes;
+      if (typeof total !== "number" || !Number.isInteger(total) || total <= 0 || total > 16 * 60) return fail("Informe quanto tempo levou (em minutos).");
+      if (timer) await tx.delete(s.timers).where(eq(s.timers.userId, actor.id));
+      const [logged] = await tx
+        .select({ n: sql<number>`coalesce(sum(${s.timeEntries.minutes}), 0)::int` })
+        .from(s.timeEntries)
+        .where(and(eq(s.timeEntries.demandId, id), eq(s.timeEntries.userId, actor.id), isNull(s.timeEntries.deletedAt)));
+      const extraMinutes = total - (logged?.n ?? 0);
+      if (extraMinutes > 0) await tx.insert(s.timeEntries).values({ demandId: id, userId: actor.id, day: todayIso(), minutes: extraMinutes, source: "completion" });
       set.completedAt = new Date();
       set.completedBy = actor.id;
+    } else if (status === "done") {
+      // já estava concluída
     } else {
       set.completedAt = null;
       set.completedBy = null;
@@ -422,13 +452,14 @@ export async function categorySuggestions(): Promise<Record<string, string>> {
 /** Opções dos formulários (pessoas ativas, contratantes, categorias ativas). */
 export async function formOptions() {
   const db = await getDb();
-  const [people, clients, categories, brands, suggestions] = await Promise.all([
+  const [people, clients, categories, brands, suggestions, types] = await Promise.all([
     db.select({ id: s.users.id, name: s.users.name }).from(s.users).where(eq(s.users.status, "active")).orderBy(asc(s.users.name)),
     db.select({ id: s.clients.id, name: s.clients.name, kind: s.clients.kind }).from(s.clients).where(and(isNull(s.clients.deletedAt), eq(s.clients.status, "active"))).orderBy(asc(s.clients.name)),
     db.select({ id: s.categories.id, name: s.categories.name }).from(s.categories).where(eq(s.categories.active, true)).orderBy(asc(s.categories.position)),
     db.select({ clientId: s.clientBrands.clientId, name: s.clientBrands.name }).from(s.clientBrands).orderBy(asc(s.clientBrands.name)),
     categorySuggestions(),
+    db.select({ id: s.demandTypes.id, categoryId: s.demandTypes.categoryId, name: s.demandTypes.name }).from(s.demandTypes).where(eq(s.demandTypes.active, true)).orderBy(asc(s.demandTypes.name)),
   ]);
-  return { people, clients, categories, brands, suggestions };
+  return { people, clients, categories, brands, suggestions, types };
 }
 export type FormOptions = Awaited<ReturnType<typeof formOptions>>;

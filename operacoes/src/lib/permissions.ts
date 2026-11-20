@@ -14,10 +14,16 @@ export const ACTIONS = [
   "client.edit",
   "category.edit",
   "user.manage",
+  "time.viewAll", // vê e corrige horas de qualquer pessoa
+  "team.view", // painel da equipe
+  "report.view", // relatórios de horas e capacidade
+  "cost.view", // custo/hora e valor de contrato
+  "routine.manage",
+  "template.manage",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
-const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit"];
+const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage"];
 
 export const ROLE_ACTIONS: Record<Role, readonly Action[]> = {
   owner: ACTIONS,

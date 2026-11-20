@@ -22,6 +22,62 @@ const CLIENTS: { name: string; kind: ClientKind; notes?: string; brands: string[
   { name: "Regis", kind: "rep", brands: ["Papel Fofinho", "Bel Chocolate", "Fralda DTM"], contacts: [{ name: "Regis" }] },
 ];
 
+/** Tipos por categoria — proposta tirada das tarefas reais (editável em Configurações). */
+const TYPES: Record<string, string[]> = {
+  Pedidos: ["Digitar pedido", "Cadastrar cliente na indústria", "Problema de NF/boleto"],
+  "Roteiro e programação": ["Traçar ou ajustar rota", "Programar visitas", "Remanejar loja", "Alterar dias de atendimento", "Enviar lojas ao promotor", "Lojas sem visita"],
+  "Fechamento e financeiro": ["Fechamento mensal", "Conferir planilha de fechamento", "Cobrar NF de promotora", "Dados de pagamento (PIX/CNPJ)"],
+  "Relatórios para marcas": ["Relatório periódico da marca", "Acompanhamento (MDias/Book)", "Vídeo de ação", "Preencher planilha do cliente"],
+  Degustação: ["Planejar/validar degustações do mês", "Projeção", "Cotação de insumos", "Separar kit"],
+  "Promotores e RH": ["Abrir vaga", "Dados para cadastro", "Enviar logins do app", "Treinamento", "Aviso à equipe"],
+  "Implantação do app": ["Configurar sistemática", "Cadastrar lojas de marca nova", "Apresentação"],
+  "Comercial MCX": ["Prospecção", "Proposta", "Contato com marca"],
+  "Interno MCX": ["Conteúdo", "Administração"],
+};
+
+type DraftItem = { section?: string; text: string; unit?: string; perAction?: boolean };
+/**
+ * Modelos iniciais — sempre RASCUNHO, com todos os itens "a validar": são
+ * sugestões para a gestora revisar e publicar, nunca listas definitivas.
+ */
+const DRAFT_TEMPLATES: { name: string; client?: string; category: string; type?: string; doubleCheck?: boolean; items: DraftItem[] }[] = [
+  {
+    name: "Kit de degustação — saída para outra cidade (Helvécio)",
+    client: "Helvécio",
+    category: "Degustação",
+    type: "Separar kit",
+    doubleCheck: true,
+    items: [
+      { section: "Produtos", text: "Café", unit: "pct", perAction: true },
+      { section: "Descartáveis", text: "Copos descartáveis", unit: "un", perAction: true },
+      { section: "Descartáveis", text: "Colheres", unit: "un", perAction: true },
+      { section: "Descartáveis", text: "Guardanapos", unit: "pct", perAction: true },
+      { section: "Equipamentos", text: "Garrafa térmica", unit: "un" },
+      { section: "Equipamentos", text: "Mesa ou balcão de degustação", unit: "un" },
+      { section: "Equipamentos", text: "Toalha de mesa", unit: "un" },
+      { section: "Equipamentos", text: "Display ou banner da marca", unit: "un" },
+      { section: "Documentos", text: "Autorização da loja para a ação" },
+    ],
+  },
+  {
+    name: "Fechamento mensal",
+    category: "Fechamento e financeiro",
+    type: "Fechamento mensal",
+    items: [{ text: "Conferir visitas realizadas × programadas" }, { text: "Conferir a planilha de fechamento" }, { text: "Cobrar NF das promotoras" }, { text: "Enviar o fechamento ao cliente" }],
+  },
+  {
+    name: "Implantação de cliente novo",
+    category: "Implantação do app",
+    items: [{ text: "Configurar a sistemática do cliente" }, { text: "Cadastrar marcas e produtos" }, { text: "Cadastrar lojas" }, { text: "Cadastrar promotores e enviar logins" }, { text: "Treinamento da equipe" }, { text: "Apresentação ao cliente" }],
+  },
+  {
+    name: "Cadastro de promotor novo",
+    category: "Promotores e RH",
+    type: "Dados para cadastro",
+    items: [{ text: "Pedir os dados para cadastro" }, { text: "Dados de pagamento (PIX/CNPJ)" }, { text: "Criar o usuário no app" }, { text: "Enviar o login" }, { text: "Treinamento do app" }],
+  },
+];
+
 export async function ensureBaseData(db: DB): Promise<void> {
   const [anyCategory] = await db.select({ id: s.categories.id }).from(s.categories).limit(1);
   if (!anyCategory) {
@@ -35,6 +91,29 @@ export async function ensureBaseData(db: DB): Promise<void> {
       const [row] = await db.insert(s.clients).values({ name: c.name, kind: c.kind, notes: c.notes ?? null }).returning({ id: s.clients.id });
       if (c.brands.length) await db.insert(s.clientBrands).values(c.brands.map((name) => ({ clientId: row.id, name })));
       if (c.contacts.length) await db.insert(s.clientContacts).values(c.contacts.map((k) => ({ clientId: row.id, name: k.name, role: k.role ?? null })));
+    }
+  }
+
+  const categories = await db.select().from(s.categories);
+  const [anyType] = await db.select({ id: s.demandTypes.id }).from(s.demandTypes).limit(1);
+  if (!anyType) {
+    for (const [category, names] of Object.entries(TYPES)) {
+      const cat = categories.find((c) => c.name === category);
+      if (cat) await db.insert(s.demandTypes).values(names.map((name) => ({ categoryId: cat.id, name })));
+    }
+  }
+
+  const [anyTemplate] = await db.select({ id: s.checklistTemplates.id }).from(s.checklistTemplates).limit(1);
+  if (!anyTemplate) {
+    const clients = await db.select().from(s.clients);
+    const types = await db.select().from(s.demandTypes);
+    for (const tpl of DRAFT_TEMPLATES) {
+      const cat = categories.find((c) => c.name === tpl.category);
+      const [row] = await db
+        .insert(s.checklistTemplates)
+        .values({ name: tpl.name, status: "draft", doubleCheck: !!tpl.doubleCheck, clientId: clients.find((c) => c.name === tpl.client)?.id ?? null, categoryId: cat?.id ?? null, typeId: types.find((ty) => ty.name === tpl.type && ty.categoryId === cat?.id)?.id ?? null })
+        .returning({ id: s.checklistTemplates.id });
+      await db.insert(s.checklistTemplateItems).values(tpl.items.map((i, position) => ({ templateId: row.id, version: 1, section: i.section ?? null, text: i.text, unit: i.unit ?? null, perAction: !!i.perAction, toValidate: true, position })));
     }
   }
 

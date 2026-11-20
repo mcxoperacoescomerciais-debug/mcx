@@ -14,7 +14,7 @@ export default async function UsersPage() {
       <PageHeader title="Usuários" subtitle="Dono: tudo. Gestor: todas as demandas e cadastros. Operacional: só as próprias demandas e as compartilhadas." />
       <ul className="mb-6 max-w-3xl space-y-3">
         {users.map((u) => (
-          <UserRow key={u.id} self={u.id === user.id} user={{ id: u.id, name: u.name, username: u.username, role: u.role, status: u.status, lastLogin: u.lastLoginAt ? formatDateTime(u.lastLoginAt) : null, mustChangePassword: u.mustChangePassword }} />
+          <UserRow key={u.id} self={u.id === user.id} user={{ id: u.id, name: u.name, username: u.username, role: u.role, status: u.status, lastLogin: u.lastLoginAt ? formatDateTime(u.lastLoginAt) : null, mustChangePassword: u.mustChangePassword, weeklyHours: u.weeklyHours, costPerHourCents: u.costPerHourCents }} />
         ))}
       </ul>
       <section className="card max-w-3xl p-4" aria-labelledby="novo-user">

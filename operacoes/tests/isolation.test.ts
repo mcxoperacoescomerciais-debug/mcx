@@ -81,6 +81,13 @@ describe("sessão", () => {
     assert.deepEqual(others.map((f) => f.replaceAll("\\", "/")).sort(), ["src/app/actions.ts", "src/app/entrar/actions.ts"]);
   });
 
+  test("rotas de API: atividade exige sessão; cron exige segredo; saúde não expõe dados", () => {
+    const routes = walk(path.join("src", "app", "api")).filter((f) => f.endsWith("route.ts")).map((f) => f.replaceAll("\\", "/")).sort();
+    assert.deepEqual(routes, ["src/app/api/atividade/route.ts", "src/app/api/cron/rotinas/route.ts", "src/app/api/health/route.ts"]);
+    assert.match(readFileSync("src/app/api/atividade/route.ts", "utf8"), /const user = await getSessionUser\(\);\s+if \(!user\) return new Response\(null, \{ status: 401 \}\);/);
+    assert.match(readFileSync("src/app/api/cron/rotinas/route.ts", "utf8"), /if \(!authorized\(request\)\) return/);
+  });
+
   test("toda página da área logada exige usuário", () => {
     const pages = walk(path.join("src", "app", "(app)")).filter((f) => f.endsWith("page.tsx"));
     assert.ok(pages.length >= 8);
@@ -99,7 +106,7 @@ describe("visibilidade e papéis", () => {
     assert.equal((await demands.listDemands(tainara, { status: "open" })).some((d) => d.id === id), false);
     for (const attempt of [
       demands.updateDemand(tainara, id, { title: "invadido" }),
-      demands.changeStatus(tainara, id, "done"),
+      demands.changeStatus(tainara, id, "done", { minutes: 10 }),
       demands.addComment(tainara, id, "oi"),
       demands.addChecklistItem(tainara, id, "item"),
     ]) {
@@ -117,7 +124,7 @@ describe("visibilidade e papéis", () => {
     const id = mine.ok ? mine.id : "";
     assert.equal((await demands.getDemand(tainara, id))?.id, id);
     assert.equal((await demands.updateDemand(tainara, id, { assigneeId: maria.id })).ok, false);
-    assert.ok((await demands.changeStatus(tainara, id, "done")).ok);
+    assert.ok((await demands.changeStatus(tainara, id, "done", { minutes: 10 })).ok);
     assert.equal((await demands.changeStatus(tainara, id, "todo")).ok, false, "reabrir é do gestor");
     assert.ok((await demands.changeStatus(maria, id, "todo")).ok);
     assert.equal((await demands.deleteDemand(tainara, id, "motivo qualquer")).ok, false);
@@ -134,6 +141,10 @@ describe("visibilidade e papéis", () => {
 
   test("mapa de papéis: dono tem tudo; operacional só cria demanda e vê contratantes", () => {
     assert.deepEqual([...ROLE_ACTIONS.operacional].sort(), ["client.view", "demand.create"]);
+    for (const a of ["time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage"] as const) {
+      assert.equal(can("operacional", a), false, a);
+      assert.equal(can("gestor", a), true, a);
+    }
     assert.equal(can("gestor", "user.manage"), false);
     assert.equal(can("owner", "user.manage"), true);
   });

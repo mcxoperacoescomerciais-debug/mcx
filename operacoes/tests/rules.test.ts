@@ -100,7 +100,7 @@ describe("demandas", () => {
     assert.equal((await demands.changeStatus(tainara, id, "waiting", { waitingFor: "Regis" })).ok, false);
     assert.ok((await demands.changeStatus(tainara, id, "waiting", { waitingFor: "Regis", followUpDate: addDays(today, 2) })).ok);
     assert.ok((await demands.updateDemand(maria, id, { dueDate: addDays(today, 4), assigneeId: maria.id })).ok);
-    assert.ok((await demands.changeStatus(maria, id, "done")).ok);
+    assert.ok((await demands.changeStatus(maria, id, "done", { minutes: 20 })).ok);
     const d = await demands.getDemand(maria, id);
     assert.equal(d?.status, "done");
     assert.equal(d?.completedBy, maria.id);

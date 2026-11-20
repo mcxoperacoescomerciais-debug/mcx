@@ -1,0 +1,24 @@
+# MCX Operações — gera as demandas das rotinas recorrentes todo dia às 6h (Brasília).
+# ATENÇÃO: o GitHub só dispara agendamentos de workflows que estão na branch
+# padrão (main). Enquanto este arquivo viver só em feat/mcx-operacoes, o
+# agendamento NÃO roda — e não faz falta: o próprio sistema gera as rotinas na
+# primeira abertura do dia (a geração é idempotente, nunca duplica).
+# Requer o segredo OPS_CRON_SECRET no repositório (igual ao CRON_SECRET do Render).
+name: MCX Operações — rotinas
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  rotinas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Gerar rotinas do dia
+        env:
+          OPS_CRON_SECRET: ${{ secrets.OPS_CRON_SECRET }}
+        run: |
+          if [ -z "$OPS_CRON_SECRET" ]; then echo "OPS_CRON_SECRET não configurado; nada a fazer."; exit 0; fi
+          curl -fsS --retry 3 --retry-delay 30 --max-time 180 -H "Authorization: Bearer $OPS_CRON_SECRET" https://mcx-operacoes.onrender.com/api/cron/rotinas

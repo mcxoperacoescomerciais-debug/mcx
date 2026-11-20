@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ActivityBeacon } from "@/components/activity-beacon";
 import { NavLinks } from "@/components/nav-links";
 import { QuickCapture } from "@/components/quick-capture";
 import { todayIso } from "@/lib/dates";
@@ -7,11 +8,15 @@ import { NAV } from "@/lib/nav";
 import { can } from "@/lib/permissions";
 import { requireUser } from "@/server/auth";
 import { formOptions } from "@/server/demands";
+import { runRoutinesOncePerDay } from "@/server/routines";
+import { activeTimer } from "@/server/time";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const items = NAV.filter((n) => !n.needs || can(user.role, n.needs));
-  const options = await formOptions();
+  // Garantia além do cron: na primeira abertura do dia, gera as rotinas devidas (idempotente).
+  await runRoutinesOncePerDay().catch((err) => console.error("[rotinas]", err));
+  const [options, timer] = await Promise.all([formOptions(), activeTimer(user.id)]);
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[15rem_1fr]">
       <aside className="bg-brand-900 pt-[env(safe-area-inset-top)] text-white lg:sticky lg:top-0 lg:h-dvh lg:overflow-y-auto">
@@ -29,7 +34,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <NavLinks items={items} />
       </aside>
-      <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 lg:px-8 lg:pt-8">{children}</main>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 lg:px-8 lg:pt-8">
+        {timer && (
+          <p className="mb-4 rounded-lg bg-info-bg px-3 py-2 text-sm text-info">
+            Cronômetro rodando em{" "}
+            <Link href={`/demandas/${timer.demandId}`} className="font-semibold underline underline-offset-2">{timer.title}</Link>
+          </p>
+        )}
+        {children}
+      </main>
+      <ActivityBeacon />
       <QuickCapture options={options} userId={user.id} today={todayIso()} />
     </div>
   );

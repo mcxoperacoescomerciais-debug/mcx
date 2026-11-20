@@ -20,6 +20,7 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
   const [title, setTitle] = useState("");
   const [clientId, setClientId] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [typeId, setTypeId] = useState("");
   const [assigneeId, setAssigneeId] = useState(userId);
   const [dueDate, setDueDate] = useState<string | null>(today);
   const [priority, setPriority] = useState<Priority>("medium");
@@ -59,7 +60,7 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
   function submit(confirmDuplicate: boolean) {
     setError(null);
     start(async () => {
-      const result = await createDemandAction({ title, clientId, categoryId, assigneeId, dueDate, priority, description, brand, origin }, confirmDuplicate);
+      const result = await createDemandAction({ title, clientId, categoryId, typeId: types.some((ty) => ty.id === typeId) ? typeId : null, assigneeId, dueDate, priority, description, brand, origin }, confirmDuplicate);
       if (!result.ok) {
         setError(result.error);
         setDuplicate("duplicate" in result && !!result.duplicate);
@@ -78,6 +79,7 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
   }
 
   const brands = options.brands.filter((b) => b.clientId === clientId);
+  const types = options.types.filter((ty) => ty.categoryId === categoryId);
 
   return (
     <>
@@ -151,6 +153,15 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
           </div>
           {more ? (
             <div className="space-y-3">
+              <div>
+                <label className="label" htmlFor="qc-type">Tipo</label>
+                <select id="qc-type" className="field" value={types.some((ty) => ty.id === typeId) ? typeId : ""} onChange={(e) => setTypeId(e.target.value)}>
+                  <option value="">Sem tipo</option>
+                  {types.map((ty) => (
+                    <option key={ty.id} value={ty.id}>{ty.name}</option>
+                  ))}
+                </select>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="label" htmlFor="qc-brand">Marca</label>
@@ -177,7 +188,7 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
             </div>
           ) : (
             <button type="button" className="text-sm font-semibold text-brand-600 underline-offset-2 hover:underline" onClick={() => setMore(true)}>
-              Mais campos (marca, origem, descrição)
+              Mais campos (tipo, marca, origem, descrição)
             </button>
           )}
           {error && <p role="alert" className="rounded-lg bg-warn-bg px-3 py-2 text-sm text-warn">{error}</p>}

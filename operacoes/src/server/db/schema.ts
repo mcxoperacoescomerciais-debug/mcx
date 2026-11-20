@@ -24,6 +24,10 @@ export const users = pgTable(
     failedLogins: integer("failed_logins").notNull().default(0),
     lockedUntil: timestamp("locked_until", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    /** Horas disponíveis por semana (capacidade). */
+    weeklyHours: integer("weekly_hours").notNull().default(40),
+    /** Custo/hora em centavos — visível só para dono e gestor. */
+    costPerHourCents: integer("cost_per_hour_cents"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("users_username_uq").on(t.username), check("users_role_ck", sql`${t.role} in ('owner','gestor','operacional')`)],
@@ -40,6 +44,8 @@ export const clients = pgTable(
     notes: text("notes"),
     campoAgencyId: uuid("campo_agency_id"),
     campoAgencyName: text("campo_agency_name"),
+    /** Valor mensal do contrato em centavos (até a Fase 5 trazer os contratos). Só dono e gestor. */
+    monthlyValueCents: integer("monthly_value_cents"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -115,6 +121,11 @@ export const demands = pgTable(
     waitingFor: text("waiting_for"),
     followUpDate: date("follow_up_date"),
     estimateMinutes: integer("estimate_minutes"),
+    routineId: uuid("routine_id"),
+    templateId: uuid("template_id"),
+    templateVersion: integer("template_version"),
+    /** Nº de ações/degustações usado para multiplicar as quantidades do checklist. */
+    actionsCount: integer("actions_count"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     completedBy: uuid("completed_by").references(() => users.id),
     createdBy: uuid("created_by").notNull().references(() => users.id),
@@ -148,9 +159,21 @@ export const demandChecklistItems = pgTable(
     demandId: uuid("demand_id").notNull().references(() => demands.id),
     text: text("text").notNull(),
     position: integer("position").notNull().default(0),
+    section: text("section"),
+    quantity: integer("quantity"),
+    unit: text("unit"),
+    required: boolean("required").notNull().default(false),
+    note: text("note"),
     checked: boolean("checked").notNull().default(false),
     checkedBy: uuid("checked_by").references(() => users.id),
     checkedAt: timestamp("checked_at", { withTimezone: true }),
+    /** "Não se aplica", com motivo. */
+    notApplicable: boolean("not_applicable").notNull().default(false),
+    naReason: text("na_reason"),
+    /** Conferência dupla ("Conferido"). */
+    verified: boolean("verified").notNull().default(false),
+    verifiedBy: uuid("verified_by").references(() => users.id),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [index("demand_checklist_demand_idx").on(t.demandId)],
@@ -199,6 +222,141 @@ export const auditLogs = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("audit_logs_entity_idx").on(t.entity, t.entityId)],
+);
+
+// ---------------------------------------------------------------------------
+// Fase 2 — tempo, atividade, rotinas e modelos de checklist
+// ---------------------------------------------------------------------------
+
+/** Tempo apontado por demanda (conclusão, cronômetro ou lançamento manual). */
+export const timeEntries = pgTable(
+  "time_entries",
+  {
+    id: id(),
+    demandId: uuid("demand_id").notNull().references(() => demands.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    day: date("day").notNull(),
+    minutes: integer("minutes").notNull(),
+    source: text("source").$type<"completion" | "timer" | "manual">().notNull(),
+    note: text("note"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("time_entries_user_day_idx").on(t.userId, t.day), index("time_entries_demand_idx").on(t.demandId), check("time_entries_minutes_ck", sql`${t.minutes} > 0`)],
+);
+
+/** Cronômetro: no máximo um ativo por pessoa. */
+export const timers = pgTable("timers", {
+  userId: uuid("user_id").primaryKey().references(() => users.id),
+  demandId: uuid("demand_id").notNull().references(() => demands.id),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** "Tempo no sistema" por dia: só minutos e primeiro/último sinal. Nenhum conteúdo, tela ou URL. */
+export const activityDays = pgTable(
+  "activity_days",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id),
+    day: date("day").notNull(),
+    minutes: integer("minutes").notNull().default(0),
+    firstAt: timestamp("first_at", { withTimezone: true }).notNull(),
+    lastAt: timestamp("last_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
+);
+
+export const checklistTemplates = pgTable("checklist_templates", {
+  id: id(),
+  name: text("name").notNull(),
+  /** Vazio = "Geral MCX". */
+  clientId: uuid("client_id").references(() => clients.id),
+  categoryId: uuid("category_id").references(() => categories.id),
+  typeId: uuid("type_id").references(() => demandTypes.id),
+  status: text("status").$type<"draft" | "published" | "archived">().notNull().default("draft"),
+  /** Conferência dupla: colunas "Separado" e "Conferido". */
+  doubleCheck: boolean("double_check").notNull().default(false),
+  version: integer("version").notNull().default(1),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Itens por versão: editar o modelo cria uma versão nova; as antigas ficam. */
+export const checklistTemplateItems = pgTable(
+  "checklist_template_items",
+  {
+    id: id(),
+    templateId: uuid("template_id").notNull().references(() => checklistTemplates.id),
+    version: integer("version").notNull(),
+    section: text("section"),
+    text: text("text").notNull(),
+    quantity: integer("quantity"),
+    unit: text("unit"),
+    /** Quantidade por ação: multiplica pelo nº de ações ao aplicar. */
+    perAction: boolean("per_action").notNull().default(false),
+    required: boolean("required").notNull().default(false),
+    note: text("note"),
+    /** Item sugerido, ainda não confirmado pela gestora. */
+    toValidate: boolean("to_validate").notNull().default(false),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [index("checklist_template_items_tpl_idx").on(t.templateId, t.version)],
+);
+
+/** "Faltou algo": o que foi esquecido numa demanda concluída. */
+export const checklistMisses = pgTable(
+  "checklist_misses",
+  {
+    id: id(),
+    demandId: uuid("demand_id").notNull().references(() => demands.id),
+    templateId: uuid("template_id").references(() => checklistTemplates.id),
+    item: text("item").notNull(),
+    quantity: text("quantity"),
+    impact: text("impact"),
+    addedToTemplate: boolean("added_to_template").notNull().default(false),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("checklist_misses_tpl_idx").on(t.templateId)],
+);
+
+export const routines = pgTable("routines", {
+  id: id(),
+  name: text("name").notNull(),
+  clientId: uuid("client_id").notNull().references(() => clients.id),
+  categoryId: uuid("category_id").notNull().references(() => categories.id),
+  typeId: uuid("type_id").references(() => demandTypes.id),
+  assigneeId: uuid("assignee_id").notNull().references(() => users.id),
+  priority: text("priority").$type<Priority>().notNull().default("medium"),
+  frequency: text("frequency").$type<"weekly" | "monthly" | "interval">().notNull(),
+  /** weekly: dias da semana (0 = domingo … 6 = sábado). */
+  weekdays: jsonb("weekdays").$type<number[]>().notNull().default([]),
+  /** monthly: dia do mês (1–31; mês curto usa o último dia). */
+  monthDay: integer("month_day"),
+  /** interval: a cada N dias a partir de start_date. */
+  intervalDays: integer("interval_days"),
+  startDate: date("start_date").notNull(),
+  /** Gerar a demanda N dias antes da ocorrência. */
+  leadDays: integer("lead_days").notNull().default(0),
+  /** Prazo = ocorrência + N dias. */
+  dueOffsetDays: integer("due_offset_days").notNull().default(0),
+  templateId: uuid("template_id").references(() => checklistTemplates.id),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Idempotência: uma demanda por (rotina, data da ocorrência). */
+export const routineRuns = pgTable(
+  "routine_runs",
+  {
+    routineId: uuid("routine_id").notNull().references(() => routines.id),
+    occurrence: date("occurrence").notNull(),
+    demandId: uuid("demand_id").notNull().references(() => demands.id),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.routineId, t.occurrence] })],
 );
 
 export const settings = pgTable("settings", {

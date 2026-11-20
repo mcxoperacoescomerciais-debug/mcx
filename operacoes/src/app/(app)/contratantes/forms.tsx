@@ -13,9 +13,10 @@ interface ClientValues {
   document: string | null;
   status: "active" | "inactive";
   notes: string | null;
+  monthlyValueCents: number | null;
 }
 
-export function ClientForm({ client }: { client?: ClientValues }) {
+export function ClientForm({ client, showValue = false }: { client?: ClientValues; showValue?: boolean }) {
   const router = useRouter();
   const { run, pending, message } = useRun();
   const [name, setName] = useState(client?.name ?? "");
@@ -23,13 +24,18 @@ export function ClientForm({ client }: { client?: ClientValues }) {
   const [document, setDocument] = useState(client?.document ?? "");
   const [status, setStatus] = useState(client?.status ?? "active");
   const [notes, setNotes] = useState(client?.notes ?? "");
+  const [value, setValue] = useState(client?.monthlyValueCents == null ? "" : (client.monthlyValueCents / 100).toFixed(2).replace(".", ","));
+  const valueCents = () => {
+    const v = value.trim().replace(/\./g, "").replace(",", ".");
+    return v === "" ? null : Math.round(Number(v) * 100);
+  };
   return (
     <form
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
         run(async () => {
-          const r = await saveClientAction(client?.id ?? null, { name, kind, document, status, notes });
+          const r = await saveClientAction(client?.id ?? null, { name, kind, document, status, notes, ...(showValue ? { monthlyValueCents: valueCents() } : {}) });
           if (r.ok && !client && "id" in r) router.push(`/contratantes/${r.id}`);
           return r;
         });
@@ -61,6 +67,12 @@ export function ClientForm({ client }: { client?: ClientValues }) {
           </div>
         )}
       </div>
+      {showValue && (
+        <div className="sm:max-w-xs">
+          <label className="label" htmlFor="c-value">Valor mensal do contrato em R$ (opcional)</label>
+          <input id="c-value" className="field" inputMode="decimal" placeholder="Ex.: 1.450,00" value={value} onChange={(e) => setValue(e.target.value)} />
+        </div>
+      )}
       <div>
         <label className="label" htmlFor="c-notes">Observações</label>
         <textarea id="c-notes" className="field min-h-20 py-2" value={notes} onChange={(e) => setNotes(e.target.value)} />

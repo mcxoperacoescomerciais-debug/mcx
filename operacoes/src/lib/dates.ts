@@ -48,3 +48,38 @@ export function formatRelative(iso: string | null | undefined, today: string): s
 export function formatDateTime(d: Date): string {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: TIMEZONE, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(d);
 }
+
+/** Último dia do mês de uma data ISO. */
+export function lastDayOfMonth(iso: string): number {
+  const [y, m] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+export function monthStart(iso: string): string {
+  return `${iso.slice(0, 7)}-01`;
+}
+
+export function monthEnd(iso: string): string {
+  return `${iso.slice(0, 7)}-${String(lastDayOfMonth(iso)).padStart(2, "0")}`;
+}
+
+/** Segunda-feira da semana da data. */
+export function weekStart(iso: string): string {
+  return addDays(iso, -((weekday(iso) + 6) % 7));
+}
+
+export function isMonth(v: unknown): v is string {
+  return typeof v === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+}
+
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+export function monthLabel(iso: string): string {
+  return `${MONTHS[Number(iso.slice(5, 7)) - 1]}/${iso.slice(0, 4)}`;
+}
+
+/** 95 → "1h35"; 30 → "30min". */
+export function formatMinutes(minutes: number): string {
+  const m = Math.round(minutes);
+  if (m < 60) return `${m}min`;
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
+}

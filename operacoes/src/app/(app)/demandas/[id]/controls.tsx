@@ -3,15 +3,20 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Trash2 } from "lucide-react";
-import { addChecklistItemAction, addCommentAction, changeStatusAction, deleteDemandAction, removeChecklistItemAction, setSharesAction, toggleChecklistItemAction, updateDemandAction } from "@/app/actions";
+import { addCommentAction, changeStatusAction, deleteDemandAction, setSharesAction, updateDemandAction } from "@/app/actions";
 import { DuePicker } from "@/components/due-picker";
+import { TimePrompt } from "@/components/time-prompt";
 import { useRun } from "@/components/use-run";
 import { addDays } from "@/lib/dates";
 import { ORIGINS, ORIGIN_LABEL, PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL, type Origin, type Priority, type Status } from "@/lib/domain";
 import type { FormOptions } from "@/server/demands";
 
-export function StatusControl({ id, status, waitingFor, followUpDate, today, canReopen }: { id: string; status: Status; waitingFor: string | null; followUpDate: string | null; today: string; canReopen: boolean }) {
+export function StatusControl({ id, title, status, waitingFor, followUpDate, today, canReopen, loggedMinutes }: { id: string; title: string; status: Status; waitingFor: string | null; followUpDate: string | null; today: string; canReopen: boolean; loggedMinutes: number }) {
   const { run, pending, message } = useRun();
+  const router = useRouter();
+  const [finishing, setFinishing] = useState(false);
+  const [donePending, startDone] = useTransition();
+  const [doneError, setDoneError] = useState<string | null>(null);
   const [askWaiting, setAskWaiting] = useState(false);
   const [who, setWho] = useState(waitingFor ?? "");
   const [when, setWhen] = useState(followUpDate ?? addDays(today, 1));
@@ -28,13 +33,37 @@ export function StatusControl({ id, status, waitingFor, followUpDate, today, can
             aria-pressed={status === s}
             disabled={pending || locked || (status === s && s !== "waiting")}
             className={clsx("chip disabled:opacity-60", status === s && "chip-on")}
-            onClick={() => (s === "waiting" ? setAskWaiting(true) : run(() => changeStatusAction(id, s), () => setAskWaiting(false)))}
+            onClick={() => {
+              if (s === "waiting") return setAskWaiting(true);
+              if (s === "done") {
+                setDoneError(null);
+                return setFinishing(true);
+              }
+              run(() => changeStatusAction(id, s), () => setAskWaiting(false));
+            }}
           >
             {STATUS_LABEL[s]}
           </button>
         ))}
       </div>
       {locked && <p className="text-sm text-muted">Só o gestor reabre uma demanda concluída ou cancelada.</p>}
+      {finishing && (
+        <TimePrompt
+          title={title}
+          initial={loggedMinutes}
+          pending={donePending}
+          error={doneError}
+          onCancel={() => setFinishing(false)}
+          onConfirm={(minutes) =>
+            startDone(async () => {
+              const r = await changeStatusAction(id, "done", { minutes });
+              if (!r.ok) return setDoneError(r.error);
+              setFinishing(false);
+              router.refresh();
+            })
+          }
+        />
+      )}
       {askWaiting && (
         <form
           className="grid gap-3 rounded-lg bg-wait-bg p-3 sm:grid-cols-[1fr_auto_auto] sm:items-end"
@@ -64,6 +93,7 @@ interface Editable {
   title: string;
   clientId: string;
   categoryId: string;
+  typeId: string | null;
   assigneeId: string | null;
   priority: Priority;
   dueDate: string | null;
@@ -80,6 +110,7 @@ export function EditDemand({ demand, options, today, canAssign }: { demand: Edit
   const [f, setF] = useState({ ...demand, description: demand.description ?? "", brand: demand.brand ?? "", store: demand.store ?? "", promoter: demand.promoter ?? "", estimate: demand.estimateMinutes === null ? "" : String(demand.estimateMinutes) });
   const set = <K extends keyof typeof f>(key: K, value: (typeof f)[K]) => setF((prev) => ({ ...prev, [key]: value }));
   const brands = options.brands.filter((b) => b.clientId === f.clientId);
+  const types = options.types.filter((ty) => ty.categoryId === f.categoryId);
 
   function save(e: React.FormEvent) {
     e.preventDefault();
@@ -88,6 +119,7 @@ export function EditDemand({ demand, options, today, canAssign }: { demand: Edit
         title: f.title,
         clientId: f.clientId,
         categoryId: f.categoryId,
+        typeId: types.some((ty) => ty.id === f.typeId) ? f.typeId : null,
         ...(canAssign && f.assigneeId ? { assigneeId: f.assigneeId } : {}),
         priority: f.priority,
         dueDate: f.dueDate,
@@ -121,6 +153,15 @@ export function EditDemand({ demand, options, today, canAssign }: { demand: Edit
           <select id="e-cat" className="field" value={f.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
             {options.categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="e-type">Tipo</label>
+          <select id="e-type" className="field" value={types.some((ty) => ty.id === f.typeId) ? (f.typeId ?? "") : ""} onChange={(e) => set("typeId", e.target.value || null)}>
+            <option value="">Sem tipo</option>
+            {types.map((ty) => (
+              <option key={ty.id} value={ty.id}>{ty.name}</option>
             ))}
           </select>
         </div>
@@ -188,43 +229,6 @@ export function EditDemand({ demand, options, today, canAssign }: { demand: Edit
       {message}
       <button className="btn-primary" disabled={pending}>{pending ? "Salvando…" : "Salvar alterações"}</button>
     </form>
-  );
-}
-
-export function Checklist({ id, items }: { id: string; items: { id: string; text: string; checked: boolean; by: string | null }[] }) {
-  const { run, pending, message } = useRun();
-  const [text, setText] = useState("");
-  const doneCount = items.filter((i) => i.checked).length;
-  return (
-    <div className="space-y-3">
-      {items.length > 0 && <p className="text-xs text-muted">{doneCount} de {items.length} feitos</p>}
-      <ul className="space-y-1">
-        {items.map((item) => (
-          <li key={item.id} className="flex items-center gap-2">
-            <label className="flex min-h-10 flex-1 items-center gap-3 rounded-lg px-2 hover:bg-subtle">
-              <input type="checkbox" className="size-5" checked={item.checked} disabled={pending} onChange={(e) => run(() => toggleChecklistItemAction(item.id, e.target.checked))} />
-              <span className={clsx("text-sm", item.checked && "text-muted line-through")}>{item.text}</span>
-              {item.checked && item.by && <span className="text-xs text-muted">· {item.by}</span>}
-            </label>
-            <button type="button" aria-label={`Remover ${item.text}`} className="rounded-lg p-2 text-muted hover:bg-bad-bg hover:text-bad" disabled={pending} onClick={() => run(() => removeChecklistItemAction(item.id))}>
-              <Trash2 aria-hidden className="size-4" />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(() => addChecklistItemAction(id, text), () => setText(""));
-        }}
-      >
-        <label className="sr-only" htmlFor="ck-new">Novo item</label>
-        <input id="ck-new" className="field" placeholder="Novo item do checklist" value={text} onChange={(e) => setText(e.target.value)} required maxLength={300} />
-        <button className="btn-ghost shrink-0" disabled={pending}>Adicionar</button>
-      </form>
-      {message}
-    </div>
   );
 }
 

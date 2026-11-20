@@ -7,7 +7,10 @@ import { can } from "@/lib/permissions";
 import { isOverdue } from "@/lib/queue";
 import { requireUser } from "@/server/auth";
 import { formOptions, getDemand } from "@/server/demands";
-import { Checklist, Comments, DeleteDemand, EditDemand, Shares, StatusControl } from "./controls";
+import { demandMisses, listTemplates } from "@/server/templates";
+import { demandTime, timerMinutes } from "@/server/time";
+import { Comments, DeleteDemand, EditDemand, Shares, StatusControl } from "./controls";
+import { Checklist, Misses, TimeSection } from "./extras";
 
 export const metadata = { title: "Demanda" };
 
@@ -16,7 +19,11 @@ export default async function DemandPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const d = await getDemand(user, id);
   if (!d) notFound();
-  const options = await formOptions();
+  const [options, time, templates, misses] = await Promise.all([formOptions(), demandTime(user, id), listTemplates(user), demandMisses(id)]);
+  const published = templates.filter((tpl) => tpl.status === "published");
+  const applied = templates.find((tpl) => tpl.id === d.templateId) ?? null;
+  // Pré-preenche "Quanto tempo levou?" com o que já foi apontado + o cronômetro em andamento.
+  const logged = time.mine + (time.timerStartedAt ? timerMinutes(time.timerStartedAt) : 0);
   const today = todayIso();
   const manager = can(user.role, "demand.viewAll");
   const late = isOverdue(d, today);
@@ -47,7 +54,7 @@ export default async function DemandPage({ params }: { params: Promise<{ id: str
         <div className="space-y-5">
           <section className="card p-4" aria-labelledby="s-status">
             <h2 id="s-status" className="mb-3 text-sm font-bold text-ink-2">Status</h2>
-            <StatusControl id={d.id} status={d.status} waitingFor={d.waitingFor} followUpDate={d.followUpDate} today={today} canReopen={can(user.role, "demand.reopen")} />
+            <StatusControl id={d.id} title={d.title} loggedMinutes={logged} status={d.status} waitingFor={d.waitingFor} followUpDate={d.followUpDate} today={today} canReopen={can(user.role, "demand.reopen")} />
           </section>
 
           <section className="card p-4" aria-labelledby="s-dados">
@@ -56,14 +63,34 @@ export default async function DemandPage({ params }: { params: Promise<{ id: str
               today={today}
               options={options}
               canAssign={can(user.role, "demand.assign")}
-              demand={{ id: d.id, title: d.title, clientId: d.clientId, categoryId: d.categoryId, assigneeId: d.assigneeId, priority: d.priority, dueDate: d.dueDate, description: d.description, brand: d.brand, store: d.store, promoter: d.promoter, origin: d.origin, estimateMinutes: d.estimateMinutes }}
+              demand={{ id: d.id, title: d.title, clientId: d.clientId, categoryId: d.categoryId, typeId: d.typeId, assigneeId: d.assigneeId, priority: d.priority, dueDate: d.dueDate, description: d.description, brand: d.brand, store: d.store, promoter: d.promoter, origin: d.origin, estimateMinutes: d.estimateMinutes }}
             />
           </section>
 
           <section className="card p-4" aria-labelledby="s-check">
             <h2 id="s-check" className="mb-3 text-sm font-bold text-ink-2">Checklist</h2>
-            <Checklist id={d.id} items={d.checklist.map((c) => ({ id: c.id, text: c.text, checked: c.checked, by: c.checkedByName }))} />
+            <Checklist
+              id={d.id}
+              doubleCheck={applied?.doubleCheck ?? false}
+              templateName={applied ? `${applied.name} (versão ${d.templateVersion}${d.actionsCount && d.actionsCount > 1 ? `, ${d.actionsCount} ações` : ""})` : null}
+              templates={published.map((tpl) => ({ id: tpl.id, name: tpl.name }))}
+              canManage={can(user.role, "template.manage")}
+              items={d.checklist.map((c) => ({ id: c.id, text: c.text, section: c.section, quantity: c.quantity, unit: c.unit, required: c.required, note: c.note, checked: c.checked, by: c.checkedByName, notApplicable: c.notApplicable, naReason: c.naReason, verified: c.verified, verifiedBy: c.verifiedByName }))}
+            />
           </section>
+
+          <section className="card p-4" aria-labelledby="s-tempo">
+            <h2 id="s-tempo" className="mb-3 text-sm font-bold text-ink-2">Tempo</h2>
+            <TimeSection id={d.id} today={today} userId={user.id} timerStartedAt={time.timerStartedAt?.toISOString() ?? null} total={time.total} showNames={can(user.role, "time.viewAll")} entries={time.entries} />
+          </section>
+
+          {d.status === "done" && (
+            <section className="card p-4" aria-labelledby="s-faltou">
+              <h2 id="s-faltou" className="mb-1 text-sm font-bold text-ink-2">Faltou algo?</h2>
+              <p className="mb-3 text-xs text-muted">Registre o que foi esquecido. O gestor pode colocar o item no modelo com um clique, para não faltar de novo.</p>
+              <Misses id={d.id} hasTemplate={!!d.templateId} canManage={can(user.role, "template.manage")} misses={misses.map((m) => ({ id: m.id, item: m.item, quantity: m.quantity, impact: m.impact, addedToTemplate: m.addedToTemplate }))} />
+            </section>
+          )}
 
           <section className="card p-4" aria-labelledby="s-coment">
             <h2 id="s-coment" className="mb-3 text-sm font-bold text-ink-2">Comentários</h2>

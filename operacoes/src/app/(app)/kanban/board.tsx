@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { changeStatusAction } from "@/app/actions";
+import { TimePrompt } from "@/components/time-prompt";
 import { PriorityBadge, type CardDemand } from "@/components/ui";
 import { addDays, formatRelative } from "@/lib/dates";
 import { STATUS_LABEL, type Status } from "@/lib/domain";
@@ -25,6 +26,20 @@ export function Board({ demands, today, canReopen }: { demands: CardDemand[]; to
   const [waiting, setWaiting] = useState<{ id: string; title: string } | null>(null);
   const [waitingFor, setWaitingFor] = useState("");
   const [followUp, setFollowUp] = useState(addDays(today, 1));
+  const [finishing, setFinishing] = useState<{ id: string; title: string } | null>(null);
+  const [pendingDone, startDone] = useTransition();
+  const [doneError, setDoneError] = useState<string | null>(null);
+
+  function finish(minutes: number) {
+    if (!finishing) return;
+    setDoneError(null);
+    startDone(async () => {
+      const result = await changeStatusAction(finishing.id, "done", { minutes });
+      if (!result.ok) return setDoneError(result.error);
+      setFinishing(null);
+      router.refresh();
+    });
+  }
 
   function apply(id: string, status: Status, extra: { waitingFor?: string; followUpDate?: string } = {}) {
     setError(null);
@@ -43,6 +58,11 @@ export function Board({ demands, today, canReopen }: { demands: CardDemand[]; to
     if (status === "waiting") {
       setWaitingFor(d.waitingFor ?? "");
       setWaiting({ id, title: d.title });
+      return;
+    }
+    if (status === "done") {
+      setDoneError(null);
+      setFinishing({ id, title: d.title });
       return;
     }
     apply(id, status);
@@ -104,6 +124,8 @@ export function Board({ demands, today, canReopen }: { demands: CardDemand[]; to
           );
         })}
       </div>
+
+      {finishing && <TimePrompt title={finishing.title} initial={0} pending={pendingDone} error={doneError} onConfirm={finish} onCancel={() => setFinishing(null)} />}
 
       {waiting && (
         <div role="dialog" aria-modal="true" aria-labelledby="w-title" className="fixed inset-0 z-50 flex items-end justify-center bg-brand-950/50 p-0 sm:items-center sm:p-4">

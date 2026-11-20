@@ -30,7 +30,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           {editable ? (
             <section className="card p-4" aria-labelledby="c-dados">
               <h2 id="c-dados" className="mb-3 text-sm font-bold text-ink-2">Cadastro</h2>
-              <ClientForm client={{ id: client.id, name: client.name, kind: client.kind, document: client.document, status: client.status, notes: client.notes }} />
+              <ClientForm showValue={can(user.role, "cost.view")} client={{ id: client.id, name: client.name, kind: client.kind, document: client.document, status: client.status, notes: client.notes, monthlyValueCents: client.monthlyValueCents }} />
             </section>
           ) : (
             client.notes && <p className="card p-4 text-sm text-ink-2">{client.notes}</p>

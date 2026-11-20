@@ -11,6 +11,11 @@ import { actionUser } from "@/server/auth";
 import * as demands from "@/server/demands";
 import type { DemandInput, DemandPatch, Result } from "@/server/demands";
 import * as registry from "@/server/registry";
+import * as routines from "@/server/routines";
+import type { RoutineInput } from "@/server/routines";
+import * as templates from "@/server/templates";
+import type { TemplateInput } from "@/server/templates";
+import * as time from "@/server/time";
 
 const EXPIRED = { ok: false as const, error: "Sessão expirada. Entre de novo." };
 
@@ -31,7 +36,7 @@ export async function updateDemandAction(id: string, patch: DemandPatch) {
   return done(await demands.updateDemand(user, id, patch));
 }
 
-export async function changeStatusAction(id: string, status: Status, extra: { waitingFor?: string | null; followUpDate?: string | null } = {}) {
+export async function changeStatusAction(id: string, status: Status, extra: { waitingFor?: string | null; followUpDate?: string | null; minutes?: number | null } = {}) {
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await demands.changeStatus(user, id, status, extra));
@@ -73,7 +78,7 @@ export async function deleteDemandAction(id: string, reason: string) {
   return done(await demands.deleteDemand(user, id, reason));
 }
 
-export async function saveClientAction(id: string | null, input: { name: string; kind: ClientKind; document?: string | null; status?: "active" | "inactive"; notes?: string | null }) {
+export async function saveClientAction(id: string | null, input: { name: string; kind: ClientKind; document?: string | null; status?: "active" | "inactive"; notes?: string | null; monthlyValueCents?: number | null }) {
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await registry.saveClient(user, id, input));
@@ -115,8 +120,98 @@ export async function createUserAction(input: { name: string; username: string; 
   return done(await registry.createUser(user, input));
 }
 
-export async function updateUserAction(id: string, input: { role?: Role; status?: "active" | "inactive"; resetPassword?: string }) {
+export async function updateUserAction(id: string, input: { role?: Role; status?: "active" | "inactive"; resetPassword?: string; weeklyHours?: number; costPerHourCents?: number | null }) {
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await registry.updateUser(user, id, input));
+}
+
+export async function saveTypeAction(id: string | null, input: { categoryId?: string; name: string; active?: boolean }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await registry.saveType(user, id, input));
+}
+
+export async function startTimerAction(demandId: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await time.startTimer(user, demandId));
+}
+
+export async function stopTimerAction() {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await time.stopTimer(user));
+}
+
+export async function addTimeEntryAction(demandId: string, input: { day: string; minutes: number; note?: string | null }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await time.addManualEntry(user, demandId, input));
+}
+
+export async function updateTimeEntryAction(entryId: string, minutes: number) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await time.updateEntry(user, entryId, minutes));
+}
+
+export async function deleteTimeEntryAction(entryId: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await time.deleteEntry(user, entryId));
+}
+
+export async function applyTemplateAction(demandId: string, templateId: string, actions: number) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await templates.applyTemplate(user, demandId, templateId, actions));
+}
+
+export async function saveAsTemplateAction(demandId: string, name: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await templates.saveAsTemplate(user, demandId, name));
+}
+
+export async function setItemNotApplicableAction(itemId: string, reason: string | null) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await templates.setItemNotApplicable(user, itemId, reason));
+}
+
+export async function verifyItemAction(itemId: string, verified: boolean) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await templates.verifyItem(user, itemId, verified));
+}
+
+export async function reportMissAction(demandId: string, input: { item: string; quantity?: string | null; impact?: string | null }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await templates.reportMiss(user, demandId, input));
+}
+
+export async function addMissToTemplateAction(missId: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await templates.addMissToTemplate(user, missId));
+}
+
+export async function saveTemplateAction(id: string | null, input: TemplateInput) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await templates.saveTemplate(user, id, input));
+}
+
+export async function duplicateTemplateAction(id: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await templates.duplicateTemplate(user, id));
+}
+
+export async function saveRoutineAction(id: string | null, input: RoutineInput) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await routines.saveRoutine(user, id, input));
 }

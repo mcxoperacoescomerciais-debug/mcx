@@ -40,7 +40,7 @@ export async function getClient(actor: Actor, id: string) {
     db.select().from(s.clientContacts).where(eq(s.clientContacts.clientId, id)).orderBy(asc(s.clientContacts.createdAt)),
     db.select().from(s.clientBrands).where(eq(s.clientBrands.clientId, id)).orderBy(asc(s.clientBrands.name)),
   ]);
-  return { ...client, contacts, brands };
+  return { ...client, monthlyValueCents: can(actor.role, "cost.view") ? client.monthlyValueCents : null, contacts, brands };
 }
 
 export interface ClientInput {
@@ -49,6 +49,8 @@ export interface ClientInput {
   document?: string | null;
   status?: "active" | "inactive";
   notes?: string | null;
+  /** Valor mensal do contrato em centavos (só dono e gestor veem e alteram). */
+  monthlyValueCents?: number | null;
 }
 
 export async function saveClient(actor: Actor, id: string | null, input: ClientInput): Promise<Result<{ id: string }>> {
@@ -57,7 +59,9 @@ export async function saveClient(actor: Actor, id: string | null, input: ClientI
   if (name.length < 2) return fail("Informe o nome do contratante.");
   if (!CLIENT_KINDS.includes(input.kind) || input.kind === "internal") return fail("Escolha o tipo: agência ou representante.");
   const db = await getDb();
-  const values = { name, kind: input.kind, document: clean(input.document), status: input.status === "inactive" ? ("inactive" as const) : ("active" as const), notes: clean(input.notes), updatedAt: new Date() };
+  const value = input.monthlyValueCents;
+  if (value !== undefined && value !== null && (!Number.isInteger(value) || value < 0 || value > 100_000_000)) return fail("Valor mensal inválido.");
+  const values = { name, kind: input.kind, document: clean(input.document), status: input.status === "inactive" ? ("inactive" as const) : ("active" as const), notes: clean(input.notes), ...(value !== undefined && can(actor.role, "cost.view") ? { monthlyValueCents: value } : {}), updatedAt: new Date() };
   if (!id) {
     const [row] = await db.insert(s.clients).values(values).returning({ id: s.clients.id });
     await audit(actor.id, "client", row.id, "created", { after: values });
@@ -132,13 +136,39 @@ export async function saveCategory(actor: Actor, id: string | null, input: { nam
   return { ok: true, message: "Categoria atualizada." };
 }
 
+// ---------- Tipos (subcategorias) ----------
+
+export async function listTypes() {
+  const db = await getDb();
+  return db.select().from(s.demandTypes).orderBy(asc(s.demandTypes.name));
+}
+
+export async function saveType(actor: Actor, id: string | null, input: { categoryId?: string; name: string; active?: boolean }): Promise<Result> {
+  if (!can(actor.role, "category.edit")) return fail("Sem permissão.");
+  const name = input.name.trim();
+  if (name.length < 2) return fail("Informe o nome do tipo.");
+  const db = await getDb();
+  if (!id) {
+    if (!UUID.test(input.categoryId ?? "")) return fail("Escolha a categoria.");
+    const [cat] = await db.select({ id: s.categories.id }).from(s.categories).where(eq(s.categories.id, input.categoryId!));
+    if (!cat) return fail("Categoria não encontrada.");
+    const [row] = await db.insert(s.demandTypes).values({ categoryId: cat.id, name }).returning({ id: s.demandTypes.id });
+    await audit(actor.id, "demand_type", row.id, "created", { after: { name } });
+    return { ok: true, message: "Tipo criado." };
+  }
+  if (!UUID.test(id)) return fail("Tipo não encontrado.");
+  await db.update(s.demandTypes).set({ name, active: input.active ?? true }).where(eq(s.demandTypes.id, id));
+  await audit(actor.id, "demand_type", id, "updated", { after: { name, active: input.active ?? true } });
+  return { ok: true, message: "Tipo atualizado." };
+}
+
 // ---------- Usuários (só o dono) ----------
 
 export async function listUsers(actor: Actor) {
   if (!can(actor.role, "user.manage")) return [];
   const db = await getDb();
   return db
-    .select({ id: s.users.id, name: s.users.name, username: s.users.username, role: s.users.role, status: s.users.status, lastLoginAt: s.users.lastLoginAt, mustChangePassword: s.users.mustChangePassword })
+    .select({ id: s.users.id, name: s.users.name, username: s.users.username, role: s.users.role, status: s.users.status, lastLoginAt: s.users.lastLoginAt, mustChangePassword: s.users.mustChangePassword, weeklyHours: s.users.weeklyHours, costPerHourCents: s.users.costPerHourCents })
     .from(s.users)
     .orderBy(asc(s.users.name));
 }
@@ -159,7 +189,7 @@ export async function createUser(actor: Actor, input: { name: string; username: 
   return { ok: true, message: `${name} cadastrado(a). A senha inicial deve ser trocada no primeiro acesso.` };
 }
 
-export async function updateUser(actor: Actor, id: string, input: { role?: Role; status?: "active" | "inactive"; resetPassword?: string }): Promise<Result> {
+export async function updateUser(actor: Actor, id: string, input: { role?: Role; status?: "active" | "inactive"; resetPassword?: string; weeklyHours?: number; costPerHourCents?: number | null }): Promise<Result> {
   if (!can(actor.role, "user.manage") || !UUID.test(id)) return fail("Sem permissão.");
   const db = await getDb();
   const [user] = await db.select().from(s.users).where(eq(s.users.id, id));
@@ -179,9 +209,19 @@ export async function updateUser(actor: Actor, id: string, input: { role?: Role;
     set.passwordHash = await hashPassword(input.resetPassword);
     set.mustChangePassword = true;
   }
+  const access = Object.keys(set).length > 0;
+  if (input.weeklyHours !== undefined && input.weeklyHours !== user.weeklyHours) {
+    if (!Number.isInteger(input.weeklyHours) || input.weeklyHours < 1 || input.weeklyHours > 80) return fail("Horas por semana: 1 a 80.");
+    set.weeklyHours = input.weeklyHours;
+  }
+  if (input.costPerHourCents !== undefined && input.costPerHourCents !== user.costPerHourCents) {
+    const c = input.costPerHourCents;
+    if (c !== null && (!Number.isInteger(c) || c < 0 || c > 10_000_000)) return fail("Custo/hora inválido.");
+    set.costPerHourCents = c;
+  }
   if (!Object.keys(set).length) return { ok: true, message: "Nada foi alterado." };
-  // Qualquer mudança de acesso derruba as sessões abertas da pessoa.
-  set.sessionVersion = user.sessionVersion + 1;
+  // Mudança de acesso (papel, status, senha) derruba as sessões abertas da pessoa.
+  if (access) set.sessionVersion = user.sessionVersion + 1;
   await db.update(s.users).set(set).where(eq(s.users.id, id));
   await audit(actor.id, "user", id, "updated", { after: { role: set.role, status: set.status, passwordReset: !!input.resetPassword } });
   return { ok: true, message: "Usuário atualizado." };
