@@ -46,6 +46,8 @@ export const clients = pgTable(
     campoAgencyName: text("campo_agency_name"),
     /** Valor mensal do contrato em centavos (até a Fase 5 trazer os contratos). Só dono e gestor. */
     monthlyValueCents: integer("monthly_value_cents"),
+    /** Ficha operacional: seções fixas de texto. Nunca guarda senha — só "onde está a credencial". */
+    operationalProfile: jsonb("operational_profile").$type<Record<string, string>>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -619,6 +621,105 @@ export const stockAlerts = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("stock_alerts_day_uq").on(t.kind, t.refKey, t.day)],
+);
+
+// ---------------------------------------------------------------------------
+// Fase 5 — Contratos e documentos
+// ---------------------------------------------------------------------------
+
+export const contracts = pgTable(
+  "contracts",
+  {
+    id: id(),
+    clientId: uuid("client_id").notNull().references(() => clients.id),
+    services: text("services").notNull(),
+    monthlyValueCents: integer("monthly_value_cents").notNull().default(0),
+    /** Dia de vencimento da mensalidade (1–31). */
+    dueDay: integer("due_day"),
+    startDate: date("start_date"),
+    termMonths: integer("term_months").notNull().default(6),
+    endDate: date("end_date"),
+    autoRenew: boolean("auto_renew").notNull().default(false),
+    status: text("status").$type<"draft" | "active" | "ended" | "cancelled">().notNull().default("draft"),
+    notes: text("notes"),
+    /** Lead do Comercial que originou o contrato (se houver). */
+    leadId: uuid("lead_id"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("contracts_client_idx").on(t.clientId), check("contracts_status_ck", sql`${t.status} in ('draft','active','ended','cancelled')`)],
+);
+
+/** Aditivos: registro com data, descrição e novo valor (o histórico nunca é editado). */
+export const contractAmendments = pgTable(
+  "contract_amendments",
+  {
+    id: id(),
+    contractId: uuid("contract_id").notNull().references(() => contracts.id),
+    day: date("day").notNull(),
+    description: text("description").notNull(),
+    previousValueCents: integer("previous_value_cents").notNull(),
+    newValueCents: integer("new_value_cents").notNull(),
+    previousEndDate: date("previous_end_date"),
+    newEndDate: date("new_end_date"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("contract_amendments_contract_idx").on(t.contractId)],
+);
+
+export const documents = pgTable(
+  "documents",
+  {
+    id: id(),
+    title: text("title").notNull(),
+    category: text("category").notNull(),
+    clientId: uuid("client_id").references(() => clients.id),
+    contractId: uuid("contract_id").references(() => contracts.id),
+    brand: text("brand"),
+    promoter: text("promoter"),
+    /** Só gestor e dono leem. Obrigatório para Contrato e Documento de promotor. */
+    restricted: boolean("restricted").notNull().default(false),
+    expiresOn: date("expires_on"),
+    currentVersion: integer("current_version").notNull().default(1),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("documents_client_idx").on(t.clientId), index("documents_contract_idx").on(t.contractId)],
+);
+
+/** Cada upload do "mesmo documento" é uma versão; as anteriores ficam guardadas. */
+export const documentVersions = pgTable(
+  "document_versions",
+  {
+    id: id(),
+    documentId: uuid("document_id").notNull().references(() => documents.id),
+    version: integer("version").notNull(),
+    storageKey: text("storage_key").notNull(),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    sha256: text("sha256").notNull(),
+    uploadedBy: uuid("uploaded_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("document_versions_uq").on(t.documentId, t.version)],
+);
+
+/** Avisos únicos (contrato perto do fim, documento perto de vencer): a chave impede abrir a mesma demanda duas vezes. */
+export const alertRuns = pgTable(
+  "alert_runs",
+  {
+    kind: text("kind").notNull(),
+    refKey: text("ref_key").notNull(),
+    demandId: uuid("demand_id").notNull().references(() => demands.id),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.kind, t.refKey] })],
 );
 
 export const settings = pgTable("settings", {

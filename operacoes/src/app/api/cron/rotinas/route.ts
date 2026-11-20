@@ -4,6 +4,8 @@
  * A geração é idempotente: chamar duas vezes não duplica demandas.
  */
 import { timingSafeEqual } from "node:crypto";
+import { generateContractAlerts } from "@/server/contracts";
+import { generateDocumentAlerts } from "@/server/documents";
 import { generateRoutines } from "@/server/routines";
 import { generateStockAlerts } from "@/server/stock";
 
@@ -21,5 +23,7 @@ export async function GET(request: Request) {
   if (!authorized(request)) return Response.json({ ok: false }, { status: 401 });
   const result = await generateRoutines();
   const stock = await generateStockAlerts();
-  return Response.json({ ok: true, ...result, stockAlerts: stock.created });
+  const contracts = await generateContractAlerts();
+  const documents = await generateDocumentAlerts();
+  return Response.json({ ok: true, ...result, stockAlerts: stock.created, contractAlerts: contracts.created, documentAlerts: documents.created });
 }

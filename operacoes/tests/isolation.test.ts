@@ -83,7 +83,8 @@ describe("sessão", () => {
 
   test("rotas de API: atividade exige sessão; cron exige segredo; saúde não expõe dados", () => {
     const routes = walk(path.join("src", "app", "api")).filter((f) => f.endsWith("route.ts")).map((f) => f.replaceAll("\\", "/")).sort();
-    assert.deepEqual(routes, ["src/app/api/atividade/route.ts", "src/app/api/cron/rotinas/route.ts", "src/app/api/health/route.ts"]);
+    assert.deepEqual(routes, ["src/app/api/atividade/route.ts", "src/app/api/cron/rotinas/route.ts", "src/app/api/documentos/[id]/route.ts", "src/app/api/documentos/route.ts", "src/app/api/health/route.ts"]);
+    for (const route of ["src/app/api/documentos/[id]/route.ts", "src/app/api/documentos/route.ts"]) assert.match(readFileSync(route, "utf8"), /const user = await getSessionUser\(\);\s+if \(!user\) return /, route);
     assert.match(readFileSync("src/app/api/atividade/route.ts", "utf8"), /const user = await getSessionUser\(\);\s+if \(!user\) return new Response\(null, \{ status: 401 \}\);/);
     assert.match(readFileSync("src/app/api/cron/rotinas/route.ts", "utf8"), /if \(!authorized\(request\)\) return/);
   });
@@ -140,7 +141,7 @@ describe("visibilidade e papéis", () => {
   });
 
   test("mapa de papéis: dono tem tudo; operacional só cria demanda, vê contratantes e movimenta estoque", () => {
-    assert.deepEqual([...ROLE_ACTIONS.operacional].sort(), ["client.view", "demand.create", "stock.move", "stock.view"]);
+    assert.deepEqual([...ROLE_ACTIONS.operacional].sort(), ["client.view", "demand.create", "document.upload", "document.view", "stock.move", "stock.view"]);
     for (const a of ["time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage"] as const) {
       assert.equal(can("operacional", a), false, a);
       assert.equal(can("gestor", a), true, a);

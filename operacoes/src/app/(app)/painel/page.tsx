@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui";
-import { formatMinutes, isMonth, monthLabel, todayIso } from "@/lib/dates";
+import { formatBr, formatMinutes, isMonth, monthLabel, todayIso } from "@/lib/dates";
 import { can } from "@/lib/permissions";
 import { requireUser } from "@/server/auth";
+import { contractsEnding } from "@/server/contracts";
+import { documentsExpiring } from "@/server/documents";
 import { dashboard } from "@/server/reports";
 
 export const metadata = { title: "Painel" };
@@ -24,7 +26,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const user = await requireUser();
   const { mes } = await searchParams;
   const month = isMonth(mes) ? mes : todayIso().slice(0, 7);
-  const d = await dashboard(user, month);
+  const [d, ending, expiring] = await Promise.all([dashboard(user, month), contractsEnding(user), documentsExpiring(user)]);
   const all = can(user.role, "demand.viewAll");
   return (
     <>
@@ -94,7 +96,36 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </section>
         )}
       </div>
-      <p className="mt-6 text-xs text-muted">Contratos e documentos vencendo entram neste painel na Fase 5.</p>
+      {(ending.length > 0 || expiring.length > 0) && (
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          {ending.length > 0 && (
+            <section className="card border-l-4 border-l-warn p-4" aria-labelledby="p-contratos">
+              <h2 id="p-contratos" className="mb-3 text-sm font-bold text-ink-2">Contratos terminando em até 30 dias</h2>
+              <ul className="space-y-2 text-sm">
+                {ending.map((c) => (
+                  <li key={c.id} className="flex flex-wrap justify-between gap-x-3">
+                    <Link href={`/contratos/${c.id}`} className="font-semibold text-ink underline-offset-2 hover:underline">{c.clientName}</Link>
+                    <span className={c.expired ? "font-semibold text-bad" : "text-ink-2"}>{c.expired ? "venceu em" : "até"} {formatBr(c.endDate)}{c.autoRenew ? " · renova sozinho" : ""}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {expiring.length > 0 && (
+            <section className="card border-l-4 border-l-warn p-4" aria-labelledby="p-docs">
+              <h2 id="p-docs" className="mb-3 text-sm font-bold text-ink-2">Documentos com validade em até 30 dias</h2>
+              <ul className="space-y-2 text-sm">
+                {expiring.map((doc) => (
+                  <li key={doc.id} className="flex flex-wrap justify-between gap-x-3">
+                    <Link href={`/documentos/${doc.id}`} className="font-semibold text-ink underline-offset-2 hover:underline">{doc.title}{doc.clientName ? ` — ${doc.clientName}` : ""}</Link>
+                    <span className={doc.expired ? "font-semibold text-bad" : "text-ink-2"}>{doc.expired ? "venceu em" : "até"} {formatBr(doc.expiresOn)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
     </>
   );
 }

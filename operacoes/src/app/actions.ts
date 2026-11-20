@@ -9,6 +9,10 @@ import { revalidatePath } from "next/cache";
 import type { ClientKind, Role, Status } from "@/lib/domain";
 import { actionUser } from "@/server/auth";
 import type { Outcome, InteractionKind } from "@/lib/crm";
+import * as contracts from "@/server/contracts";
+import type { ContractInput } from "@/server/contracts";
+import * as documents from "@/server/documents";
+import type { DocumentMeta } from "@/server/documents";
 import * as crm from "@/server/crm";
 import type { LeadInput, MoveExtra } from "@/server/crm";
 import * as demands from "@/server/demands";
@@ -358,4 +362,40 @@ export async function setInventoryDayAction(day: number) {
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await stock.setInventoryDay(user, day));
+}
+
+export async function saveContractAction(id: string | null, input: ContractInput) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await contracts.saveContract(user, id, input));
+}
+
+export async function addAmendmentAction(contractId: string, input: { day: string; description: string; newValueCents: number; newEndDate?: string | null }) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await contracts.addAmendment(user, contractId, input));
+}
+
+export async function deleteContractAction(id: string, reason: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await contracts.deleteContract(user, id, reason));
+}
+
+export async function saveClientProfileAction(clientId: string, sections: Record<string, string>) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await contracts.saveClientProfile(user, clientId, sections));
+}
+
+export async function updateDocumentAction(id: string, meta: DocumentMeta) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await documents.updateDocument(user, id, meta));
+}
+
+export async function deleteDocumentAction(id: string, reason: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await documents.deleteDocument(user, id, reason));
 }

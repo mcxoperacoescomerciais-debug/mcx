@@ -124,7 +124,7 @@ export function MoveDialog({ lead, target, today, onClose, onDone }: { lead: Mov
               <input id="mv-won" className="field" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
               <p className="mt-1 text-xs text-muted">Potencial calculado: {formatMoney(lead.potentialCents)}.</p>
             </div>
-            <p className="rounded-lg bg-info-bg px-3 py-2 text-sm text-info">Ao confirmar, o sistema cria o contratante (se ainda não existir) e abre a demanda de implantação. Não dá para desfazer pelo funil.</p>
+            <p className="rounded-lg bg-info-bg px-3 py-2 text-sm text-info">Ao confirmar, o sistema cria o contratante (se ainda não existir), um contrato em rascunho e a demanda de implantação. Não dá para desfazer pelo funil.</p>
           </>
         )}
 

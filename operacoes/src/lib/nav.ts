@@ -21,6 +21,8 @@ export const NAV: NavItem[] = [
   { href: "/checklists", label: "Checklists" },
   { href: "/estoque", label: "Estoque", needs: "stock.view" },
   { href: "/contratantes", label: "Contratantes", needs: "client.view" },
+  { href: "/contratos", label: "Contratos", needs: "contract.view" },
+  { href: "/documentos", label: "Documentos", needs: "document.view" },
   { href: "/config/categorias", label: "Categorias e tipos", needs: "category.edit" },
   { href: "/config/usuarios", label: "Usuários", needs: "user.manage" },
   { href: "/manual", label: "Manual" },

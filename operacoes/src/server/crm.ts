@@ -354,7 +354,10 @@ async function convertWon(tx: Tx, actor: Actor, lead: NonNullable<Awaited<Return
     }
   }
   await audit(actor.id, "demand", demand.id, "created", { after: { leadId: lead.id }, source: "comercial" }, tx);
-  return { clientId, demandId: demand.id, withChecklist };
+  // Contrato em RASCUNHO: o gestor confere serviços, valor, início e vigência antes de marcar como vigente.
+  const [contract] = await tx.insert(s.contracts).values({ clientId, services: lead.products.join(", ") || "A definir", monthlyValueCents: valueCents, status: "draft", leadId: lead.id, notes: `Criado ao ganhar o lead #${lead.number}.`, createdBy: actor.id }).returning({ id: s.contracts.id });
+  await audit(actor.id, "contract", contract.id, "created", { after: { leadId: lead.id, status: "draft" }, source: "comercial" }, tx);
+  return { clientId, demandId: demand.id, withChecklist, contractId: contract.id };
 }
 
 export async function moveLead(actor: Actor, id: string, stageId: string, extra: MoveExtra = {}, source?: string): Promise<Result<{ demandId?: string }>> {
@@ -416,7 +419,7 @@ export async function moveLead(actor: Actor, id: string, stageId: string, extra:
   if (result) {
     const client = lead.clientId ? "Contratante já existia (expansão)" : "Contratante criado";
     const checklist = result.withChecklist ? "com o checklist de implantação" : "sem checklist (o modelo “Implantação de cliente novo” ainda está em rascunho)";
-    return { ok: true, demandId: result.demandId, message: `Ganho! ${client}; demanda de implantação aberta ${checklist}. O contrato em rascunho entra na Fase 5.` };
+    return { ok: true, demandId: result.demandId, message: `Ganho! ${client}; demanda de implantação aberta ${checklist}. Contrato criado em rascunho (confira em Contratos).` };
   }
   return { ok: true, message: `Movido para ${target.name}.` };
 }

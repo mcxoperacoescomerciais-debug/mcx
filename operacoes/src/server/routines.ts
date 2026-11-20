@@ -12,6 +12,8 @@ import { occurrencesBetween, routineTitle, type Frequency } from "@/lib/routines
 import { audit } from "./audit";
 import { getDb, schema as s } from "./db";
 import type { Actor, Result } from "./demands";
+import { generateContractAlerts } from "./contracts";
+import { generateDocumentAlerts } from "./documents";
 import { generateStockAlerts } from "./stock";
 import { copyTemplateInto } from "./templates";
 import { pruneActivity } from "./time";
@@ -139,6 +141,8 @@ export async function runRoutinesOncePerDay(): Promise<void> {
   if (last?.value === today) return;
   await generateRoutines(today);
   await generateStockAlerts(today);
+  await generateContractAlerts(today);
+  await generateDocumentAlerts(today);
   await pruneActivity(today);
   await db.insert(s.settings).values({ key: "routines_last_run", value: today }).onConflictDoUpdate({ target: s.settings.key, set: { value: today, updatedAt: new Date() } });
 }
