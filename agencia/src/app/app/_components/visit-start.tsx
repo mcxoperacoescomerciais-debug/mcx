@@ -4,20 +4,22 @@
  * Início de visita, com as proteções do fluxo:
  * - mesma programação → retoma a visita existente (nunca duplica);
  * - outra visita aberta → oferece retomar ou encerrar a anterior;
- * - loja sem programação → visita extraordinária com justificativa e marcas escolhidas.
+ * - loja sem programação → visita extraordinária com justificativa e marcas escolhidas;
+ * - visita do dia já encerrada e marca sem atender → visita complementar só com essa marca.
  */
 import { useState } from "react";
 import { AlertTriangle, Loader2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui";
 import { openVisit, startVisit } from "../_lib/local-store";
+import { COMPLEMENT_REASON } from "../_lib/complement";
 import { go, haptic, useCatalog, useLocal } from "../_lib/hooks";
 import { Chip, Sheet, TextArea, toast } from "./primitives";
 import type { BootstrapSchedule, BootstrapStore } from "@/lib/sync-types";
 
-type Pending = { kind: "conflict"; openVisitId: string; target: () => Promise<void> } | { kind: "extra"; store: BootstrapStore } | null;
+type Pending = { kind: "conflict"; openVisitId: string; target: () => Promise<void> } | { kind: "extra"; store: BootstrapStore } | { kind: "complement"; storeId: string; brandId: string; portfolio: boolean } | null;
 
 export function useStartVisit() {
-  const { settings, storeById } = useCatalog();
+  const { settings, storeById, brandById } = useCatalog();
   const local = useLocal();
   const [pending, setPending] = useState<Pending>(null);
   const [busy, setBusy] = useState(false);
@@ -58,6 +60,15 @@ export function useStartVisit() {
     guard(async () => setPending({ kind: "extra", store }));
   }
 
+  /** Marca que faltou numa visita já encerrada hoje: abre uma visita complementar na mesma loja. */
+  function startComplement(storeId: string, brandId: string, portfolio: boolean) {
+    if (!portfolio && !settings?.allowExtraVisits) {
+      toast("A visita de hoje nesta loja já foi encerrada. Fale com o gestor para atender esta marca.", "warn");
+      return;
+    }
+    guard(async () => setPending({ kind: "complement", storeId, brandId, portfolio }));
+  }
+
   /** Carteira com meta: visita direta na loja, com as marcas que ainda faltam na semana. */
   function startPortfolio(storeId: string, brandIds: string[]) {
     const existing = Object.values(local.visits).find((v) => v.storeId === storeId && v.status === "in_progress");
@@ -88,10 +99,30 @@ export function useStartVisit() {
         ) : null}
       </Sheet>
       {pending?.kind === "extra" ? <ExtraVisitSheet store={pending.store} busy={busy} onClose={() => setPending(null)} onConfirm={(brands, reason) => doStart(pending.store.id, null, brands, reason)} /> : null}
+      <Sheet
+        open={pending?.kind === "complement"}
+        onClose={() => setPending(null)}
+        title={pending?.kind === "complement" ? `Atender ${brandById.get(pending.brandId)?.name ?? "marca"}` : ""}
+        footer={
+          pending?.kind === "complement" ? (
+            <Button size="xl" className="w-full" disabled={busy} onClick={() => doStart(pending.storeId, null, [pending.brandId], pending.portfolio ? undefined : COMPLEMENT_REASON, pending.portfolio)}>
+              {busy ? <Loader2 className="size-5 animate-spin" /> : null}
+              Abrir e atender esta marca
+            </Button>
+          ) : undefined
+        }
+      >
+        {pending?.kind === "complement" ? (
+          <p className="text-[14px] text-ink-2">
+            A visita de hoje em <strong className="text-ink">{storeById.get(pending.storeId)?.name ?? "esta loja"}</strong> já foi encerrada. Vamos abrir um complemento para você atender{" "}
+            <strong className="text-ink">{brandById.get(pending.brandId)?.name ?? "esta marca"}</strong>. O que já foi enviado continua como está; o horário desta marca começa agora.
+          </p>
+        ) : null}
+      </Sheet>
     </>
   );
 
-  return { startScheduled, startExtra, startPortfolio, sheets, busy };
+  return { startScheduled, startExtra, startPortfolio, startComplement, sheets, busy };
 }
 
 function ExtraVisitSheet({ store, busy, onClose, onConfirm }: { store: BootstrapStore; busy: boolean; onClose: () => void; onConfirm: (brandIds: string[], reason: string) => void }) {

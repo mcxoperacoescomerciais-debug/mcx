@@ -7,7 +7,9 @@ import { Button, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtDuration, fmtTime } from "@/lib/dates";
 import { addPlannedBrand, cancelAttendance, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, finishVisitIfDone, peekShareRequest, pendingPhotos, retryBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
-import { go, haptic, useCatalog, useVisit } from "../_lib/hooks";
+import { go, haptic, useCatalog, useLocal, useVisit } from "../_lib/hooks";
+import { brandsInOtherVisits, remainingStoreBrands, sameDayStoreVisits } from "../_lib/complement";
+import { useStartVisit } from "./visit-start";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
 import { Notice, Screen, SectionTitle, Sheet, TextArea, toast, TopBar } from "./primitives";
 import { SharePdf } from "./share-pdf";
@@ -15,6 +17,8 @@ import { SharePdf } from "./share-pdf";
 export function VisitScreen({ visitId, closing = false }: { visitId: string; closing?: boolean }) {
   const visit = useVisit(visitId);
   const cat = useCatalog();
+  const local = useLocal();
+  const { startComplement, sheets } = useStartVisit();
   const [closeOpen, setCloseOpen] = useState(closing);
   // Relatório a enviar no grupo (aberto sozinho logo depois de finalizar um atendimento).
   const [shareId, setShareId] = useState<string | null>(() => peekShareRequest());
@@ -38,7 +42,12 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
   const slots = brandSlots(visit, schedule?.brandIds ?? visit.plannedBrandIds);
   const open = visit.status === "in_progress";
   // Todas as marcas da loja aparecem: as programadas primeiro, depois as demais autorizadas.
-  const extraBrands = (store?.brandIds ?? []).filter((b) => !slots.some((s) => s.brandId === b));
+  // Marca já atendida hoje em outra visita desta loja (complemento) não se repete aqui.
+  const dayVisits = sameDayStoreVisits(Object.values(local.visits), visit.storeId, visit.visitDate);
+  const elsewhere = brandsInOtherVisits(visitId, dayVisits);
+  const extraBrands = (store?.brandIds ?? []).filter((b) => !slots.some((s) => s.brandId === b) && !elsewhere.has(b));
+  // Visita de hoje já encerrada: a marca que faltou pode ser atendida num complemento.
+  const complementable = !open && visit.visitDate === cat.today && !dayVisits.some((v) => v.status === "in_progress") ? remainingStoreBrands(store?.brandIds ?? [], dayVisits) : [];
   const allSlots = [...slots, ...extraBrands.map((brandId) => ({ brandId, attendance: undefined, status: "pending" as const, planned: false }))];
   const shareAttendance = shareId ? visit.attendances[shareId] : undefined;
   const done = slots.filter((s) => isDoneStatus(s.status)).length;
@@ -49,7 +58,10 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
   async function openBrand(brandId: string) {
     const slot = slots.find((s) => s.brandId === brandId);
     if (slot?.attendance) return go(`visita/${visitId}/marca/${slot.attendance.id}`);
-    if (!open) return;
+    if (!open) {
+      if (complementable.includes(brandId)) startComplement(visit!.storeId, brandId, visit!.origin === "portfolio");
+      return;
+    }
     if (pendingMix.some((x) => x.brandId === brandId)) {
       window.scrollTo({ top: 0, behavior: "smooth" });
       toast("Escolha primeiro o tipo da loja.", "warn");
@@ -151,6 +163,11 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
 
       <SectionTitle>Marcas desta loja</SectionTitle>
       <div className="px-4 space-y-2.5">
+        {complementable.length ? (
+          <Notice tone="info" icon={<Flag className="size-5" />}>
+            Faltou atender alguma marca nesta loja? Toque nela para atender agora.
+          </Notice>
+        ) : null}
         {allSlots.map((slot) => {
           const brand = cat.brandById.get(slot.brandId);
           const a = slot.attendance;
@@ -159,7 +176,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
             <button
               type="button"
               onClick={() => void openBrand(slot.brandId)}
-              disabled={!a && !open}
+              disabled={!a && !open && !complementable.includes(slot.brandId)}
               className={clsx("w-full text-left bg-surface border rounded-2xl p-4 active:bg-canvas disabled:opacity-60", slot.status === "in_progress" ? "border-info/40" : slot.status === "correction_requested" ? "border-bad/40" : "border-line")}
             >
               <div className="flex items-center gap-3">
@@ -181,7 +198,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
                   </div>
                   {a?.serverError ? <p className="text-[12.5px] text-bad mt-1.5 font-medium">{a.serverError}</p> : null}
                 </div>
-                {!a && open ? <span className="text-[13px] font-bold text-brand-800 shrink-0">INICIAR</span> : <ChevronRight className="size-5 text-muted shrink-0" />}
+                {!a && (open || complementable.includes(slot.brandId)) ? <span className="text-[13px] font-bold text-brand-800 shrink-0">{open ? "INICIAR" : "ATENDER"}</span> : <ChevronRight className="size-5 text-muted shrink-0" />}
               </div>
               {a && (a.status === "completed" || a.status === "cancelled") ? (
                 <p className="text-[12px] text-muted mt-2 tnum">
@@ -246,6 +263,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
         ) : null}
       </Sheet>
 
+      {sheets}
       <DiscardSheet open={discardOpen} onClose={() => setDiscardOpen(false)} visitId={visitId} />
       {closeOpen && open ? <CloseVisitSheet visitId={visitId} onClose={() => setCloseOpen(false)} onNotAttended={setNotAttended} /> : null}
       {notAttended ? <NotAttendedSheet visitId={visitId} brandId={notAttended} onClose={() => setNotAttended(null)} /> : null}

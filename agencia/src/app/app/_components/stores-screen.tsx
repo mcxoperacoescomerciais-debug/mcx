@@ -9,6 +9,7 @@ import { BottomTabs, Chip, RefreshButton, Screen, TopBar } from "./primitives";
 import { useStartVisit } from "./visit-start";
 import { usePortfolio } from "../_lib/portfolio-progress";
 import { portfolioBrands } from "./portfolio";
+import { currentStoreVisit, sameDayStoreVisits } from "../_lib/complement";
 
 /** Só lojas autorizadas ao promotor (o servidor manda apenas essas). */
 export function StoresScreen() {
@@ -62,7 +63,7 @@ export function StoresScreen() {
         ) : null}
         {list.map((store) => {
           const schedule = todaySchedules.find((s) => s.storeId === store.id);
-          const visit = Object.values(local.visits).find((v) => v.storeId === store.id && v.visitDate === cat.today && v.status !== "cancelled");
+          const visit = currentStoreVisit(sameDayStoreVisits(Object.values(local.visits), store.id, cat.today));
           return (
             <article key={store.id} className="bg-surface border border-line rounded-2xl p-4">
               <div className="flex items-start gap-3">
