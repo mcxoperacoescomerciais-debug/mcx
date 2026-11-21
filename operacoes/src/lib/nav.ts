@@ -24,6 +24,7 @@ export const NAV: NavItem[] = [
   { href: "/contratos", label: "Contratos", needs: "contract.view" },
   { href: "/documentos", label: "Documentos", needs: "document.view" },
   { href: "/config/categorias", label: "Categorias e tipos", needs: "category.edit" },
+  { href: "/config/importar-notion", label: "Importar do Notion", needs: "import.run" },
   { href: "/config/usuarios", label: "Usuários", needs: "user.manage" },
   { href: "/manual", label: "Manual" },
 ];

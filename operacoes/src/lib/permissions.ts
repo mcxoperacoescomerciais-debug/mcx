@@ -30,11 +30,12 @@ export const ACTIONS = [
   "document.upload",
   "document.restricted", // lê e envia documentos restritos (contrato, documento de promotor)
   "document.manage", // edita dados e exclui documentos
+  "import.run", // importação do Notion (gestor e dono)
   "crm.manage", // etapas do funil, meta diária e aprovação de modelos de mensagem (dono)
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
-const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage", "crm.view", "stock.view", "stock.move", "stock.manage", "contract.view", "contract.manage", "document.view", "document.upload", "document.restricted", "document.manage"];
+const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage", "crm.view", "stock.view", "stock.move", "stock.manage", "contract.view", "contract.manage", "document.view", "document.upload", "document.restricted", "document.manage", "import.run"];
 
 export const ROLE_ACTIONS: Record<Role, readonly Action[]> = {
   owner: ACTIONS,

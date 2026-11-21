@@ -17,6 +17,8 @@ import * as crm from "@/server/crm";
 import type { LeadInput, MoveExtra } from "@/server/crm";
 import * as demands from "@/server/demands";
 import type { DemandInput, DemandPatch, Result } from "@/server/demands";
+import * as notion from "@/server/notion-import";
+import type { NotionImportOptions } from "@/server/notion-import";
 import * as registry from "@/server/registry";
 import * as routines from "@/server/routines";
 import * as stock from "@/server/stock";
@@ -398,4 +400,10 @@ export async function deleteDocumentAction(id: string, reason: string) {
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await documents.deleteDocument(user, id, reason));
+}
+
+export async function importNotionAction(csv: string, opts: NotionImportOptions) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await notion.importNotion(user, csv, opts));
 }
