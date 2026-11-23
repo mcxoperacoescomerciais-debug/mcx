@@ -14,6 +14,7 @@ export const NAV: NavItem[] = [
   { href: "/demandas", label: "Lista da equipe" },
   { href: "/kanban", label: "Kanban" },
   { href: "/meu-dia", label: "Meu dia" },
+  { href: "/assistente", label: "Assistente", needs: "assistant.use" },
   { href: "/comercial", label: "Comercial", needs: "crm.view" },
   { href: "/equipe", label: "Equipe", needs: "team.view" },
   { href: "/relatorios", label: "Relatórios", needs: "report.view" },
@@ -25,6 +26,7 @@ export const NAV: NavItem[] = [
   { href: "/documentos", label: "Documentos", needs: "document.view" },
   { href: "/config/categorias", label: "Categorias e tipos", needs: "category.edit" },
   { href: "/config/importar-notion", label: "Importar do Notion", needs: "import.run" },
+  { href: "/config/assistente", label: "Assistente: uso e ajustes", needs: "assistant.manage" },
   { href: "/config/usuarios", label: "Usuários", needs: "user.manage" },
   { href: "/manual", label: "Manual" },
 ];

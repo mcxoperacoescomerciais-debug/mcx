@@ -132,9 +132,10 @@ export async function contractsEnding(actor: Actor, today: string = todayIso()) 
 }
 
 /** Demanda única por aviso, para o gestor. Chave (kind, refKey) é única: nunca duplica. */
-export async function openAlertDemand(db: DB, kind: string, refKey: string, demand: { clientId: string; title: string; description: string; dueDate: string }): Promise<boolean> {
+export async function openAlertDemand(db: DB, kind: string, refKey: string, demand: { clientId: string; title: string; description: string; dueDate: string }, to: "gestor" | "owner" = "gestor"): Promise<boolean> {
   const people = await db.select().from(s.users).where(eq(s.users.status, "active"));
-  const assignee = people.find((p) => p.role === "gestor") ?? people.find((p) => p.role === "owner");
+  const other = to === "gestor" ? "owner" : "gestor";
+  const assignee = people.find((p) => p.role === to) ?? people.find((p) => p.role === other);
   if (!assignee) return false;
   const categories = await db.select().from(s.categories).orderBy(asc(s.categories.position));
   const category = categories.find((c) => c.name === "Fechamento e financeiro") ?? categories[0];

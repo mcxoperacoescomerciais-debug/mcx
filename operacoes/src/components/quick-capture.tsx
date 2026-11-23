@@ -32,6 +32,22 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
   const [duplicate, setDuplicate] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Outras telas (ex.: Assistente) abrem a captura já preenchida.
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const d = (e as CustomEvent<{ title?: string; description?: string }>).detail ?? {};
+      setTitle((d.title ?? "").slice(0, 200));
+      setDescription((d.description ?? "").slice(0, 4000));
+      setMore(Boolean(d.description));
+      setError(null);
+      setDuplicate(false);
+      dialog.current?.showModal();
+      titleRef.current?.focus();
+    };
+    window.addEventListener("mcx:nova-demanda", onPrefill);
+    return () => window.removeEventListener("mcx:nova-demanda", onPrefill);
+  }, []);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3500);

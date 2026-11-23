@@ -31,16 +31,18 @@ export const ACTIONS = [
   "document.restricted", // lê e envia documentos restritos (contrato, documento de promotor)
   "document.manage", // edita dados e exclui documentos
   "import.run", // importação do Notion (gestor e dono)
+  "assistant.use", // Assistente MCX (o dono ainda libera pessoa por pessoa)
+  "assistant.manage", // liga/desliga, modelo, limites e painel de uso do Assistente (dono)
   "crm.manage", // etapas do funil, meta diária e aprovação de modelos de mensagem (dono)
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
-const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage", "crm.view", "stock.view", "stock.move", "stock.manage", "contract.view", "contract.manage", "document.view", "document.upload", "document.restricted", "document.manage", "import.run"];
+const GESTOR: Action[] = ["demand.create", "demand.viewAll", "demand.assign", "demand.reopen", "demand.delete", "client.view", "client.edit", "category.edit", "time.viewAll", "team.view", "report.view", "cost.view", "routine.manage", "template.manage", "crm.view", "stock.view", "stock.move", "stock.manage", "contract.view", "contract.manage", "document.view", "document.upload", "document.restricted", "document.manage", "import.run", "assistant.use"];
 
 export const ROLE_ACTIONS: Record<Role, readonly Action[]> = {
   owner: ACTIONS,
   gestor: GESTOR,
-  operacional: ["demand.create", "client.view", "stock.view", "stock.move", "document.view", "document.upload"],
+  operacional: ["demand.create", "client.view", "stock.view", "stock.move", "document.view", "document.upload", "assistant.use"],
 };
 
 export function can(role: Role, action: Action): boolean {

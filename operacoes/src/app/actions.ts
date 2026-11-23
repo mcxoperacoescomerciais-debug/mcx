@@ -20,6 +20,8 @@ import type { DemandInput, DemandPatch, Result } from "@/server/demands";
 import * as notion from "@/server/notion-import";
 import type { NotionImportOptions } from "@/server/notion-import";
 import * as registry from "@/server/registry";
+import * as assistant from "@/server/assistant";
+import type { AssistantConfig } from "@/lib/assistant";
 import * as routines from "@/server/routines";
 import * as stock from "@/server/stock";
 import type { MovementInput, StockItemInput } from "@/server/stock";
@@ -406,4 +408,22 @@ export async function importNotionAction(csv: string, opts: NotionImportOptions)
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await notion.importNotion(user, csv, opts));
+}
+
+export async function renameConversationAction(id: string, title: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await assistant.renameConversation(user, id, title));
+}
+
+export async function archiveConversationAction(id: string, archived = true) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await assistant.archiveConversation(user, id, archived));
+}
+
+export async function saveAssistantConfigAction(patch: Partial<AssistantConfig>) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await assistant.saveAssistantConfig(user, patch));
 }

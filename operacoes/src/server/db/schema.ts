@@ -727,3 +727,55 @@ export const settings = pgTable("settings", {
   value: jsonb("value").notNull(),
   updatedAt: updatedAt(),
 });
+
+/* ---------- Fase 7 — Assistente MCX (chat via API da Anthropic) ---------- */
+
+/** Conversas do Assistente: cada pessoa vê só as próprias. */
+export const aiConversations = pgTable(
+  "ai_conversations",
+  {
+    id: id(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    title: text("title").notNull().default("Nova conversa"),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("ai_conversations_user_idx").on(t.userId, t.updatedAt)],
+);
+
+/** Mensagens. Anexos guardam só nome/tipo/tamanho — o arquivo não fica no banco. */
+export const aiMessages = pgTable(
+  "ai_messages",
+  {
+    id: id(),
+    conversationId: uuid("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
+    role: text("role").$type<"user" | "assistant">().notNull(),
+    content: text("content").notNull(),
+    attachments: jsonb("attachments").$type<{ name: string; type: string; size: number }[]>().notNull().default([]),
+    /** Resposta interrompida ou recusada (mostrada com aviso). */
+    error: text("error"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ai_messages_conversation_idx").on(t.conversationId, t.createdAt), check("ai_messages_role_ck", sql`${t.role} in ('user','assistant')`)],
+);
+
+/** Uso e custo por chamada à API (base do limite mensal e do painel de uso). */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: id(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    conversationId: uuid("conversation_id").references(() => aiConversations.id, { onDelete: "set null" }),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    /** Custo em micro-dólares (US$ × 1.000.000). */
+    costMicros: integer("cost_micros").notNull().default(0),
+    day: date("day").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ai_usage_day_idx").on(t.day), index("ai_usage_user_day_idx").on(t.userId, t.day)],
+);
