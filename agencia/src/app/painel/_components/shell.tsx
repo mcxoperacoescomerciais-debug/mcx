@@ -8,6 +8,8 @@ import { Suspense, useCallback, useEffect, useState, useTransition, type ReactNo
 import { clearPanelCache, PanelOffline } from "./offline";
 import {
   BarChart3,
+  Briefcase,
+  ExternalLink,
   ClipboardCheck,
   Lightbulb,
   Handshake,
@@ -99,6 +101,9 @@ const MCX_NAV: NavItem[] = [
   { href: "/painel/mcx/equipe", label: "Equipe MCX", icon: UserCog },
 ];
 
+/** Atalho para o MCX Operações (sistema interno separado: outro serviço, outro banco e login próprio). */
+const MCX_INTERNO_URL = "https://mcx-operacoes.onrender.com";
+
 function isActive(pathname: string, item: NavItem) {
   if (item.href === "/painel" || item.href === "/painel/mcx") return pathname === item.href;
   return [item.href, ...(item.also ?? [])].some((h) => pathname === h || pathname.startsWith(`${h}/`));
@@ -188,6 +193,23 @@ function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, hidden, onNav
           {MCX_NAV.filter((i) => owner || i.href !== "/painel/mcx/equipe").map((item) => (
             <NavItemLink key={item.href} item={{ ...item, badge: mcxBadges[item.href] }} active={isActive(pathname, item)} onNavigate={onNavigate} />
           ))}
+        </ul>
+        <p className="px-3 mt-5 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-200/60">MCX Interno</p>
+        <ul className="space-y-0.5">
+          <li>
+            <a
+              href={MCX_INTERNO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onNavigate}
+              className="flex items-center gap-2.5 px-3 min-h-9 py-1.5 rounded-lg text-[13.5px] font-medium text-brand-100/80 hover:bg-white/6 hover:text-white transition-colors"
+            >
+              <Briefcase className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1 leading-tight">Operações internas</span>
+              <ExternalLink className="size-3.5 shrink-0 opacity-70" aria-hidden />
+              <span className="sr-only">(abre em outra aba)</span>
+            </a>
+          </li>
         </ul>
       </nav>
     );
