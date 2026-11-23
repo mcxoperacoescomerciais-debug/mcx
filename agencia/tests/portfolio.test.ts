@@ -292,6 +292,41 @@ describe("carteira com meta semanal", () => {
     assert.ok((await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: b1, perWeek: 1, weekdays: [2] }, { brandId: b2, perWeek: 1, weekdays: [2] }])).ok);
     assert.deepEqual((await at(wednesday))!.brands, [b1, b2].sort(), "dia extra sobrevive à sincronização");
   });
+  test("mudar de dia: a loja sai da rota do dia de origem e entra no novo, só desta vez", async () => {
+    const admin = await scopeOf("admin");
+    const [lucas] = await db.select().from(s.users).where(eq(s.users.username, "lucas"));
+    const boot0 = await promoter.buildBootstrap(await scopeOf("lucas"));
+    const store = boot0.stores.find((x) => x.brandIds.length >= 2)!;
+    const [b1, b2] = store.brandIds;
+    assert.ok((await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: b1, perWeek: 1, weekdays: [2] }, { brandId: b2, perWeek: 1, weekdays: [2] }])).ok);
+    const tuesday = addDaysIso(weekStartIso(todayIso()), 8);
+    const thursday = addDaysIso(tuesday, 2);
+    const at = async (date: string) => {
+      const [x] = await db.select().from(s.schedules).where(and(eq(s.schedules.promoterId, lucas.id), eq(s.schedules.storeId, store.id), eq(s.schedules.date, date), eq(s.schedules.status, "active")));
+      return x ? (await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, x.id))).map((y) => y.brandId).sort() : null;
+    };
+    assert.deepEqual(await at(tuesday), [b1, b2].sort());
+    assert.equal(await at(thursday), null);
+
+    // Dia sem a loja na rota: recusa.
+    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id, { date: tuesday, mode: "once", fromDate: thursday })).ok, false);
+    // Só uma marca muda: a outra fica na terça.
+    const r1 = await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id, { date: thursday, mode: "once", fromDate: tuesday });
+    assert.ok(r1.ok, JSON.stringify(r1));
+    assert.deepEqual(await at(tuesday), [b2]);
+    assert.deepEqual(await at(thursday), [b1]);
+    // A outra também: a terça sai da rota.
+    assert.ok((await portfolio.transferAssignment(admin, lucas.id, store.id, [b2], lucas.id, { date: thursday, mode: "once", fromDate: tuesday })).ok);
+    assert.equal(await at(tuesday), null, "terça fora da rota");
+    assert.deepEqual(await at(thursday), [b1, b2].sort());
+
+    // Sincronizar o roteiro não traz a terça de volta, e a próxima terça segue normal.
+    assert.ok((await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: b1, perWeek: 1, weekdays: [2] }, { brandId: b2, perWeek: 1, weekdays: [2] }])).ok);
+    assert.equal(await at(tuesday), null, "a sincronização respeita a mudança");
+    assert.deepEqual(await at(thursday), [b1, b2].sort());
+    const route = (await portfolio.listAssignments(admin, lucas.id)).find((x) => x.storeId === store.id)!;
+    assert.ok(route.brands.every((b) => b.weekdays.length === 1 && b.weekdays[0] === 2), "roteiro fixo continua na terça");
+  });
   test("avulsa transferida: aparece na carteira de quem fez e cumpre a meta de quem atende a loja × marca", async () => {
     const admin = await scopeOf("admin");
     const [lucas] = await db.select().from(s.users).where(eq(s.users.username, "lucas"));

@@ -364,8 +364,12 @@ function TransferDialog({
   const today = todayIso();
   const [date, setDate] = useState(today);
   const [mode, setMode] = useState<"fixed" | "once" | null>(null);
-  // Próprio promotor: dia extra (só avulsa), sem mudar o roteiro.
+  // Próprio promotor: mudar de dia (sai de um dia, entra em outro) ou dia extra; o roteiro não muda.
   const self = to === promoterId;
+  const [selfKind, setSelfKind] = useState<"move" | "extra">("move");
+  const [fromDate, setFromDate] = useState(today);
+  const moving = self && selfKind === "move";
+  const fromDdmm = fromDate ? `${fromDate.slice(8, 10)}/${fromDate.slice(5, 7)}` : "";
   const effectiveMode = self ? "once" : mode;
   const others = promoters.filter((p) => p.id !== promoterId);
   const selfName = promoters.find((p) => p.id === promoterId)?.name ?? "este promotor";
@@ -381,7 +385,7 @@ function TransferDialog({
       <div className="bg-surface rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl">
         <header className="flex items-start gap-3 px-5 py-4 border-b border-line">
           <div className="flex-1 min-w-0">
-            <p className="text-[11.5px] uppercase tracking-wide font-semibold text-muted">{self ? "Dia extra para o próprio promotor" : "Transferir loja"}</p>
+            <p className="text-[11.5px] uppercase tracking-wide font-semibold text-muted">{self ? (moving ? "Mudar a loja de dia (só desta vez)" : "Dia extra para o próprio promotor") : "Transferir loja"}</p>
             <h2 className="text-[17px] font-semibold leading-snug">{store.name}</h2>
             <p className="text-[12.5px] text-muted">{[store.chain, store.city, store.code].filter(Boolean).join(" · ")}</p>
           </div>
@@ -392,7 +396,7 @@ function TransferDialog({
         <div className="overflow-y-auto px-5 py-4 space-y-4">
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5">
-              <p className="text-[12.5px] font-semibold text-ink-2">{self ? "Quais marcas o promotor vai atender nesse dia?" : "Quais marcas passam para o outro promotor?"}</p>
+              <p className="text-[12.5px] font-semibold text-ink-2">{self ? (moving ? "Quais marcas mudam de dia?" : "Quais marcas o promotor vai atender nesse dia?") : "Quais marcas passam para o outro promotor?"}</p>
               <button type="button" onClick={() => setPicked(all ? [] : assignment.brands.map((b) => b.brandId))} className="text-[12px] font-semibold text-brand-700 hover:underline">
                 {all ? "Desmarcar todas" : "Marcar todas"}
               </button>
@@ -410,13 +414,25 @@ function TransferDialog({
                 </label>
               ))}
             </div>
-            <p className="text-[12px] text-muted mt-1.5">{self ? "As marcas não marcadas ficam só nos dias de sempre." : "As marcas não marcadas continuam com este promotor."}</p>
+            <p className="text-[12px] text-muted mt-1.5">{self ? (moving ? "As marcas não marcadas continuam no dia de origem." : "As marcas não marcadas ficam só nos dias de sempre.") : "As marcas não marcadas continuam com este promotor."}</p>
           </div>
           <label className="block text-[12.5px] font-semibold text-ink-2">
             Para qual promotor?
-            <select value={to} onChange={(e) => setTo(e.target.value)} className={selectClass + " mt-1"}>
+            <select
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                // Mudar de dia: sai de hoje e, por padrão, vai para amanhã.
+                if (e.target.value === promoterId && date === today) {
+                  const d = new Date(`${today}T12:00:00Z`);
+                  d.setUTCDate(d.getUTCDate() + 1);
+                  setDate(d.toISOString().slice(0, 10));
+                }
+              }}
+              className={selectClass + " mt-1"}
+            >
               <option value="">Escolha o promotor…</option>
-              <option value={promoterId}>{selfName} (o próprio — dia extra)</option>
+              <option value={promoterId}>{selfName} (o próprio — mudar de dia ou dia extra)</option>
               {others.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -424,13 +440,37 @@ function TransferDialog({
               ))}
             </select>
           </label>
+          {self ? (
+            <div className="grid gap-1.5">
+              {(
+                [
+                  { v: "move", t: "Mudar de dia", d: "Tira a loja da rota num dia e coloca em outro, só desta vez." },
+                  { v: "extra", t: "Dia extra", d: "Só acrescenta a loja num dia, sem tirar de nenhum outro." },
+                ] as const
+              ).map((o) => (
+                <label key={o.v} className={clsx("flex items-start gap-2.5 rounded-lg border px-3 py-2 cursor-pointer", selfKind === o.v ? "border-brand-600 bg-brand-50/40" : "border-line")}>
+                  <input type="radio" name="self-kind" checked={selfKind === o.v} onChange={() => setSelfKind(o.v)} className="size-4 mt-0.5" />
+                  <span className="text-[13.5px]">
+                    <strong>{o.t}</strong>
+                    <span className="block text-[12px] text-muted">{o.d}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : null}
+          {moving ? (
+            <label className="block text-[12.5px] font-semibold text-ink-2">
+              Tirar de qual dia?
+              <input type="date" value={fromDate} min={today} onChange={(e) => setFromDate(e.target.value)} className={inputClass + " mt-1"} />
+            </label>
+          ) : null}
           <label className="block text-[12.5px] font-semibold text-ink-2">
-            {self ? "Em qual dia?" : "A partir de qual dia?"}
+            {self ? (moving ? "Para qual dia?" : "Em qual dia?") : "A partir de qual dia?"}
             <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className={inputClass + " mt-1"} />
           </label>
           {self ? (
             <p className="rounded-lg bg-brand-50/60 border border-brand-600/30 px-3 py-2 text-[12.5px] text-ink-2">
-              {date ? `A loja entra na rota de ${selfName} só em ${ddmm}, além do que já está programado nesse dia. O roteiro fixo e os dias de sempre não mudam.` : "Escolha o dia acima."}
+              {!date ? "Escolha o dia acima." : moving ? (fromDate === date ? "Escolha dias diferentes." : `A loja sai da rota de ${selfName} em ${fromDdmm} e entra em ${ddmm}, só desta vez. O roteiro fixo e os dias de sempre não mudam.`) : `A loja entra na rota de ${selfName} só em ${ddmm}, além do que já está programado nesse dia. O roteiro fixo e os dias de sempre não mudam.`}
             </p>
           ) : (
           <div>
@@ -459,11 +499,11 @@ function TransferDialog({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={pending || !picked.length || !to || !date || !effectiveMode}
+              disabled={pending || !picked.length || !to || !date || !effectiveMode || (moving && (!fromDate || fromDate === date))}
               onClick={() => {
                 setError(null);
                 start(async () => {
-                  const r = await transferAssignmentAction(promoterId, store.id, picked, to, { date, mode: effectiveMode! });
+                  const r = await transferAssignmentAction(promoterId, store.id, picked, to, { date, mode: effectiveMode!, ...(moving ? { fromDate } : {}) });
                   if (r.ok) onClose(r.message);
                   else setError(r.error);
                 });
@@ -471,7 +511,7 @@ function TransferDialog({
               className={buttonClass("primary")}
             >
               {pending ? <Loader2 className="size-4 animate-spin" /> : <ArrowRightLeft className="size-4" />}
-              {self ? "Adicionar ao dia" : "Transferir"} {picked.length ? `(${picked.length} marca${picked.length > 1 ? "s" : ""})` : ""}
+              {self ? (moving ? "Mudar de dia" : "Adicionar ao dia") : "Transferir"} {picked.length ? `(${picked.length} marca${picked.length > 1 ? "s" : ""})` : ""}
             </button>
             <button type="button" onClick={() => onClose()} className={buttonClass("secondary")}>
               Cancelar

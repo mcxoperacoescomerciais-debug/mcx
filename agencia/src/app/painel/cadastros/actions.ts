@@ -272,7 +272,7 @@ export async function moveStoreDayAction(promoterId: string, storeId: string, fr
   return r;
 }
 
-export async function transferAssignmentAction(promoterId: string, storeId: string, brandIds: string[], toPromoterId: string, opts: { date: string; mode: "fixed" | "once" }) {
+export async function transferAssignmentAction(promoterId: string, storeId: string, brandIds: string[], toPromoterId: string, opts: { date: string; mode: "fixed" | "once"; fromDate?: string }) {
   const { transferAssignment } = await import("@/server/portfolio");
   const r = await transferAssignment(await getScope(), promoterId, storeId, brandIds, toPromoterId, opts);
   if (r.ok) {

@@ -396,7 +396,7 @@ export type TransferMode = "fixed" | "once";
  * do roteiro. Nada na atribuição muda; a programação é manual (a sincronização
  * do roteiro não a apaga) e aparece no app dele naquele dia.
  */
-async function addExtraDay(scope: Scope, promoterId: string, storeId: string, brandIds: string[], date: string): Promise<ActionResult> {
+async function addExtraDay(scope: Scope, promoterId: string, storeId: string, brandIds: string[], date: string, fromDate?: string): Promise<ActionResult> {
   const bad = await checkPromoterStore(scope, promoterId, storeId);
   if (bad) return fail(bad);
   const db = await getDb();
@@ -404,6 +404,7 @@ async function addExtraDay(scope: Scope, promoterId: string, storeId: string, br
   if (!rows.length) return fail("Nada para programar nesta loja.");
   const brands = [...new Set(rows.map((r) => r.brandId))];
   const ddmm = `${date.slice(8, 10)}/${date.slice(5, 7)}`;
+  if (fromDate !== undefined) return moveOneDay(scope, promoterId, storeId, brands, fromDate, date);
   const [existing] = await db
     .select({ id: s.schedules.id, origin: s.schedules.origin })
     .from(s.schedules)
@@ -437,6 +438,65 @@ async function addExtraDay(scope: Scope, promoterId: string, storeId: string, br
   });
   return { ok: true, message: `Dia extra: a loja entra na rota do promotor só em ${ddmm} (${brands.length} marca(s)). O roteiro fixo não muda.` };
 }
+/**
+ * Mudar de dia (só esta vez): tira a loja × marcas da rota do promotor em
+ * `fromDate` e põe em `date`. O roteiro fixo não muda; a programação de
+ * `fromDate` é cancelada com motivo próprio (a sincronização respeita e não a
+ * recria) ou perde só as marcas que mudaram.
+ */
+async function moveOneDay(scope: Scope, promoterId: string, storeId: string, brands: string[], fromDate: string, date: string): Promise<ActionResult> {
+  const fmt = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || fromDate < todayIso()) return fail("Escolha de qual dia a loja sai: de hoje em diante.");
+  if (fromDate === date) return fail("Escolha um dia diferente para a loja ir.");
+  const db = await getDb();
+  const [orig] = await db
+    .select({ id: s.schedules.id })
+    .from(s.schedules)
+    .where(and(eq(s.schedules.agencyId, scope.agencyId), eq(s.schedules.promoterId, promoterId), eq(s.schedules.storeId, storeId), eq(s.schedules.date, fromDate), eq(s.schedules.status, "active")));
+  const origBrands = orig ? (await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, orig.id))).map((b) => b.brandId) : [];
+  const moving = brands.filter((b) => origBrands.includes(b));
+  if (!orig || !moving.length) return fail(`Esta loja (com essas marcas) não está na rota do promotor em ${fmt(fromDate)}.`);
+  const [startedVisit] = await db.select({ id: s.visits.id }).from(s.visits).where(and(eq(s.visits.scheduleId, orig.id), ne(s.visits.status, "cancelled"))).limit(1);
+  if (startedVisit) return fail(`A visita de ${fmt(fromDate)} já foi iniciada pelo promotor; não dá para mudar de dia.`);
+  const [dest] = await db
+    .select({ id: s.schedules.id })
+    .from(s.schedules)
+    .where(and(eq(s.schedules.agencyId, scope.agencyId), eq(s.schedules.promoterId, promoterId), eq(s.schedules.storeId, storeId), eq(s.schedules.date, date), eq(s.schedules.status, "active")));
+  const destHave = dest ? new Set((await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, dest.id))).map((b) => b.brandId)) : new Set<string>();
+  const missing = moving.filter((b) => !destHave.has(b));
+  const note = `Mudou de dia (${fmt(fromDate)} → ${fmt(date)})`;
+  await db.transaction(async (tx) => {
+    // Sai do dia de origem.
+    if (moving.length === origBrands.length) {
+      await tx.update(s.schedules).set({ status: "cancelled", cancelReason: `Mudou para ${fmt(date)}.`, updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.schedules.id, orig.id));
+    } else {
+      await tx.delete(s.scheduleBrands).where(and(eq(s.scheduleBrands.scheduleId, orig.id), inArray(s.scheduleBrands.brandId, moving)));
+      await tx.update(s.schedules).set({ origin: "manual", updatedAt: new Date(), updatedBy: scope.userId }).where(eq(s.schedules.id, orig.id));
+    }
+    // Entra no dia novo.
+    if (dest) {
+      if (missing.length) {
+        await tx.insert(s.scheduleBrands).values(missing.map((brandId) => ({ scheduleId: dest.id, brandId }))).onConflictDoNothing();
+        await tx
+          .update(s.schedules)
+          .set({ origin: "manual", notes: sql`case when coalesce(${s.schedules.notes}, '') = '' then ${note} else ${s.schedules.notes} || ' · ' || ${note} end`, updatedAt: new Date(), updatedBy: scope.userId })
+          .where(eq(s.schedules.id, dest.id));
+      }
+    } else {
+      const [seq] = await tx
+        .select({ next: sql<number>`coalesce(max(${s.schedules.seq}), -1)::int + 1` })
+        .from(s.schedules)
+        .where(and(eq(s.schedules.promoterId, promoterId), eq(s.schedules.date, date)));
+      const [row] = await tx
+        .insert(s.schedules)
+        .values({ agencyId: scope.agencyId, promoterId, storeId, date, seq: Number(seq?.next ?? 0), origin: "manual", notes: note, createdBy: scope.userId, updatedBy: scope.userId })
+        .returning({ id: s.schedules.id });
+      await tx.insert(s.scheduleBrands).values(moving.map((brandId) => ({ scheduleId: row.id, brandId })));
+    }
+    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", promoterId, "day_moved_once", { after: { storeId, brands: moving, fromDate, date } }, tx);
+  });
+  return { ok: true, message: `Loja mudou de dia: sai da rota em ${fmt(fromDate)} e entra em ${fmt(date)} (${moving.length} marca(s)). O roteiro fixo não muda.` };
+}
 /** Marca a programação da visita avulsa transferida (libera a loja × marca no app de quem recebe). */
 export const ONCE_TRANSFER_NOTE = "Visita avulsa (transferida)";
 /** Dia extra: o próprio promotor faz a loja num dia fora do roteiro, sem mudar o roteiro. */
@@ -451,8 +511,9 @@ export const EXTRA_DAY_NOTE = "Dia extra (fora do roteiro)";
  *   da data, quem transferiu continua com a programação que já tinha.
  * - Avulsa: só naquele dia o outro promotor faz a loja × marca; depois volta
  *   tudo como estava (a atribuição não muda).
- * - Para o próprio promotor (dia extra): a loja entra só naquele dia na rota
- *   dele, além do que já tem; o roteiro fixo e o dia de sempre não mudam.
+ * - Para o próprio promotor: "mudar de dia" (com `fromDate`) tira a loja do
+ *   dia de origem e põe no dia escolhido, só daquela vez; "dia extra" (sem
+ *   `fromDate`) só acrescenta. O roteiro fixo não muda em nenhum dos dois.
  */
 export async function transferAssignment(
   scope: Scope,
@@ -460,7 +521,7 @@ export async function transferAssignment(
   storeId: string,
   brandIds: string[],
   toPromoterId: string,
-  opts: { date?: string; mode?: TransferMode } = {},
+  opts: { date?: string; mode?: TransferMode; fromDate?: string } = {},
 ): Promise<ActionResult> {
   if (!canManage(scope)) return fail("Sem permissão.");
   if (!brandIds.length) return fail("Marque ao menos uma marca.");
@@ -470,7 +531,7 @@ export async function transferAssignment(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today) return fail("Escolha no calendário um dia de hoje em diante.");
   if (fromPromoterId === toPromoterId) {
     if (mode !== "once") return fail("Para o próprio promotor, a visita é só naquele dia (avulsa): o roteiro do promotor não muda.");
-    return addExtraDay(scope, fromPromoterId, storeId, brandIds, date);
+    return addExtraDay(scope, fromPromoterId, storeId, brandIds, date, opts.fromDate || undefined);
   }
   if (mode !== "fixed" && mode !== "once") return fail("Escolha se a visita é fixa ou avulsa.");
   const bad = (await checkPromoterStore(scope, fromPromoterId, storeId)) ?? (await checkPromoterStore(scope, toPromoterId, storeId));
