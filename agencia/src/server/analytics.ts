@@ -266,6 +266,7 @@ export async function ruptureList(scope: Scope, f: F, opts: { page?: number; pag
       storeId: s.stores.id,
       storeName: s.stores.name,
       city: s.stores.city,
+      chainName: s.chains.name,
       promoterName: s.users.name,
       photos: sql<number>`(select count(*)::int from ${s.photos} p where p.rupture_id = ${s.ruptures.id} and p.deleted_at is null)`,
       total: sql<number>`count(*) over()::int`,
@@ -274,6 +275,7 @@ export async function ruptureList(scope: Scope, f: F, opts: { page?: number; pag
     .innerJoin(s.attendances, eq(s.attendances.id, s.ruptures.attendanceId))
     .innerJoin(s.visits, eq(s.visits.id, s.attendances.visitId))
     .innerJoin(s.stores, eq(s.stores.id, s.visits.storeId))
+    .leftJoin(s.chains, eq(s.chains.id, s.stores.chainId))
     .innerJoin(s.products, eq(s.products.id, s.ruptures.productId))
     .innerJoin(s.brands, eq(s.brands.id, s.attendances.brandId))
     .innerJoin(s.users, eq(s.users.id, s.visits.promoterId))

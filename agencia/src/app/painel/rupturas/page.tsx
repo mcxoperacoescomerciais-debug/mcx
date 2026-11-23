@@ -33,7 +33,7 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
         range={{ from: f.from, to: f.to }}
         fields={["period", "brand", "chain", "store", "promoter", "q"]}
         options={options}
-        qPlaceholder="Produto ou SKU"
+        qPlaceholder="Produto"
       />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
@@ -57,7 +57,7 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
               <thead>
                 <tr>
                   <Th>Produto</Th>
-                  <Th>Loja</Th>
+                  <Th>PDV</Th>
                   <Th align="right">Visitas com ruptura</Th>
                 </tr>
               </thead>
@@ -86,30 +86,34 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
             storeOf={(r) => ({ id: r.storeId, name: r.storeName, city: r.city })}
             head={
               <tr>
-                <Th>Data</Th>
+                <Th>Data de ocorrência</Th>
+                <Th>Rede</Th>
+                <Th>PDV</Th>
                 <Th>Produto</Th>
+                <Th>Ocorrência</Th>
                 <Th>Marca</Th>
                 <Th>Promotor</Th>
-                <Th>Situação</Th>
               </tr>
             }
             renderRow={(r) => (
               <tr key={r.id} className="hover:bg-surface">
-                <Td className="tnum whitespace-nowrap">{fmtDateTime(r.recordedAt).slice(0, 16)}</Td>
+                <Td className="tnum whitespace-nowrap">{fmtDateTime(r.recordedAt)}</Td>
+                <Td>{r.chainName ?? "—"}</Td>
+                <Td>{r.storeName}</Td>
                 <Td>
                   <Link href={`/painel/atendimentos/${r.attendanceId}`} target="_blank" className="font-semibold hover:underline">
                     {r.productName}
                   </Link>
-                  <span className="block text-[11.5px] text-muted">SKU {r.sku}</span>
                 </Td>
+                <Td className="text-[12.5px]">{RUPTURE_SITUATION_LABEL[r.situation]}</Td>
                 <Td>{r.brandName}</Td>
                 <Td>{r.promoterName}</Td>
-                <Td className="text-[12.5px]">{RUPTURE_SITUATION_LABEL[r.situation]}</Td>
               </tr>
             )}
             exportTitle="Rupturas registradas"
-            exportHead={["Data", "Produto", "SKU", "Marca", "Promotor", "Situação"]}
-            exportRow={(r) => [fmtDateTime(r.recordedAt).slice(0, 16), r.productName, r.sku, r.brandName, r.promoterName, RUPTURE_SITUATION_LABEL[r.situation]]}
+            exportStoreCols={false}
+            exportHead={["Data de ocorrência", "Rede", "PDV", "Produto", "Ocorrência", "Marca", "Promotor", "Cidade"]}
+            exportRow={(r) => [fmtDateTime(r.recordedAt),r.chainName ?? "", r.storeName, r.productName, RUPTURE_SITUATION_LABEL[r.situation], r.brandName, r.promoterName, r.city ?? ""]}
             page={f.page}
             hrefFor={(p) => withParams(keep, { page: p })}
           />

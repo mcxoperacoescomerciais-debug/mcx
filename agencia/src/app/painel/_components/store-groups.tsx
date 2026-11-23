@@ -30,6 +30,7 @@ export function StoreGroups<T>({
   pageSize = 50,
   hrefFor,
   openFirst = false,
+  exportStoreCols = true,
 }: {
   rows: T[];
   storeOf: (r: T) => StoreRef;
@@ -47,6 +48,8 @@ export function StoreGroups<T>({
   pageSize?: number;
   hrefFor: (page: number) => string;
   openFirst?: boolean;
+  /** false: o Excel não começa com Loja e Cidade (a página põe as colunas na ordem dela). */
+  exportStoreCols?: boolean;
 }) {
   const groups: { store: StoreRef; items: T[] }[] = [];
   const at = new Map<string, number>();
@@ -95,8 +98,12 @@ export function StoreGroups<T>({
       <table hidden data-export-title={exportTitle}>
         <thead>
           <tr>
-            <Th>Loja</Th>
-            <Th>Cidade</Th>
+            {exportStoreCols ? (
+              <>
+                <Th>Loja</Th>
+                <Th>Cidade</Th>
+              </>
+            ) : null}
             {exportHead.map((h) => (
               <Th key={h}>{h}</Th>
             ))}
@@ -107,8 +114,12 @@ export function StoreGroups<T>({
             const st = storeOf(r);
             return (
               <tr key={i}>
-                <td>{st.name}</td>
-                <td>{st.city ?? ""}</td>
+                {exportStoreCols ? (
+                  <>
+                    <td>{st.name}</td>
+                    <td>{st.city ?? ""}</td>
+                  </>
+                ) : null}
                 {exportRow(r).map((c, j) => (
                   <td key={j}>{c ?? ""}</td>
                 ))}
