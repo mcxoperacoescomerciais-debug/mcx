@@ -101,7 +101,7 @@ export default async function PromoterRoutePage({ params }: PageProps<"/painel/c
         subtitle="Selecione a loja, escolha as marcas que ele atende nela e, para cada marca, os dias e quantas vezes. É isso que gera a programação, a carteira e as metas dele."
         bodyClass="px-5 pb-5"
       >
-        <PromoterAssignments promoterId={user.id} promoters={promoterList.filter((p) => p.id !== user.id)} stores={storeOptions} allBrands={brands} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
+        <PromoterAssignments promoterId={user.id} promoters={promoterList} stores={storeOptions} allBrands={brands} assignments={assignments.map((a) => ({ storeId: a.storeId, brands: a.brands }))} />
       </SectionCard>
 
       <SectionCard

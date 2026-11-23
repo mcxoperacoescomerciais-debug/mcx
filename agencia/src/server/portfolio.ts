@@ -390,8 +390,57 @@ export async function moveStoreDay(scope: Scope, promoterId: string, storeId: st
 }
 
 export type TransferMode = "fixed" | "once";
+
+/**
+ * Dia extra: programa a loja × marca para o próprio promotor numa data, além
+ * do roteiro. Nada na atribuição muda; a programação é manual (a sincronização
+ * do roteiro não a apaga) e aparece no app dele naquele dia.
+ */
+async function addExtraDay(scope: Scope, promoterId: string, storeId: string, brandIds: string[], date: string): Promise<ActionResult> {
+  const bad = await checkPromoterStore(scope, promoterId, storeId);
+  if (bad) return fail(bad);
+  const db = await getDb();
+  const rows = (await db.select().from(s.visitTargets).where(and(eq(s.visitTargets.promoterId, promoterId), eq(s.visitTargets.storeId, storeId), eq(s.visitTargets.agencyId, scope.agencyId)))).filter((r) => brandIds.includes(r.brandId));
+  if (!rows.length) return fail("Nada para programar nesta loja.");
+  const brands = [...new Set(rows.map((r) => r.brandId))];
+  const ddmm = `${date.slice(8, 10)}/${date.slice(5, 7)}`;
+  const [existing] = await db
+    .select({ id: s.schedules.id, origin: s.schedules.origin })
+    .from(s.schedules)
+    .where(and(eq(s.schedules.agencyId, scope.agencyId), eq(s.schedules.promoterId, promoterId), eq(s.schedules.storeId, storeId), eq(s.schedules.date, date), eq(s.schedules.status, "active")));
+  if (existing) {
+    const have = new Set((await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, existing.id))).map((b) => b.brandId));
+    const missing = brands.filter((b) => !have.has(b));
+    if (!missing.length) return fail(`Esta loja já está na rota do promotor em ${ddmm}.`);
+    await db.transaction(async (tx) => {
+      await tx.insert(s.scheduleBrands).values(missing.map((brandId) => ({ scheduleId: existing.id, brandId }))).onConflictDoNothing();
+      // Solta do roteiro para a sincronização não tirar as marcas do dia extra.
+      await tx
+        .update(s.schedules)
+        .set({ origin: "manual", notes: sql`case when coalesce(${s.schedules.notes}, '') = '' then ${EXTRA_DAY_NOTE} else ${s.schedules.notes} || ' · ' || ${EXTRA_DAY_NOTE} end`, updatedAt: new Date(), updatedBy: scope.userId })
+        .where(eq(s.schedules.id, existing.id));
+      await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", promoterId, "extra_day_added", { after: { storeId, brands: missing, date } }, tx);
+    });
+    return { ok: true, message: `Dia extra: ${missing.length} marca(s) a mais nesta loja em ${ddmm}. O roteiro do promotor não muda.` };
+  }
+  await db.transaction(async (tx) => {
+    const [seq] = await tx
+      .select({ next: sql<number>`coalesce(max(${s.schedules.seq}), -1)::int + 1` })
+      .from(s.schedules)
+      .where(and(eq(s.schedules.promoterId, promoterId), eq(s.schedules.date, date)));
+    const [row] = await tx
+      .insert(s.schedules)
+      .values({ agencyId: scope.agencyId, promoterId, storeId, date, seq: Number(seq?.next ?? 0), origin: "manual", notes: EXTRA_DAY_NOTE, createdBy: scope.userId, updatedBy: scope.userId })
+      .returning({ id: s.schedules.id });
+    await tx.insert(s.scheduleBrands).values(brands.map((brandId) => ({ scheduleId: row.id, brandId })));
+    await audit({ agencyId: scope.agencyId, userId: scope.userId }, "user", promoterId, "extra_day_added", { after: { storeId, brands, date } }, tx);
+  });
+  return { ok: true, message: `Dia extra: a loja entra na rota do promotor só em ${ddmm} (${brands.length} marca(s)). O roteiro fixo não muda.` };
+}
 /** Marca a programação da visita avulsa transferida (libera a loja × marca no app de quem recebe). */
 export const ONCE_TRANSFER_NOTE = "Visita avulsa (transferida)";
+/** Dia extra: o próprio promotor faz a loja num dia fora do roteiro, sem mudar o roteiro. */
+export const EXTRA_DAY_NOTE = "Dia extra (fora do roteiro)";
 
 /**
  * Quadro do promotor › "Transferir": passa marcas de uma loja para outro promotor
@@ -402,6 +451,8 @@ export const ONCE_TRANSFER_NOTE = "Visita avulsa (transferida)";
  *   da data, quem transferiu continua com a programação que já tinha.
  * - Avulsa: só naquele dia o outro promotor faz a loja × marca; depois volta
  *   tudo como estava (a atribuição não muda).
+ * - Para o próprio promotor (dia extra): a loja entra só naquele dia na rota
+ *   dele, além do que já tem; o roteiro fixo e o dia de sempre não mudam.
  */
 export async function transferAssignment(
   scope: Scope,
@@ -412,12 +463,15 @@ export async function transferAssignment(
   opts: { date?: string; mode?: TransferMode } = {},
 ): Promise<ActionResult> {
   if (!canManage(scope)) return fail("Sem permissão.");
-  if (fromPromoterId === toPromoterId) return fail("Escolha outro promotor.");
   if (!brandIds.length) return fail("Marque ao menos uma marca.");
   const today = todayIso();
   const date = opts.date ?? today;
   const mode: TransferMode = opts.mode ?? "fixed";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today) return fail("Escolha no calendário um dia de hoje em diante.");
+  if (fromPromoterId === toPromoterId) {
+    if (mode !== "once") return fail("Para o próprio promotor, a visita é só naquele dia (avulsa): o roteiro do promotor não muda.");
+    return addExtraDay(scope, fromPromoterId, storeId, brandIds, date);
+  }
   if (mode !== "fixed" && mode !== "once") return fail("Escolha se a visita é fixa ou avulsa.");
   const bad = (await checkPromoterStore(scope, fromPromoterId, storeId)) ?? (await checkPromoterStore(scope, toPromoterId, storeId));
   if (bad) return fail(bad);

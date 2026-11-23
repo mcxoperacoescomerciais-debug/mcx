@@ -364,6 +364,11 @@ function TransferDialog({
   const today = todayIso();
   const [date, setDate] = useState(today);
   const [mode, setMode] = useState<"fixed" | "once" | null>(null);
+  // Próprio promotor: dia extra (só avulsa), sem mudar o roteiro.
+  const self = to === promoterId;
+  const effectiveMode = self ? "once" : mode;
+  const others = promoters.filter((p) => p.id !== promoterId);
+  const selfName = promoters.find((p) => p.id === promoterId)?.name ?? "este promotor";
   const wdName = date ? WEEKDAY_NAME[new Date(`${date}T12:00:00Z`).getUTCDay()] : "";
   const ddmm = date ? `${date.slice(8, 10)}/${date.slice(5, 7)}` : "";
   const [error, setError] = useState<string | null>(null);
@@ -376,7 +381,7 @@ function TransferDialog({
       <div className="bg-surface rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl">
         <header className="flex items-start gap-3 px-5 py-4 border-b border-line">
           <div className="flex-1 min-w-0">
-            <p className="text-[11.5px] uppercase tracking-wide font-semibold text-muted">Transferir para outro promotor</p>
+            <p className="text-[11.5px] uppercase tracking-wide font-semibold text-muted">{self ? "Dia extra para o próprio promotor" : "Transferir loja"}</p>
             <h2 className="text-[17px] font-semibold leading-snug">{store.name}</h2>
             <p className="text-[12.5px] text-muted">{[store.chain, store.city, store.code].filter(Boolean).join(" · ")}</p>
           </div>
@@ -387,7 +392,7 @@ function TransferDialog({
         <div className="overflow-y-auto px-5 py-4 space-y-4">
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5">
-              <p className="text-[12.5px] font-semibold text-ink-2">Quais marcas passam para o outro promotor?</p>
+              <p className="text-[12.5px] font-semibold text-ink-2">{self ? "Quais marcas o promotor vai atender nesse dia?" : "Quais marcas passam para o outro promotor?"}</p>
               <button type="button" onClick={() => setPicked(all ? [] : assignment.brands.map((b) => b.brandId))} className="text-[12px] font-semibold text-brand-700 hover:underline">
                 {all ? "Desmarcar todas" : "Marcar todas"}
               </button>
@@ -405,13 +410,14 @@ function TransferDialog({
                 </label>
               ))}
             </div>
-            <p className="text-[12px] text-muted mt-1.5">As marcas não marcadas continuam com este promotor.</p>
+            <p className="text-[12px] text-muted mt-1.5">{self ? "As marcas não marcadas ficam só nos dias de sempre." : "As marcas não marcadas continuam com este promotor."}</p>
           </div>
           <label className="block text-[12.5px] font-semibold text-ink-2">
             Para qual promotor?
             <select value={to} onChange={(e) => setTo(e.target.value)} className={selectClass + " mt-1"}>
               <option value="">Escolha o promotor…</option>
-              {promoters.map((p) => (
+              <option value={promoterId}>{selfName} (o próprio — dia extra)</option>
+              {others.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -419,9 +425,14 @@ function TransferDialog({
             </select>
           </label>
           <label className="block text-[12.5px] font-semibold text-ink-2">
-            A partir de qual dia?
+            {self ? "Em qual dia?" : "A partir de qual dia?"}
             <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className={inputClass + " mt-1"} />
           </label>
+          {self ? (
+            <p className="rounded-lg bg-brand-50/60 border border-brand-600/30 px-3 py-2 text-[12.5px] text-ink-2">
+              {date ? `A loja entra na rota de ${selfName} só em ${ddmm}, além do que já está programado nesse dia. O roteiro fixo e os dias de sempre não mudam.` : "Escolha o dia acima."}
+            </p>
+          ) : (
           <div>
             <p className="text-[12.5px] font-semibold text-ink-2 mb-1.5">A visita será fixa ou avulsa?</p>
             <div className="grid gap-1.5">
@@ -441,17 +452,18 @@ function TransferDialog({
               ))}
             </div>
           </div>
+          )}
         </div>
         <footer className="px-5 py-4 border-t border-line space-y-2">
           {error ? <p className="text-[13px] text-bad font-medium">{error}</p> : null}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={pending || !picked.length || !to || !date || !mode}
+              disabled={pending || !picked.length || !to || !date || !effectiveMode}
               onClick={() => {
                 setError(null);
                 start(async () => {
-                  const r = await transferAssignmentAction(promoterId, store.id, picked, to, { date, mode: mode! });
+                  const r = await transferAssignmentAction(promoterId, store.id, picked, to, { date, mode: effectiveMode! });
                   if (r.ok) onClose(r.message);
                   else setError(r.error);
                 });
@@ -459,7 +471,7 @@ function TransferDialog({
               className={buttonClass("primary")}
             >
               {pending ? <Loader2 className="size-4 animate-spin" /> : <ArrowRightLeft className="size-4" />}
-              Transferir {picked.length ? `(${picked.length} marca${picked.length > 1 ? "s" : ""})` : ""}
+              {self ? "Adicionar ao dia" : "Transferir"} {picked.length ? `(${picked.length} marca${picked.length > 1 ? "s" : ""})` : ""}
             </button>
             <button type="button" onClick={() => onClose()} className={buttonClass("secondary")}>
               Cancelar

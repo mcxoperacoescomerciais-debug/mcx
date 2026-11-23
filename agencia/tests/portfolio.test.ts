@@ -229,7 +229,8 @@ describe("carteira com meta semanal", () => {
       return x ? (await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, x.id))).map((y) => y.brandId) : null;
     };
     assert.deepEqual(await active(lucas.id, tuesday), [b1]);
-    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id, { date: tuesday, mode: "once" })).ok, false, "mesmo promotor");
+    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id, { date: tuesday, mode: "fixed" })).ok, false, "mesmo promotor: só avulsa");
+    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id, { date: tuesday, mode: "once" })).ok, false, "já está na rota dele nesse dia");
     assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], joao.id, { date: "2020-01-01", mode: "once" })).ok, false, "dia passado");
 
     // Avulsa: só na terça o João faz; o Lucas continua com a marca.
@@ -256,6 +257,40 @@ describe("carteira com meta semanal", () => {
     // Transferir a última marca tira a loja do Lucas.
     assert.ok((await portfolio.transferAssignment(admin, lucas.id, store.id, [b2], joao.id, { date: thursday, mode: "fixed" })).ok);
     assert.equal((await portfolio.listAssignments(admin, lucas.id)).some((x) => x.storeId === store.id), false);
+  });
+  test("dia extra: a loja entra na rota do próprio promotor só naquele dia, sem mudar o roteiro", async () => {
+    const admin = await scopeOf("admin");
+    const [lucas] = await db.select().from(s.users).where(eq(s.users.username, "lucas"));
+    const boot0 = await promoter.buildBootstrap(await scopeOf("lucas"));
+    const store = boot0.stores.find((x) => x.brandIds.length >= 2)!;
+    const [b1, b2] = store.brandIds;
+    assert.ok((await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: b1, perWeek: 1, weekdays: [2] }, { brandId: b2, perWeek: 1, weekdays: [2] }])).ok);
+    const wednesday = addDaysIso(weekStartIso(todayIso()), 9);
+    const tuesday = addDaysIso(weekStartIso(todayIso()), 8);
+    const at = async (date: string) => {
+      const [x] = await db.select().from(s.schedules).where(and(eq(s.schedules.promoterId, lucas.id), eq(s.schedules.storeId, store.id), eq(s.schedules.date, date), eq(s.schedules.status, "active")));
+      return x ? { x, brands: (await db.select().from(s.scheduleBrands).where(eq(s.scheduleBrands.scheduleId, x.id))).map((y) => y.brandId).sort() } : null;
+    };
+    assert.equal(await at(wednesday), null);
+    const before = (await portfolio.listAssignments(admin, lucas.id)).find((x) => x.storeId === store.id)!;
+
+    const r = await portfolio.transferAssignment(admin, lucas.id, store.id, [b1], lucas.id, { date: wednesday, mode: "once" });
+    assert.ok(r.ok, JSON.stringify(r));
+    const extra = (await at(wednesday))!;
+    assert.deepEqual(extra.brands, [b1]);
+    assert.equal(extra.x.origin, "manual");
+    assert.deepEqual((await at(tuesday))!.brands, [b1, b2].sort(), "a terça de sempre continua");
+    const after = (await portfolio.listAssignments(admin, lucas.id)).find((x) => x.storeId === store.id)!;
+    assert.deepEqual(after.brands, before.brands, "roteiro não muda");
+
+    // Repetir com outra marca soma ao mesmo dia; repetir igual avisa.
+    assert.ok((await portfolio.transferAssignment(admin, lucas.id, store.id, [b2], lucas.id, { date: wednesday, mode: "once" })).ok);
+    assert.deepEqual((await at(wednesday))!.brands, [b1, b2].sort());
+    assert.equal((await portfolio.transferAssignment(admin, lucas.id, store.id, [b1, b2], lucas.id, { date: wednesday, mode: "once" })).ok, false);
+
+    // Sincronizar o roteiro não apaga o dia extra.
+    assert.ok((await portfolio.saveStoreAssignment(admin, lucas.id, store.id, [{ brandId: b1, perWeek: 1, weekdays: [2] }, { brandId: b2, perWeek: 1, weekdays: [2] }])).ok);
+    assert.deepEqual((await at(wednesday))!.brands, [b1, b2].sort(), "dia extra sobrevive à sincronização");
   });
   test("avulsa transferida: aparece na carteira de quem fez e cumpre a meta de quem atende a loja × marca", async () => {
     const admin = await scopeOf("admin");
