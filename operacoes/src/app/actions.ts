@@ -27,7 +27,7 @@ import * as routines from "@/server/routines";
 import * as stock from "@/server/stock";
 import type { MovementInput, StockItemInput } from "@/server/stock";
 import type { UnitStatus } from "@/lib/stock";
-import type { RoutineInput } from "@/server/routines";
+import type { RepeatInput, RoutineInput } from "@/server/routines";
 import * as templates from "@/server/templates";
 import type { TemplateInput } from "@/server/templates";
 import * as time from "@/server/time";
@@ -421,6 +421,12 @@ export async function archiveConversationAction(id: string, archived = true) {
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await assistant.archiveConversation(user, id, archived));
+}
+
+export async function createRepeatingDemandAction(input: Parameters<typeof routines.createRepeatingDemand>[1], repeat: RepeatInput) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await routines.createRepeatingDemand(user, input, repeat));
 }
 
 export async function saveCalendarConfigAction(text: string) {

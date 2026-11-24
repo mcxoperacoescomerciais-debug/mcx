@@ -7,10 +7,13 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
-import { createDemandAction } from "@/app/actions";
+import { createDemandAction, createRepeatingDemandAction } from "@/app/actions";
+import { WEEKDAY_LABEL } from "@/lib/routines";
 import { ORIGINS, ORIGIN_LABEL, PRIORITIES, PRIORITY_LABEL, type Origin, type Priority } from "@/lib/domain";
 import type { FormOptions } from "@/server/demands";
 import { DuePicker } from "./due-picker";
+
+type Repeat = "none" | "daily" | "weekly" | "monthly";
 
 export function QuickCapture({ options, userId, today }: { options: FormOptions; userId: string; today: string }) {
   const router = useRouter();
@@ -31,6 +34,9 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
   const [error, setError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [repeat, setRepeat] = useState<Repeat>("none");
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [monthDay, setMonthDay] = useState(1);
 
   // Outras telas (ex.: Assistente) abrem a captura já preenchida.
   useEffect(() => {
@@ -73,8 +79,33 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
     if (v === null) setPriority("low"); // "Sem prazo" só com prioridade Baixa
   }
 
+  function pickRepeat(kind: Repeat) {
+    setRepeat(kind);
+    const ref = dueDate ?? today;
+    if (kind === "weekly" && !weekdays.length) setWeekdays([new Date(`${ref}T12:00:00`).getDay()]);
+    if (kind === "monthly") setMonthDay(Number(ref.slice(8, 10)));
+  }
+
   function submit(confirmDuplicate: boolean) {
     setError(null);
+    if (repeat !== "none") {
+      start(async () => {
+        const result = await createRepeatingDemandAction(
+          { title, clientId, categoryId, typeId: types.some((ty) => ty.id === typeId) ? typeId : null, assigneeId, priority, startDate: dueDate ?? today },
+          { kind: repeat, weekdays, monthDay },
+        );
+        if (!result.ok) return setError(result.error);
+        setToast(result.message ?? "Tarefa repetida criada.");
+        setTitle("");
+        setDescription("");
+        setRepeat("none");
+        setWeekdays([]);
+        setDueDate(today);
+        dialog.current?.close();
+        router.refresh();
+      });
+      return;
+    }
     start(async () => {
       const result = await createDemandAction({ title, clientId, categoryId, typeId: types.some((ty) => ty.id === typeId) ? typeId : null, assigneeId, dueDate, priority, description, brand, origin }, confirmDuplicate);
       if (!result.ok) {
@@ -145,8 +176,47 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
             </div>
           </div>
           <div>
-            <span className="label">Prazo</span>
+            <span className="label">{repeat === "none" ? "Prazo" : "Começa em"}</span>
             <DuePicker value={dueDate} onChange={pickDue} today={today} />
+          </div>
+          <div>
+            <label className="label" htmlFor="qc-repeat">Repetir</label>
+            <select id="qc-repeat" className="field" value={repeat} onChange={(e) => pickRepeat(e.target.value as Repeat)}>
+              <option value="none">Não repete</option>
+              <option value="daily">Todo dia</option>
+              <option value="weekly">Toda semana</option>
+              <option value="monthly">Todo mês</option>
+            </select>
+            {repeat === "weekly" && (
+              <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Dias da semana">
+                {WEEKDAY_LABEL.map((label, d) => {
+                  const on = weekdays.includes(d);
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setWeekdays(on ? weekdays.filter((x) => x !== d) : [...weekdays, d].sort())}
+                      className={on ? "btn-primary min-h-9 px-3 py-1 text-sm" : "btn-ghost min-h-9 px-3 py-1 text-sm"}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {repeat === "monthly" && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-ink-2">
+                <label htmlFor="qc-monthday">Todo dia</label>
+                <input id="qc-monthday" type="number" min={1} max={31} className="field w-20" value={monthDay} onChange={(e) => setMonthDay(Number(e.target.value))} />
+                <span>do mês</span>
+              </div>
+            )}
+            {repeat !== "none" && (
+              <p className="mt-1 text-xs text-muted">
+                A tarefa aparece sozinha na fila do responsável no dia de cada repetição{repeat === "weekly" && weekdays.length ? ` (toda ${weekdays.map((d) => WEEKDAY_LABEL[d]).join(", ")})` : ""}. Para mudar ou parar: Rotinas.
+              </p>
+            )}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -214,7 +284,7 @@ export function QuickCapture({ options, userId, today }: { options: FormOptions;
                 Criar mesmo assim
               </button>
             )}
-            <button className="btn-primary" disabled={pending}>{pending ? "Salvando…" : "Criar demanda"}</button>
+            <button className="btn-primary" disabled={pending || (repeat === "weekly" && !weekdays.length)}>{pending ? "Salvando…" : repeat === "none" ? "Criar demanda" : "Criar tarefa repetida"}</button>
           </div>
         </form>
       </dialog>

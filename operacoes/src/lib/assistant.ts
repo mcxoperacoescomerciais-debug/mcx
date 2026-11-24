@@ -40,7 +40,7 @@ Regras:
 - Ao extrair dados de foto ou PDF (pedido, nota, planilha), devolva em lista ou tabela simples e marque o que ficou ilegível.
 - Mensagens para WhatsApp: curtas, cordiais, sem emojis em excesso, prontas para colar.
 - Quando a conversa virar uma tarefa com prazo ou responsável, sugira: "Quer transformar em demanda?".
-- Você não tem acesso aos dados do sistema MCX nem pode executar ações nele.`;
+- Você consulta os dados do sistema MCX só pelas ferramentas de consulta (somente leitura) e não pode executar ações nele.`;
 
 export interface AssistantConfig {
   enabled: boolean;
@@ -199,6 +199,16 @@ export function titleFrom(text: string): string {
 
 /** Biblioteca "Prompts MCX": modelos de instrução que preenchem a caixa de mensagem. */
 export const PROMPTS_MCX: { id: string; title: string; text: string }[] = [
+  {
+    id: "resumo-dia",
+    title: "Resumo do dia",
+    text: "Como foi o dia hoje? Monte o resumo do dia: o que precisa de atenção (atrasadas, vencendo, aguardando retorno, follow-ups e, se tiver, os números de campo — lojas sem visita, rupturas, avarias, validades e ocorrências) e o que eu devo resolver amanhã, com responsável e contratante.",
+  },
+  {
+    id: "campo-semana",
+    title: "Campo da semana",
+    text: "Como foi a semana no campo? Compare as agências: lojas programadas sem visita, rupturas, avarias, validades e ocorrências abertas, e diga quais lojas e marcas precisam de ação.",
+  },
   {
     id: "pedido-foto",
     title: "Extrair pedido de foto",

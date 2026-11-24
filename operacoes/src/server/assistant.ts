@@ -28,6 +28,7 @@ import {
 import { addDays, todayIso } from "@/lib/dates";
 import { can } from "@/lib/permissions";
 import { audit } from "./audit";
+import { assistantTools, runAssistantTool, toolsInstructions } from "./assistant-tools";
 import { openAlertDemand } from "./contracts";
 import { getDb, schema as s } from "./db";
 import type { Actor, Result } from "./demands";
@@ -36,11 +37,23 @@ const fail = (error: string): { ok: false; error: string } => ({ ok: false, erro
 const UUID = /^[0-9a-f-]{36}$/i;
 const CONFIG_KEY = "assistant_config";
 
+/** Prompts salvos antes das consultas diziam que o Assistente não vê dados: essa linha sai. */
+export function withoutNoDataLine(prompt: string): string {
+  return prompt
+    .split("\n")
+    .filter((l) => !/não tem acesso aos dados do sistema MCX/i.test(l))
+    .join("\n")
+    .trim();
+}
+
 export interface TurnRequest {
   model: AssistantModel;
   effort: Effort;
   system: string;
   messages: Anthropic.Beta.Messages.BetaMessageParam[];
+  /** Ferramentas de consulta (somente leitura) e quem as executa. */
+  tools?: Anthropic.Beta.Messages.BetaTool[];
+  runTool?: (name: string, input: Record<string, unknown>) => Promise<{ text: string; isError?: boolean }>;
 }
 export interface TurnResult {
   text: string;
@@ -234,7 +247,14 @@ export async function runTurn(
   if (last?.role === "user") messages[messages.length - 1] = { role: "user", content: [{ type: "text", text: last.content as string }, ...current] };
   else messages.push({ role: "user", content: current });
 
-  const req: TurnRequest = { model: config.model, effort: config.effort, system: config.systemPrompt, messages };
+  const req: TurnRequest = {
+    model: config.model,
+    effort: config.effort,
+    system: `${withoutNoDataLine(config.systemPrompt)}\n\n${toolsInstructions(today)}`,
+    messages,
+    tools: assistantTools(),
+    runTool: (name, toolInput) => runAssistantTool(actor, name, toolInput),
+  };
   let answer = "";
   try {
     const result = await streamer(req, (d) => {

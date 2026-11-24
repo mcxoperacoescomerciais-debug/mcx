@@ -55,6 +55,46 @@ export async function listRoutines(actor: Actor) {
 
 export async function saveRoutine(actor: Actor, id: string | null, input: RoutineInput): Promise<Result> {
   if (!can(actor.role, "routine.manage")) return fail("Sem permissão.");
+  return upsertRoutine(actor, id, input);
+}
+
+export type RepeatKind = "daily" | "weekly" | "monthly";
+export interface RepeatInput {
+  kind: RepeatKind;
+  weekdays?: number[];
+  monthDay?: number | null;
+}
+
+/**
+ * "Nova demanda" com repetição (todo dia, toda quinta, todo dia 5...): vira uma
+ * rotina, e a demanda aparece na fila do responsável no dia de cada repetição
+ * (se a primeira for hoje, já aparece agora). Quem não é gestor só repete
+ * tarefa para si mesmo.
+ */
+export async function createRepeatingDemand(
+  actor: Actor,
+  input: { title: string; clientId: string; categoryId: string; typeId?: string | null; assigneeId: string; priority?: Priority; startDate: string },
+  repeat: RepeatInput,
+): Promise<Result> {
+  if (!can(actor.role, "demand.create")) return fail("Sem permissão.");
+  if (input.assigneeId !== actor.id && !can(actor.role, "routine.manage")) return fail("Só o gestor cria tarefa repetida para outra pessoa. Escolha você mesmo como responsável.");
+  if (!["daily", "weekly", "monthly"].includes(repeat.kind)) return fail("Escolha como a tarefa se repete.");
+  const frequency: Frequency = repeat.kind === "daily" ? "interval" : repeat.kind;
+  const rule = { weekdays: repeat.kind === "weekly" ? (repeat.weekdays ?? []) : [], monthDay: repeat.kind === "monthly" ? (repeat.monthDay ?? null) : null, intervalDays: repeat.kind === "daily" ? 1 : null };
+  const saved = await upsertRoutine(actor, null, { name: input.title, clientId: input.clientId, categoryId: input.categoryId, typeId: input.typeId ?? null, assigneeId: input.assigneeId, priority: input.priority ?? "medium", frequency, ...rule, startDate: input.startDate, leadDays: 0, dueOffsetDays: 0 });
+  if (!saved.ok) return saved;
+  await generateRoutines(todayIso());
+  const DAYS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  const when =
+    repeat.kind === "daily"
+      ? "todo dia"
+      : repeat.kind === "weekly"
+        ? `toda ${rule.weekdays.map((d) => DAYS[d]).join(", ").replace(/, ([^,]+)$/, " e $1")}`
+        : `todo dia ${rule.monthDay} do mês`;
+  return { ok: true, message: `Tarefa repetida criada: ${when}. Ela aparece na fila no dia de cada repetição; para mudar ou parar, use Rotinas.` };
+}
+
+async function upsertRoutine(actor: Actor, id: string | null, input: RoutineInput): Promise<Result> {
   const name = input.name.trim();
   if (name.length < 3) return fail("Informe o nome da rotina.");
   if (![input.clientId, input.categoryId, input.assigneeId].every((v) => UUID.test(v ?? ""))) return fail("Informe contratante, categoria e responsável.");
