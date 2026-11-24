@@ -20,6 +20,7 @@ import type { DemandInput, DemandPatch, Result } from "@/server/demands";
 import * as notion from "@/server/notion-import";
 import type { NotionImportOptions } from "@/server/notion-import";
 import * as registry from "@/server/registry";
+import * as googleCalendar from "@/server/google-calendar";
 import * as assistant from "@/server/assistant";
 import type { AssistantConfig } from "@/lib/assistant";
 import * as routines from "@/server/routines";
@@ -420,6 +421,12 @@ export async function archiveConversationAction(id: string, archived = true) {
   const user = await actionUser();
   if (!user) return EXPIRED;
   return done(await assistant.archiveConversation(user, id, archived));
+}
+
+export async function saveCalendarConfigAction(text: string) {
+  const user = await actionUser();
+  if (!user) return EXPIRED;
+  return done(await googleCalendar.saveCalendarConfig(user, text));
 }
 
 export async function saveAssistantConfigAction(patch: Partial<AssistantConfig>) {
