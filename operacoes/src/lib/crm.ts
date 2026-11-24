@@ -4,7 +4,37 @@
  */
 import { addDays } from "./dates";
 
-export const LEAD_TYPES = ["Agência de promotoria", "Agência de degustação/ação", "Representante", "Marca/Indústria", "Outro"] as const;
+export const LEAD_TYPES = ["Agência de promotoria", "Agência de ativação/promoções", "Representante", "Marca/Indústria", "Outro"] as const;
+/** Nomes antigos de tipo que já podem estar gravados → nome atual. */
+const LEGACY_TYPES: Record<string, (typeof LEAD_TYPES)[number]> = { "Agência de degustação/ação": "Agência de ativação/promoções" };
+export function normalizeLeadType(type: string): string {
+  return LEGACY_TYPES[type] ?? type;
+}
+
+/**
+ * Foco do lead: o que a MCX quer vender. Vem dos produtos marcados no lead —
+ * App = venda do aplicativo; Backoffice, Degustação e Administrativo = serviço.
+ */
+export const LEAD_FOCUS = ["Venda do app", "Serviço", "App + serviço"] as const;
+export type LeadFocus = (typeof LEAD_FOCUS)[number];
+const SERVICE_PRODUCTS = ["Backoffice", "Degustação", "Administrativo"];
+export function leadFocus(products: readonly string[]): LeadFocus | null {
+  const app = products.includes("App");
+  const service = products.some((p) => SERVICE_PRODUCTS.includes(p));
+  return app && service ? "App + serviço" : app ? "Venda do app" : service ? "Serviço" : null;
+}
+
+/** Texto livre da planilha ("Venda do aplicativo…", "serviço", "app + backoffice") → produtos. */
+export function productsFromFocus(text: string): Product[] {
+  const t = companyKey(text);
+  if (!t) return [];
+  const out = new Set<Product>();
+  if (/\b(app|aplicativo|sistema)\b/.test(t)) out.add("App");
+  if (/\bbackoffice\b|\bservico\b|\bservicos\b/.test(t)) out.add("Backoffice");
+  if (/\bdegustac/.test(t) && !out.has("App")) out.add("Degustação");
+  if (/\badministrativo\b/.test(t)) out.add("Administrativo");
+  return [...out];
+}
 export const LEAD_SOURCES = ["Prospecção ativa", "Indicação", "Instagram", "Anúncio", "Evento", "Outro"] as const;
 export const PRODUCTS = ["Backoffice", "App", "Degustação", "Administrativo"] as const;
 export type Product = (typeof PRODUCTS)[number];
@@ -161,6 +191,17 @@ export interface CsvLead {
   city: string;
   type: string;
   source: string;
+  /** Colunas opcionais (planilha de prospecção). */
+  region: string;
+  focus: string;
+  nextAction: string;
+  dataSource: string;
+  fit: string;
+  why: string;
+  notes: string;
+  instagram: string;
+  site: string;
+  address: string;
 }
 
 function splitCsvLine(line: string, sep: string): string[] {
@@ -192,7 +233,19 @@ const HEADER_ALIASES: Record<keyof Omit<CsvLead, "line">, string[]> = {
   city: ["cidade", "municipio"],
   type: ["tipo"],
   source: ["origem"],
+  region: ["regiao"],
+  focus: ["foco", "oferta", "produto", "produtos"],
+  nextAction: ["proximo passo", "proxima acao"],
+  dataSource: ["fonte", "fonte do dado"],
+  fit: ["fit"],
+  why: ["por que e lead", "motivo"],
+  notes: ["observacao", "observacoes", "notas"],
+  instagram: ["instagram"],
+  site: ["site"],
+  address: ["endereco"],
 };
+
+const CSV_FIELDS = Object.keys(HEADER_ALIASES) as (keyof typeof HEADER_ALIASES)[];
 
 /** Lê o CSV (separador ; ou ,). A 1ª linha é o cabeçalho; só "empresa" é obrigatória. */
 export function parseLeadsCsv(text: string): { rows: CsvLead[]; error?: string } {
@@ -201,7 +254,7 @@ export function parseLeadsCsv(text: string): { rows: CsvLead[]; error?: string }
   const sep = (lines[0].match(/;/g)?.length ?? 0) >= (lines[0].match(/,/g)?.length ?? 0) ? ";" : ",";
   const header = splitCsvLine(lines[0], sep).map((h) => companyKey(h));
   const col = (field: keyof typeof HEADER_ALIASES) => header.findIndex((h) => HEADER_ALIASES[field].includes(h));
-  const idx = { company: col("company"), contact: col("contact"), whatsapp: col("whatsapp"), city: col("city"), type: col("type"), source: col("source") };
+  const idx = Object.fromEntries(CSV_FIELDS.map((f) => [f, col(f)])) as Record<keyof typeof HEADER_ALIASES, number>;
   if (idx.company < 0) return { rows: [], error: "Não achei a coluna “empresa” no cabeçalho." };
   const rows: CsvLead[] = [];
   lines.slice(1).forEach((line, i) => {
@@ -209,7 +262,9 @@ export function parseLeadsCsv(text: string): { rows: CsvLead[]; error?: string }
     const get = (n: number) => (n >= 0 ? (cells[n] ?? "") : "");
     const company = get(idx.company);
     if (!company) return;
-    rows.push({ line: i + 2, company, contact: get(idx.contact), whatsapp: get(idx.whatsapp), city: get(idx.city), type: get(idx.type), source: get(idx.source) });
+    const row = { line: i + 2 } as CsvLead;
+    for (const f of CSV_FIELDS) row[f] = get(idx[f]);
+    rows.push(row);
   });
   return { rows };
 }

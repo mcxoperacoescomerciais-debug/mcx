@@ -1,6 +1,6 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { formatMoney } from "@/lib/crm";
+import { formatMoney, leadFocus, normalizeLeadType } from "@/lib/crm";
 import { formatRelative } from "@/lib/dates";
 
 export interface LineLead {
@@ -17,12 +17,15 @@ export interface LineLead {
   proposalValueCents: number | null;
   proposalValidUntil: string | null;
   ownerName: string;
+  type?: string;
+  products?: string[] | null;
 }
 
 /** Linha de lead usada em "Comercial hoje" e na lista. */
 export function LeadLine({ lead, today, showProposal = false }: { lead: LineLead; today: string; showProposal?: boolean }) {
   const late = !!lead.nextActionDate && lead.nextActionDate < today && (lead.stageKind === "open" || lead.stageKind === "nurture");
   const value = lead.proposalValueCents ?? lead.potentialCents;
+  const focus = lead.products ? leadFocus(lead.products) : null;
   return (
     <Link href={`/comercial/leads/${lead.id}`} className="card block px-4 py-3 transition-colors hover:border-brand-500">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
@@ -35,6 +38,8 @@ export function LeadLine({ lead, today, showProposal = false }: { lead: LineLead
       {lead.nextAction && <p className="mt-1 text-sm text-ink-2">{lead.nextAction}</p>}
       <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
         <span className="rounded-full border border-line-strong bg-subtle px-2 py-0.5 font-semibold text-ink-2">{lead.stageName}</span>
+        {lead.type && <span className="rounded-full bg-brand-50 px-2 py-0.5 font-semibold text-brand-900">{normalizeLeadType(lead.type)}</span>}
+        {focus && <span className={clsx("rounded-full px-2 py-0.5 font-semibold", focus === "Serviço" ? "bg-ok-bg text-ok" : "bg-warn-bg text-warn")}>{focus}</span>}
         {lead.contactName && <span>{lead.contactName}</span>}
         {lead.city && <span>· {lead.city}</span>}
         {!!value && <span>· {formatMoney(value)}/mês</span>}

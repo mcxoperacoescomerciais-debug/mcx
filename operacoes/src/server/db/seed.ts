@@ -53,7 +53,7 @@ export async function seedDemoIfEmpty(db: DB): Promise<void> {
   const demo: { company: string; type: string; city: string; stage: string; products: string[]; promoters?: number; next: string; nextIn: number; contact: string; phone: string; contacted?: number; responded?: boolean; proposal?: number }[] = [
     { company: "Agência Exemplo Alfa", type: "Agência de promotoria", city: "Belo Horizonte", stage: "prospect", products: ["App"], promoters: 30, next: "Fazer o primeiro contato", nextIn: 0, contact: "Contato Alfa", phone: "31900000001" },
     { company: "Agência Exemplo Beta", type: "Agência de promotoria", city: "Contagem", stage: "contacted", products: ["App", "Backoffice"], promoters: 15, next: "Follow-up D+3", nextIn: -1, contact: "Contato Beta", phone: "31900000002", contacted: -4 },
-    { company: "Agência Exemplo Gama", type: "Agência de degustação/ação", city: "Divinópolis", stage: "talking", products: ["Degustação"], next: "Agendar a demonstração", nextIn: 0, contact: "Contato Gama", phone: "37900000003", contacted: -6, responded: true },
+    { company: "Agência Exemplo Gama", type: "Agência de ativação/promoções", city: "Divinópolis", stage: "talking", products: ["Degustação"], next: "Agendar a demonstração", nextIn: 0, contact: "Contato Gama", phone: "37900000003", contacted: -6, responded: true },
     { company: "Marca Exemplo Delta", type: "Marca/Indústria", city: "Betim", stage: "proposal", products: ["App"], promoters: 60, next: "Cobrar retorno da proposta", nextIn: 2, contact: "Contato Delta", phone: "31900000004", contacted: -15, responded: true, proposal: -8 },
   ];
   for (const d of demo) {

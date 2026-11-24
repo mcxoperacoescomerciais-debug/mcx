@@ -16,6 +16,9 @@ import {
   lossReasons,
   matchOption,
   LEAD_TYPES,
+  leadFocus,
+  normalizeLeadType,
+  productsFromFocus,
   parseLeadsCsv,
   parseMoney,
   phoneDigits,
@@ -319,7 +322,10 @@ describe("importação de CSV", () => {
   test("lê ; ou , com aspas e reconhece o cabeçalho", () => {
     const a = parseLeadsCsv("Empresa;Contato;WhatsApp;Cidade;Tipo;Origem\nAlfa;Ana;31 97777-1111;BH;Representante;Evento\n\n");
     assert.equal(a.rows.length, 1);
-    assert.deepEqual(a.rows[0], { line: 2, company: "Alfa", contact: "Ana", whatsapp: "31 97777-1111", city: "BH", type: "Representante", source: "Evento" });
+    assert.deepEqual(
+      { ...a.rows[0] },
+      { line: 2, company: "Alfa", contact: "Ana", whatsapp: "31 97777-1111", city: "BH", type: "Representante", source: "Evento", region: "", focus: "", nextAction: "", dataSource: "", fit: "", why: "", notes: "", instagram: "", site: "", address: "" },
+    );
     const b = parseLeadsCsv('empresa,cidade\n"Beta, Filial",Betim');
     assert.equal(b.rows[0].company, "Beta, Filial");
     assert.ok(parseLeadsCsv("nome;cidade\nx;y").error);
@@ -346,6 +352,38 @@ describe("importação de CSV", () => {
     assert.equal(imported.stageKey, "prospect");
     assert.equal(imported.nextActionDate, today);
     assert.equal(imported.contactName, "Ana");
+  });
+
+  test("planilha de prospecção: tipo, foco (app ou serviço), região, próximo passo e contexto nas observações", async () => {
+    assert.deepEqual(productsFromFocus("Venda do aplicativo: agenda de degustações, painel financeiro e calculadora"), ["App"]);
+    assert.deepEqual(productsFromFocus("App + serviço"), ["App", "Backoffice"]);
+    assert.deepEqual(productsFromFocus("Serviço"), ["Backoffice"]);
+    assert.equal(leadFocus(["App"]), "Venda do app");
+    assert.equal(leadFocus(["Degustação"]), "Serviço");
+    assert.equal(leadFocus(["App", "Backoffice"]), "App + serviço");
+    assert.equal(leadFocus([]), null);
+    assert.equal(normalizeLeadType("Agência de degustação/ação"), "Agência de ativação/promoções");
+    const csv = [
+      "Agência;Cidade;Região;Telefone;Instagram;Site;Fit;Tipo;Foco;Por que é lead;Próximo passo;Endereço;Fonte;Observação",
+      "Promo Teste Alfa;Uberlândia;Triângulo;(34) 99161-1697;https://instagram.com/x;Não encontrado;A;Agência de ativação/promoções;Venda do aplicativo;Promoções;Perguntar quantas ações fazem;R. Um, 1;Google Maps;",
+      "Promotoria Teste Beta;Juiz de Fora;Zona da Mata;(32) 3216-7548;Não encontrado;;B;Agência de promotoria;App + serviço;Promotores em PDV;Ligar;;Google Maps;Alinhar antes",
+    ].join("\n");
+    const done = await crm.importLeads(eduardo, csv, { dryRun: false });
+    assert.ok(done.ok && done.created === 2, JSON.stringify(done));
+    const alfa = (await crm.listLeads(eduardo, { q: "promo teste alfa" }))[0];
+    assert.equal(alfa.type, "Agência de ativação/promoções");
+    assert.equal(alfa.focus, "Venda do app");
+    assert.equal(alfa.nextAction, "Perguntar quantas ações fazem");
+    const full = (await crm.getLead(eduardo, alfa.id))!;
+    assert.equal(full.region, "Triângulo");
+    assert.deepEqual(full.tags, ["Fit A"]);
+    assert.match(full.notes ?? "", /Instagram: https:\/\/instagram\.com\/x/);
+    assert.doesNotMatch(full.notes ?? "", /Não encontrado/);
+    assert.equal(full.dataSource, "Planilha (Google Maps)");
+    const servico = await crm.listLeads(eduardo, { focus: "App + serviço", type: "Agência de promotoria" });
+    assert.ok(servico.some((l) => l.company === "Promotoria Teste Beta"));
+    assert.ok(!servico.some((l) => l.company === "Promo Teste Alfa"));
+    assert.ok((await crm.listLeads(eduardo, { focus: "none" })).every((l) => l.focus === null));
   });
 });
 

@@ -17,6 +17,10 @@ import {
   INTERACTION_KINDS,
   LEAD_SOURCES,
   LEAD_TYPES,
+  leadFocus,
+  normalizeLeadType,
+  productsFromFocus,
+  type CsvLead,
   LOSS_REASONS,
   lossReasons,
   matchOption,
@@ -161,7 +165,14 @@ const leadColumns = {
 
 export type LeadRow = Awaited<ReturnType<typeof listLeads>>[number];
 
-export async function listLeads(actor: Actor, f: { owner?: string; stage?: string; scope?: "open" | "all"; q?: string } = {}) {
+export async function listLeads(actor: Actor, f: { owner?: string; stage?: string; scope?: "open" | "all"; q?: string; type?: string; focus?: string } = {}) {
+  const rows = await queryLeads(actor, f);
+  return rows
+    .map((r) => ({ ...r, type: normalizeLeadType(r.type), focus: leadFocus(r.products ?? []) }))
+    .filter((r) => (!f.type || r.type === f.type) && (!f.focus || (f.focus === "none" ? !r.focus : r.focus === f.focus)));
+}
+
+async function queryLeads(actor: Actor, f: { owner?: string; stage?: string; scope?: "open" | "all"; q?: string }) {
   if (!can(actor.role, "crm.view")) return [];
   const db = await getDb();
   const where = [isNull(s.leads.deletedAt)];
@@ -193,7 +204,7 @@ export async function getLead(actor: Actor, id: string) {
   ]);
   const stage = stages.find((x) => x.id === lead.stageId)!;
   const unanswered = lead.respondedAt ? 0 : interactions.length;
-  return { ...lead, stage, stages, contacts, interactions, history, ownerName: owner?.name ?? "", unanswered };
+  return { ...lead, type: normalizeLeadType(lead.type), stage, stages, contacts, interactions, history, ownerName: owner?.name ?? "", unanswered };
 }
 
 /** Lead parecido já cadastrado (mesmo WhatsApp ou mesmo nome de empresa). */
@@ -212,7 +223,7 @@ async function findDuplicate(db: DB | Tx, company: string, whatsapp: string | nu
 
 function validateBase(input: LeadInput): string | null {
   if (input.company.trim().length < 2) return "Informe a empresa.";
-  if (!(LEAD_TYPES as readonly string[]).includes(input.type)) return "Escolha o tipo do lead.";
+  if (!(LEAD_TYPES as readonly string[]).includes(normalizeLeadType(input.type))) return "Escolha o tipo do lead.";
   if (!(LEAD_SOURCES as readonly string[]).includes(input.source)) return "Escolha a origem do lead.";
   if (input.source === "Indicação" && !clean(input.referredBy)) return "Indicação: informe quem indicou.";
   if (!UUID.test(input.ownerId ?? "")) return "Escolha o responsável.";
@@ -233,7 +244,7 @@ function leadValues(input: LeadInput) {
   return {
     company: input.company.trim().slice(0, 160),
     companyKey: companyKey(input.company),
-    type: input.type,
+    type: normalizeLeadType(input.type),
     city: clean(input.city, 80),
     region: clean(input.region, 80),
     source: input.source,
@@ -675,16 +686,22 @@ export async function commercialDashboard(actor: Actor, month: string) {
 
 // --- Importação de CSV -----------------------------------------------------
 
-export interface ImportPreviewRow {
-  line: number;
-  company: string;
-  contact: string;
-  whatsapp: string;
-  city: string;
-  type: string;
-  source: string;
+export interface ImportPreviewRow extends CsvLead {
   problem: string | null;
   duplicateOf: string | null;
+}
+
+/** Junta o que a planilha traz de contexto (sem inventar nada) nas observações do lead. */
+function importNotes(r: CsvLead): string | null {
+  const useful = (v: string) => (v.trim() && !/^(nao encontrado|null|-)$/.test(companyKey(v)) ? v.trim() : "");
+  const parts = [
+    useful(r.why) && `Por que é lead: ${useful(r.why)}`,
+    useful(r.notes) && `Observação: ${useful(r.notes)}`,
+    useful(r.instagram) && `Instagram: ${useful(r.instagram)}`,
+    useful(r.site) && `Site: ${useful(r.site)}`,
+    useful(r.address) && `Endereço: ${useful(r.address)}`,
+  ].filter(Boolean);
+  return parts.length ? parts.join("\n").slice(0, 2000) : null;
 }
 
 /**
@@ -711,9 +728,10 @@ export async function importLeads(actor: Actor, csv: string, opts: { dryRun: boo
   for (const r of parsed.rows) {
     const key = companyKey(r.company);
     const digits = phoneDigits(r.whatsapp);
-    const type = matchOption(r.type, LEAD_TYPES, "Agência de promotoria");
+    const type = matchOption(normalizeLeadType(r.type), LEAD_TYPES, "Agência de promotoria");
     const source = matchOption(r.source, LEAD_SOURCES, "Prospecção ativa");
-    const row: ImportPreviewRow = { ...r, type, source, problem: null, duplicateOf: null };
+    const products = productsFromFocus(r.focus);
+    const row: ImportPreviewRow = { ...r, type, source, focus: leadFocus(products) ?? "—", problem: null, duplicateOf: null };
     if (key.length < 2) row.problem = "Empresa em branco.";
     else if (r.whatsapp && !digits) row.problem = "WhatsApp inválido (entra sem o número).";
     if (seenNames.has(key) || (digits && seenPhones.has(digits))) row.duplicateOf = "linha repetida no arquivo";
@@ -728,7 +746,24 @@ export async function importLeads(actor: Actor, csv: string, opts: { dryRun: boo
     await db.transaction(async (tx) => {
       const [lead] = await tx
         .insert(s.leads)
-        .values({ company: r.company.trim().slice(0, 160), companyKey: key, type, city: clean(r.city, 80), source: source === "Indicação" ? "Outro" : source, dataSource: "Importação de planilha", products: [], potentialCents: 0, ownerId, stageId: first.id, nextAction: "Fazer o primeiro contato", nextActionDate: today, createdBy: actor.id })
+        .values({
+          company: r.company.trim().slice(0, 160),
+          companyKey: key,
+          type,
+          city: clean(r.city, 80),
+          region: clean(r.region, 80),
+          source: source === "Indicação" ? "Outro" : source,
+          dataSource: clean(r.dataSource ? `Planilha (${r.dataSource})` : "Importação de planilha", 200),
+          products,
+          potentialCents: potentialValue(products, null, null).cents,
+          tags: r.fit.trim() ? [`Fit ${r.fit.trim().toUpperCase().slice(0, 3)}`] : [],
+          notes: importNotes(r),
+          ownerId,
+          stageId: first.id,
+          nextAction: clean(r.nextAction, 200) ?? "Fazer o primeiro contato",
+          nextActionDate: today,
+          createdBy: actor.id,
+        })
         .returning({ id: s.leads.id });
       await tx.insert(s.leadStageHistory).values({ leadId: lead.id, fromStageId: null, toStageId: first.id, userId: actor.id });
       if (r.contact.trim() || digits) await tx.insert(s.leadContacts).values({ leadId: lead.id, name: r.contact.trim() || r.company.trim(), whatsapp: digits ? r.whatsapp.trim() : null, whatsappDigits: digits, isPrimary: true });

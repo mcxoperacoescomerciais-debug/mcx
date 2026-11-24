@@ -11,6 +11,7 @@ interface Row {
   city: string;
   type: string;
   source: string;
+  focus: string;
   problem: string | null;
   duplicateOf: string | null;
 }
@@ -76,7 +77,7 @@ export function Importer({ people, userId }: { people: { id: string; name: strin
             setRows(null);
             setCsv(e.target.value);
           }}
-          placeholder={"empresa;contato;whatsapp;cidade;tipo;origem\nAgência Tal;Fulano;31 90000-0000;Contagem;Agência de promotoria;Prospecção ativa"}
+          placeholder={"empresa;contato;whatsapp;cidade;tipo;foco;origem\nAgência Tal;Fulano;31 90000-0000;Contagem;Agência de promotoria;App + serviço;Prospecção ativa"}
         />
       </div>
       {error && <p role="alert" className="rounded-lg bg-bad-bg px-3 py-2 text-sm text-bad">{error}</p>}
@@ -103,6 +104,7 @@ export function Importer({ people, userId }: { people: { id: string; name: strin
                 <th className="pb-1 font-semibold">Contato</th>
                 <th className="pb-1 font-semibold">Cidade</th>
                 <th className="pb-1 font-semibold">Tipo</th>
+                <th className="pb-1 font-semibold">Foco</th>
                 <th className="pb-1 font-semibold">Situação</th>
               </tr>
             </thead>
@@ -114,6 +116,7 @@ export function Importer({ people, userId }: { people: { id: string; name: strin
                   <td className="py-1.5 text-ink-2">{[r.contact, r.whatsapp].filter(Boolean).join(" · ")}</td>
                   <td className="py-1.5 text-ink-2">{r.city}</td>
                   <td className="py-1.5 text-ink-2">{r.type}</td>
+                  <td className="py-1.5 text-ink-2">{r.focus}</td>
                   <td className="py-1.5">
                     {r.duplicateOf ? <span className="font-semibold text-warn">Pular — já existe: {r.duplicateOf}</span> : r.problem ? <span className="text-warn">{r.problem}</span> : <span className="text-ok">Entra</span>}
                   </td>
