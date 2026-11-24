@@ -5,6 +5,7 @@
  */
 import "server-only";
 import ExcelJS from "exceljs";
+import { excelDate } from "@/lib/excel-dates";
 
 export interface SheetSpec {
   name: string;
@@ -25,7 +26,17 @@ export async function buildWorkbook(sheets: SheetSpec[], meta: { agency: string;
     head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0C323A" } };
     head.alignment = { vertical: "middle" };
     head.height = 20;
-    for (const r of spec.rows) ws.addRow(r);
+    for (const r of spec.rows) {
+      // Texto de data ("24/11/2026") vira data de verdade: o filtro do Excel agrupa por ano e mês.
+      const dates = new Map<string, NonNullable<ReturnType<typeof excelDate>>>();
+      for (const c of spec.columns) {
+        const v = r[c.key];
+        const d = typeof v === "string" ? excelDate(v) : null;
+        if (d) dates.set(c.key, d);
+      }
+      const row = ws.addRow(dates.size ? { ...r, ...Object.fromEntries([...dates].map(([k, d]) => [k, d.value])) } : r);
+      for (const [k, d] of dates) row.getCell(k).numFmt = d.numFmt;
+    }
     if (spec.rows.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: spec.columns.length } };
     if (spec.note) {
       ws.addRow([]);
