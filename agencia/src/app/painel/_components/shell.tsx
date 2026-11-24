@@ -385,7 +385,7 @@ export function PanelShell({
         </div>
       ) : null}
 
-      <main className="px-4 sm:px-6 lg:px-8 pt-6 lg:py-8 max-w-[1480px] pb-[calc(24px+env(safe-area-inset-bottom,0px))]">
+      <main data-agencia={mcx || !agency ? "mcx" : agency.id} className="px-4 sm:px-6 lg:px-8 pt-6 lg:py-8 max-w-[1480px] pb-[calc(24px+env(safe-area-inset-bottom,0px))]">
         <Suspense fallback={null}>
           <PanelOffline agencyId={mcx || !agency ? "mcx" : agency.id} />
         </Suspense>

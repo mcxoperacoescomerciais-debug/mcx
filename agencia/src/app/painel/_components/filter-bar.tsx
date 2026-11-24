@@ -5,10 +5,11 @@
  * recalculada no servidor e TODOS os números da tela seguem o mesmo filtro.
  */
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { ChevronLeft, ChevronRight, Loader2, RotateCcw, Search } from "lucide-react";
 import clsx from "clsx";
 import { addDays, todayIso } from "@/lib/dates";
+import { filtersToRestore, pickFilters, readSavedFilters, savedFiltersKey, writeSavedFilters } from "@/lib/saved-filters";
 import { SearchSelect } from "./search-select";
 
 type Option = { id: string; name: string };
@@ -52,6 +53,9 @@ export function FilterBar({
   const [q, setQ] = useState(params.get("q") ?? "");
   const today = todayIso();
 
+  /** A pessoa mesma deixou a tela sem filtro (desmarcou ou "Limpar filtros"): não restaurar o salvo. */
+  const clearedByUser = useRef(false);
+
   function update(patch: Record<string, string | null | undefined>) {
     const next = new URLSearchParams(params.toString());
     for (const [k, v] of Object.entries(patch)) {
@@ -59,8 +63,38 @@ export function FilterBar({
       else next.delete(k);
     }
     next.delete("page");
+    if (!Object.keys(pickFilters(next)).length) clearedByUser.current = true;
     const qs = next.toString();
     start(() => router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }
+
+  // Filtros salvos: ao voltar para a tela sem filtro na URL, recoloca os últimos
+  // marcados; a cada mudança, guarda os atuais (vazio = apaga o salvo).
+  const paramsKey = params.toString();
+  useEffect(() => {
+    const agency = document.querySelector("main[data-agencia]")?.getAttribute("data-agencia") ?? "";
+    const key = savedFiltersKey(agency, pathname);
+    const current = new URLSearchParams(paramsKey);
+    const values = pickFilters(current);
+    if (!Object.keys(values).length && !clearedByUser.current) {
+      const restore = filtersToRestore(readSavedFilters(key), todayIso());
+      if (Object.keys(restore).length) {
+        for (const [k, v] of Object.entries(restore)) current.set(k, v);
+        start(() => router.replace(`${pathname}?${current.toString()}`, { scroll: false }));
+        return;
+      }
+    }
+    clearedByUser.current = false;
+    writeSavedFilters(key, values, todayIso());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, paramsKey]);
+
+  // A busca acompanha a URL quando ela muda por fora (filtro restaurado, voltar do navegador).
+  const urlQ = params.get("q") ?? "";
+  const [seenUrlQ, setSeenUrlQ] = useState(urlQ);
+  if (seenUrlQ !== urlQ) {
+    setSeenUrlQ(urlQ);
+    if (q.trim() !== urlQ) setQ(urlQ);
   }
 
   // Busca com pequeno atraso (não recarrega a cada tecla).
