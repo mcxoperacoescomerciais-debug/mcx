@@ -111,6 +111,8 @@ export default async function SettingsPage() {
               <input type="number" name="groupPhotoMax" min={1} max={10} step={1} defaultValue={st.groupPhotoMax} className={inputClass} />
             </Row>
             <p className="text-[12px] text-muted -mt-1">Menos fotos deixam o grupo mais organizado. Vale no próximo envio de cada promotor, depois que o app dele atualizar os dados.</p>
+            <Check name="groupPortraitOnly" checked={st.groupPortraitOnly} label="Não enviar ao grupo as fotos tiradas na horizontal (deitadas)" />
+            <p className="text-[12px] text-muted -mt-1">Foto na horizontal quebra o álbum do WhatsApp e sai separada das outras. Com esta opção ela fica só no relatório completo.</p>
           </SectionCard>
           <SectionCard title="Regras de campo" bodyClass="px-5 pb-5 space-y-3">
             <Check name="allowExceptions" checked={st.allowExceptions} label="Permitir exceção justificada para foto/estoque obrigatórios" help="A exceção exige motivo + justificativa e aparece para o gestor." />

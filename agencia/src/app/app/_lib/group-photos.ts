@@ -8,10 +8,17 @@ export const GROUP_MAX_FILES = 10;
 
 type Taken = { kind: string; takenAt: string };
 
-export function groupPhotos<T extends Taken>(photos: T[], max = GROUP_MAX_FILES): { sent: T[]; hasBefore: boolean; afterLeft: number } {
+export function groupPhotos<T extends Taken>(photos: T[], max = GROUP_MAX_FILES, skip?: (p: T) => boolean): { sent: T[]; hasBefore: boolean; afterLeft: number; skipped: number } {
   const after = photos.filter((p) => p.kind === "after").sort((a, b) => a.takenAt.localeCompare(b.takenAt));
-  const sent = after.slice(0, Math.max(0, max));
-  return { sent, hasBefore: photos.some((p) => p.kind === "before"), afterLeft: after.length - sent.length };
+  // "skip" tira do grupo as fotos que a agência não quer lá (ex.: tiradas na horizontal): ficam no relatório.
+  const allowed = skip ? after.filter((p) => !skip(p)) : after;
+  const sent = allowed.slice(0, Math.max(0, max));
+  return { sent, hasBefore: photos.some((p) => p.kind === "before"), afterLeft: after.length - sent.length, skipped: after.length - allowed.length };
+}
+
+/** Foto tirada na horizontal (mais larga que alta). Quadrada conta como em pé. */
+export function isLandscape(width: number, height: number): boolean {
+  return width > height;
 }
 
 /** Texto para o promotor, embaixo do botão de envio. */

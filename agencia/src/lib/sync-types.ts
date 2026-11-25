@@ -283,7 +283,7 @@ export interface BootstrapPayload {
   /** "route" = programação por dia; "portfolio" = carteira com meta semanal. */
   workMode: "route" | "portfolio";
   portfolio: BootstrapPortfolio | null;
-  agency: { name: string; logoUrl: string | null; /** Fotos do DEPOIS enviadas ao grupo (1 a 10); ausente em cópia antiga do app = 10. */ groupPhotoMax?: number };
+  agency: { name: string; logoUrl: string | null; /** Fotos do DEPOIS enviadas ao grupo (1 a 10); ausente em cópia antiga do app = 10. */ groupPhotoMax?: number; /** Só fotos em pé vão para o grupo (as na horizontal ficam no relatório). */ groupPortraitOnly?: boolean };
   settings: {
     allowIncompleteVisit: boolean;
     allowExtraVisits: boolean;

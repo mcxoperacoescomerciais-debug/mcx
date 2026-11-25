@@ -39,6 +39,27 @@ describe("fotos no grupo do WhatsApp", () => {
   });
 });
 
+test("só fotos em pé: as tiradas na horizontal não vão para o grupo", async () => {
+  const { groupLimit, isLandscape } = await import("../src/app/app/_lib/group-photos");
+  const { mergeSettings } = await import("../src/lib/settings");
+  assert.equal(isLandscape(1600, 1200), true);
+  assert.equal(isLandscape(1200, 1600), false);
+  assert.equal(isLandscape(1000, 1000), false);
+  // 7 do depois; a 2ª e a 5ª na horizontal. Limite 4: vão a 1ª, 3ª, 4ª e 6ª; ficam 3 no relatório.
+  const lying = new Set([ph("after", 2).id, ph("after", 5).id]);
+  const r = groupPhotos(Array.from({ length: 7 }, (_, i) => ph("after", i + 1)), groupLimit(4), (p) => lying.has(p.id));
+  assert.deepEqual(r.sent.map((p) => p.id), [1, 3, 4, 6].map((i) => ph("after", i).id));
+  assert.equal(r.afterLeft, 3);
+  assert.equal(r.skipped, 2);
+  // Todas na horizontal: nenhuma vai, todas ficam no relatório.
+  const none = groupPhotos([ph("after", 1), ph("after", 2)], 10, () => true);
+  assert.equal(none.sent.length, 0);
+  assert.equal(none.afterLeft, 2);
+  assert.equal(groupPhotos([ph("after", 1)]).skipped, 0);
+  assert.equal(mergeSettings({}).groupPortraitOnly, false);
+  assert.equal(mergeSettings({ groupPortraitOnly: true }).groupPortraitOnly, true);
+});
+
 test("limite da agência: 4 fotos no grupo, o resto no relatório", async () => {
   const { groupLimit, groupReportNote } = await import("../src/app/app/_lib/group-photos");
   const { mergeSettings } = await import("../src/lib/settings");
