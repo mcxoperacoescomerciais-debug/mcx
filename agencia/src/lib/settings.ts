@@ -71,6 +71,8 @@ export interface AgencySettings {
   checkinRadiusM: number;
   /** Foto da galeria: "brand" = regra de cada marca; "none" = só câmera; "authorized" = só promotores autorizados (e a marca permitir). */
   galleryPolicy: GalleryPolicy;
+  /** Quantas fotos do DEPOIS vão para o grupo do WhatsApp no envio do atendimento (1 a 10); as demais ficam no relatório completo. */
+  groupPhotoMax: number;
   /** Feriados (AAAA-MM-DD): no relatório mensal, visita prevista não feita em feriado conta como válida. */
   holidays: string[];
   /** Valor pago por visita válida (relatório mensal e sistemática); null = não informado. */
@@ -139,6 +141,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   defaultWorkMode: "route",
   promoterCost: { salary: null, meal: null, fuel: null, other: null, chargesPct: DEFAULT_CHARGES_PCT },
   galleryPolicy: "brand",
+  groupPhotoMax: 10,
   checkinRadiusM: 300,
   modules: { tastings: true, finance: true, sistematica: false },
   overviewStyle: "standard",
@@ -167,6 +170,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
     },
     overviewStyle: r.overviewStyle === "executive" ? "executive" : "standard",
     checkinRadiusM: num(r.checkinRadiusM, DEFAULT_SETTINGS.checkinRadiusM, 50, 5000),
+    groupPhotoMax: num(r.groupPhotoMax, DEFAULT_SETTINGS.groupPhotoMax, 1, 10),
     galleryPolicy: r.galleryPolicy === "none" || r.galleryPolicy === "authorized" ? r.galleryPolicy : DEFAULT_SETTINGS.galleryPolicy,
     requireApproval: bool(r.requireApproval, DEFAULT_SETTINGS.requireApproval),
     allowIncompleteVisit: bool(r.allowIncompleteVisit, DEFAULT_SETTINGS.allowIncompleteVisit),

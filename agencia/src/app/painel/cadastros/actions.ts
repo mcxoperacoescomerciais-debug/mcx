@@ -142,6 +142,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         checkinRadiusM: Number(str(fd, "checkinRadiusM")),
         defaultWorkMode: str(fd, "defaultWorkMode"),
         galleryPolicy: str(fd, "galleryPolicy") as never,
+        groupPhotoMax: fd.has("groupPhotoMax") ? Number(str(fd, "groupPhotoMax")) : scope.settings.groupPhotoMax,
         // Definidos pela equipe MCX na tela da agência: a tela de Configurações não muda.
         modules: scope.settings.modules,
         overviewStyle: scope.settings.overviewStyle,

@@ -23,3 +23,14 @@ export function groupSendHint(sentCount: number, afterLeft: number, hasBefore: b
 
 /** Linha padrão da mensagem do grupo quando o atendimento tem fotos do antes. */
 export const BEFORE_IN_REPORT_NOTE = "📷 As fotos do ANTES estão no relatório completo.";
+
+/** Limite escolhido pela agência (1 a 10); valor ausente ou inválido = o máximo. */
+export function groupLimit(v: number | null | undefined): number {
+  return typeof v === "number" && Number.isFinite(v) ? Math.min(GROUP_MAX_FILES, Math.max(1, Math.round(v))) : GROUP_MAX_FILES;
+}
+
+/** Aviso no fim da mensagem do grupo: o que não foi como foto está no relatório completo. */
+export function groupReportNote(hasBefore: boolean, afterLeft: number): string | null {
+  if (afterLeft > 0) return hasBefore ? "📷 As fotos do ANTES e as demais do DEPOIS estão no relatório completo." : "📷 As demais fotos do DEPOIS estão no relatório completo.";
+  return hasBefore ? BEFORE_IN_REPORT_NOTE : null;
+}

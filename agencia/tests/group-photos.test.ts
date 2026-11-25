@@ -38,3 +38,23 @@ describe("fotos no grupo do WhatsApp", () => {
     assert.equal(groupPhotos(Array.from({ length: 12 }, (_, i) => ph("after", i)), 9).sent.length, 9);
   });
 });
+
+test("limite da agência: 4 fotos no grupo, o resto no relatório", async () => {
+  const { groupLimit, groupReportNote } = await import("../src/app/app/_lib/group-photos");
+  const { mergeSettings } = await import("../src/lib/settings");
+  assert.equal(groupLimit(4), 4);
+  assert.equal(groupLimit(undefined), 10);
+  assert.equal(groupLimit(0), 1);
+  assert.equal(groupLimit(99), 10);
+  const r = groupPhotos([ph("before", 0), ...Array.from({ length: 7 }, (_, i) => ph("after", i + 1))], groupLimit(4));
+  assert.equal(r.sent.length, 4);
+  assert.deepEqual(r.sent.map((p) => p.takenAt), [1, 2, 3, 4].map((i) => ph("after", i).takenAt));
+  assert.equal(r.afterLeft, 3);
+  assert.equal(groupReportNote(true, 3), "📷 As fotos do ANTES e as demais do DEPOIS estão no relatório completo.");
+  assert.equal(groupReportNote(false, 3), "📷 As demais fotos do DEPOIS estão no relatório completo.");
+  assert.equal(groupReportNote(true, 0), "📷 As fotos do ANTES estão no relatório completo.");
+  assert.equal(groupReportNote(false, 0), null);
+  assert.equal(mergeSettings({}).groupPhotoMax, 10);
+  assert.equal(mergeSettings({ groupPhotoMax: 4 }).groupPhotoMax, 4);
+  assert.equal(mergeSettings({ groupPhotoMax: 50 }).groupPhotoMax, 10);
+});

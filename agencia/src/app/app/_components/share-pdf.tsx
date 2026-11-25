@@ -18,7 +18,7 @@ import { fmtDate } from "@/lib/dates";
 import { attendanceDisplayStatus, type LocalAttendance } from "../_lib/local-store";
 import { useCatalog, useLocal, useObjectUrl } from "../_lib/hooks";
 import { PHOTOS_ONLY_HINT } from "../_lib/share-mode";
-import { BEFORE_IN_REPORT_NOTE, GROUP_MAX_FILES, groupPhotos, groupSendHint } from "../_lib/group-photos";
+import { GROUP_MAX_FILES, groupLimit, groupPhotos, groupReportNote, groupSendHint } from "../_lib/group-photos";
 
 export function SharePdf({ attendance, storeId, visitDate, onShared }: { attendance: LocalAttendance; storeId: string; visitDate: string; /** Chamado quando o WhatsApp recebeu o envio. */ onShared?: () => void }) {
   const { bootstrap, sync } = useLocal();
@@ -100,7 +100,8 @@ export function SharePdf({ attendance, storeId, visitDate, onShared }: { attenda
 
   // Padrão do grupo: só as fotos do DEPOIS (com faixa), até 10 — 9 se o PDF for anexado (o
   // Android recusa mais de 10 arquivos). As do antes ficam no relatório completo.
-  const groupMax = attendance.reportLinkId ? GROUP_MAX_FILES : GROUP_MAX_FILES - 1;
+  // A agência pode mandar menos (Configurações › Fotos no grupo do WhatsApp): o resto fica no relatório.
+  const groupMax = Math.min(groupLimit(bootstrap?.agency.groupPhotoMax), attendance.reportLinkId ? GROUP_MAX_FILES : GROUP_MAX_FILES - 1);
   const group = groupPhotos(attendance.photos, groupMax);
   const photoKey = group.sent.map((ph) => `${ph.id}:${ph.uploaded}`).join(",");
   const [photos, setPhotos] = useState<{ key: string; before: File[]; after: File[] } | null>(null);
@@ -128,7 +129,8 @@ export function SharePdf({ attendance, storeId, visitDate, onShared }: { attenda
   // fotos vão como FOTO. Sem o link (atendimento antigo), o PDF vai como arquivo junto.
   const reportUrl = attendance.reportLinkId && typeof window !== "undefined" ? `${window.location.origin}/r/${attendance.reportLinkId}` : null;
   const message0 = reportUrl ? `${text}\n\n📄 Relatório completo (PDF): ${reportUrl}` : text;
-  const message = group.hasBefore ? `${message0}\n\n${BEFORE_IN_REPORT_NOTE}` : message0;
+  const note = groupReportNote(group.hasBefore, group.afterLeft);
+  const message = note ? `${message0}\n\n${note}` : message0;
   const ready = photoFiles !== null && (Boolean(reportUrl) || Boolean(file));
 
   const split = Boolean(bootstrap?.user.photosOnlyShare);
