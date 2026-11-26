@@ -46,6 +46,8 @@ const loadImage = loadPdfImage;
 export interface AttendanceBlockData {
   d: Detail;
   images: Map<string, Img>;
+  /** Recursos liberados para a agência: seção de recurso desligado não entra no relatório. */
+  features?: { stock: boolean; damage: boolean };
 }
 
 /**
@@ -70,7 +72,7 @@ export async function loadAttendanceBlock(scope: Scope, attendanceId: string, ma
       if (img) images.set(p.id, img);
     }),
   );
-  return { d, images };
+  return { d, images, features: { stock: scope.settings.modules.stock, damage: scope.settings.modules.damage } };
 }
 
 /** Fotos separadas por origem (Validade / Avaria), com o produto embaixo. */
@@ -173,6 +175,7 @@ function PhotoBox({ label, photo, img }: { label: string; photo: Detail["photos"
 
 export function AttendanceBlock({ data, breakBefore = false }: { data: AttendanceBlockData; breakBefore?: boolean }) {
   const { d, images } = data;
+  const feat = data.features ?? { stock: true, damage: true };
   const a = d.attendance;
   const before = d.photos.filter((p) => p.kind === "before");
   const after = d.photos.filter((p) => p.kind === "after");
@@ -209,10 +212,14 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
             ["Início", fmtTime(a.startedAt)],
             ["Finalização", a.finishedAt ? fmtTime(a.finishedAt) : "—"],
             ["Duração", a.finishedAt ? fmtDuration(a.startedAt, a.finishedAt) : "—"],
-            ["Estoque informado", `${informed}/${d.stockRows.length}`],
-            ["Validades", `${d.validities.length}${urgent ? ` (${urgent} crítica/vencida)` : ""}`],
-            ["Rupturas", String(d.ruptures.length)],
-            ["Avarias", String(d.damages.length)],
+            ...(feat.stock
+              ? ([
+                  ["Estoque informado", `${informed}/${d.stockRows.length}`],
+                  ["Validades", `${d.validities.length}${urgent ? ` (${urgent} crítica/vencida)` : ""}`],
+                  ["Rupturas", String(d.ruptures.length)],
+                ] as [string, string][])
+              : []),
+            ...(feat.damage ? ([["Avarias", String(d.damages.length)]] as [string, string][]) : []),
             ["Ocorrências", String(d.occurrences.length)],
           ]}
         />
@@ -234,6 +241,8 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
       ))}
       {a.notes ? <Text style={{ fontSize: 8.5, marginTop: 3 }}>Observação: “{a.notes}”</Text> : null}
 
+      {feat.stock ? (
+        <>
       <Text style={base.h3}>Relatório de estoque {zero ? `· ${zero} com estoque zero` : ""}</Text>
       <PdfTable
         cols={[
@@ -278,6 +287,10 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
         <Text style={base.empty}>Nenhuma ruptura registrada.</Text>
       )}
 
+        </>
+      ) : null}
+      {feat.damage ? (
+        <>
       <Text style={base.h3}>Avarias</Text>
       <PdfTable
         cols={[
@@ -292,6 +305,8 @@ export function AttendanceBlock({ data, breakBefore = false }: { data: Attendanc
       />
       <PhotoStrip title="Fotos · Avaria" photos={damageImgs} images={images} />
 
+        </>
+      ) : null}
       <Text style={base.h3}>Observações e ocorrências</Text>
       {d.occurrences.length ? (
         d.occurrences.map((o) => (

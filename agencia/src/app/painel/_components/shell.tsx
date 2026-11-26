@@ -176,6 +176,7 @@ function NavItemLink({ item, active, onNavigate, compact }: { item: NavItem; act
 function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, hidden, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; perms: string[] | null; owner: boolean; mcxBadges: Record<string, number>; hidden: string[]; onNavigate?: () => void }) {
   const pathname = usePathname();
   const allowed = (i: NavItem) => {
+    if (hidden.includes(i.href)) return false;
     const mod = panelForPath(i.href);
     if (mod && hidden.includes(mod.key)) return false;
     if (perms) {
@@ -219,7 +220,10 @@ function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, hidden, onNav
   return (
     <nav className="space-y-4">
       <ul className="space-y-0.5">
-        {MAIN.filter(allowed).map((item) => (
+        {/* Estoque/ruptura/validade desligados e Avarias ligado: o item do menu vira "Avarias". */}
+        {MAIN.map((i) => (i.href === "/painel/estoque" && hidden.includes(i.href) && !hidden.includes("/painel/avarias") && !hidden.includes("estoque") ? { ...i, href: "/painel/avarias", label: "Avarias", also: [] } : i))
+          .filter(allowed)
+          .map((item) => (
           <NavItemLink key={item.href} item={item} active={isActive(pathname, item)} onNavigate={onNavigate} />
         ))}
       </ul>

@@ -15,6 +15,7 @@ import { agencyLogoAction, agencyModulesAction, clearAgencyDataAction, clearFiel
 import { mergeSettings } from "@/lib/settings";
 import { agencyDataCounts } from "@/server/agency-delete";
 import { fieldHistoryCounts } from "@/server/field-reset";
+import { ModuleChecks } from "../module-checks";
 
 /** Nome das tabelas na tela de "Limpar dados" (as demais aparecem pelo nome técnico). */
 const TABLE_LABEL: Record<string, string> = {
@@ -116,17 +117,9 @@ export default async function AgencyPage({ params, searchParams }: PageProps<"/p
           </ActionForm>
         </SectionCard>
 
-        <SectionCard title="Módulos e visão geral" subtitle="O que esta agência enxerga no painel. Desligado: o menu some e a página fica bloqueada." bodyClass="px-5 pb-5">
-          <ActionForm action={agencyModulesAction} hidden={{ id: agency.id }} submitLabel="Salvar módulos" resetOnSuccess={false}>
-            <label className="flex items-center gap-2 text-[13.5px]">
-              <input type="checkbox" name="tastings" defaultChecked={settings.modules.tastings} /> Degustações
-            </label>
-            <label className="flex items-center gap-2 text-[13.5px]">
-              <input type="checkbox" name="finance" defaultChecked={settings.modules.finance} /> Financeiro
-            </label>
-            <label className="flex items-center gap-2 text-[13.5px]">
-              <input type="checkbox" name="sistematica" defaultChecked={settings.modules.sistematica} /> Sistemática e relatório mensal (formato Etros)
-            </label>
+        <SectionCard title="Recursos liberados e visão geral" subtitle="O que esta agência usa. Desligado: some do painel (menu e página) e do app do promotor; o que já foi registrado continua guardado e volta ao religar." bodyClass="px-5 pb-5">
+          <ActionForm action={agencyModulesAction} hidden={{ id: agency.id }} submitLabel="Salvar recursos" resetOnSuccess={false}>
+            <ModuleChecks value={settings.modules} />
             <label className="block">
               <span className="block text-[12.5px] font-semibold text-ink-2 mb-1">Visão geral</span>
               <select name="overviewStyle" defaultValue={settings.overviewStyle} className={selectClass}>

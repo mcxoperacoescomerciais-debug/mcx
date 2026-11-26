@@ -91,16 +91,52 @@ export interface AgencySettings {
   };
 }
 
-export interface AgencyModules {
-  tastings: boolean;
-  finance: boolean;
-  /** Menu Sistemática + relatório mensal de atendimentos por marca (formato Etros). */
-  sistematica: boolean;
+/**
+ * Recursos que a equipe MCX libera por agência (Equipe MCX › Agências › a agência). Toda agência
+ * pode ter qualquer um: o que muda é o que está ligado. Recurso novo = uma linha aqui (o
+ * formulário, a gravação e a leitura saem desta lista); depois, usar `modules.<chave>` onde ele aparece.
+ * `on`: como vem para agência nova e para agência que ainda não tem a chave gravada.
+ */
+export const AGENCY_MODULES = [
+  { key: "stock", group: "Promotoria", label: "Estoque, ruptura e validade", hint: "Etapa de produtos no app do promotor e os relatórios de estoque, ruptura e validade.", on: true },
+  { key: "damage", group: "Promotoria", label: "Avarias", hint: "Etapa de avarias no app do promotor e o relatório de avarias.", on: true },
+  { key: "tastings", group: "Degustações e financeiro", label: "Degustações", hint: "Agenda, degustadoras, calculadora de preço e painel.", on: true },
+  { key: "finance", group: "Degustações e financeiro", label: "Financeiro", hint: "Resultado, despesas e custo da equipe (só o administrador da agência vê).", on: true },
+  { key: "sistematica", group: "Relatórios", label: "Sistemática e relatório mensal (formato Etros)", hint: "Menu Sistemática e relatório mensal de atendimentos por marca.", on: false },
+] as const;
+export type ModuleKey = (typeof AGENCY_MODULES)[number]["key"];
+export type AgencyModules = Record<ModuleKey, boolean>;
+
+/** Recursos como vêm por padrão, com o que foi informado por cima (valor que não é sim/não é ignorado). */
+export function resolveModules(raw?: Partial<Record<ModuleKey, unknown>> | null): AgencyModules {
+  return Object.fromEntries(AGENCY_MODULES.map((m) => [m.key, typeof raw?.[m.key] === "boolean" ? (raw[m.key] as boolean) : m.on])) as AgencyModules;
+}
+
+/** Recursos marcados num formulário (caixa marcada = "on"). */
+export function modulesFromForm(fd: { get(name: string): unknown }): AgencyModules {
+  return Object.fromEntries(AGENCY_MODULES.map((m) => [m.key, fd.get(m.key) === "on"])) as AgencyModules;
 }
 
 /** Painéis (lib/permissions) escondidos pelos módulos desligados. */
 export function hiddenPanels(st: Pick<AgencySettings, "modules">): string[] {
-  return [...(st.modules.tastings ? [] : ["degustacoes"]), ...(st.modules.finance ? [] : ["financeiro"]), ...(st.modules.sistematica ? [] : ["sistematica"])];
+  const m = st.modules;
+  return [...(m.tastings ? [] : ["degustacoes"]), ...(m.finance ? [] : ["financeiro"]), ...(m.sistematica ? [] : ["sistematica"]), ...(m.stock || m.damage ? [] : ["estoque"])];
+}
+
+/** Páginas escondidas pelos recursos desligados (o painel "estoque" reúne quatro relatórios). */
+export function hiddenPaths(st: Pick<AgencySettings, "modules">): string[] {
+  const m = st.modules;
+  return [
+    ...(m.stock ? [] : ["/painel/estoque", "/painel/rupturas", "/painel/validades"]),
+    ...(m.damage ? [] : ["/painel/avarias"]),
+    // Indicadores: só ruptura, datas críticas e avarias.
+    ...(m.stock || m.damage ? [] : ["/painel/indicadores"]),
+  ];
+}
+
+/** O endereço está numa página escondida? */
+export function isHiddenPath(pathname: string, hidden: string[]): boolean {
+  return hidden.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export type GalleryPolicy = "brand" | "none" | "authorized";
@@ -146,7 +182,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   groupPhotoMax: 10,
   groupPortraitOnly: false,
   checkinRadiusM: 300,
-  modules: { tastings: true, finance: true, sistematica: false },
+  modules: resolveModules(),
   overviewStyle: "standard",
   holidays: [],
   visitValue: null,
@@ -162,7 +198,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
   const priority = { ...DEFAULT_ISSUE_PRIORITY };
   for (const k of ISSUE_KINDS) priority[k] = num(r.issuePriority?.[k], DEFAULT_ISSUE_PRIORITY[k], 1, 9);
   return {
-    modules: { tastings: bool(r.modules?.tastings, true), finance: bool(r.modules?.finance, true), sistematica: bool(r.modules?.sistematica, false) },
+    modules: resolveModules(r.modules),
     holidays: Array.isArray(r.holidays) ? [...new Set(r.holidays.filter((d): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort().slice(-200) : [],
     visitValue: money(r.visitValue),
     operationStart: typeof r.operationStart === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.operationStart) ? r.operationStart : null,

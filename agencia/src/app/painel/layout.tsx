@@ -6,7 +6,7 @@ import { getDb, schema as s } from "@/server/db";
 import { countImprovementsToReview } from "@/server/improvements";
 import { asc, eq, inArray } from "drizzle-orm";
 import { PanelShell } from "./_components/shell";
-import { hiddenPanels } from "@/lib/settings";
+import { hiddenPanels, hiddenPaths, isHiddenPath } from "@/lib/settings";
 import { enterAgencyAction, leaveAgencyAction } from "./mcx/actions";
 
 async function logoutAction() {
@@ -32,6 +32,9 @@ export default async function PanelLayout({ children }: LayoutProps<"/painel">) 
   // Módulos desligados para a agência (ex.: sem Degustações e Financeiro): somem do menu e da URL.
   const hidden = scope ? hiddenPanels(scope.settings) : [];
   if (panel && hidden.includes(panel.key)) redirect("/painel");
+  // Recursos desligados que são só parte de um painel (ex.: Avarias dentro de Estoque e ruptura).
+  const hiddenPages = scope ? hiddenPaths(scope.settings) : [];
+  if (isHiddenPath(pathname, hiddenPages)) redirect("/painel");
   const agencies = user.platform
     ? await db.select({ id: s.agencies.id, name: s.agencies.name, status: s.agencies.status }).from(s.agencies).where(eq(s.agencies.kind, "client")).orderBy(asc(s.agencies.name))
     : [];
@@ -51,7 +54,7 @@ export default async function PanelLayout({ children }: LayoutProps<"/painel">) 
       platform={user.platform ? { agencies, improvementsToReview, enter: enterAgencyAction, leave: leaveAgencyAction } : null}
       fullScope={scope ? scope.brandIds === null : true}
       allowed={allowed ? [...allowed] : null}
-      hidden={hidden}
+      hidden={[...hidden, ...hiddenPages]}
       owner={user.platformRole === "owner"}
       scopeNote={user.platform ? "Equipe MCX" : scopeNote}
       logout={logoutAction}

@@ -50,6 +50,10 @@ const STEPS = [
 type StepId = (typeof STEPS)[number]["id"];
 /** Etapas sem mínimo obrigatório: não ganham o "check" verde só por estarem vazias. */
 const OPTIONAL_STEPS = new Set<StepId>(["avaria", "ocorrencias"]);
+type Features = { stock: boolean; damage: boolean };
+const ALL_FEATURES: Features = { stock: true, damage: true };
+/** Etapas da agência: sem os recursos que a equipe MCX desligou para ela. */
+const stepsFor = (f: Features) => STEPS.filter((s) => (s.id !== "estoque" || f.stock) && (s.id !== "avaria" || f.damage));
 
 export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: string; attendanceId: string; step?: string }) {
   const visit = useVisit(visitId);
@@ -79,8 +83,13 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
   }
 
   const editable = attendance.status === "in_progress" || attendance.status === "correction_requested";
-  const current: StepId = (STEPS.find((s) => s.id === step)?.id ?? (editable ? firstOpenStep(attendance, brand, tracked.length) : "revisao")) as StepId;
-  const idx = STEPS.findIndex((s) => s.id === current);
+  const feat = cat.settings?.features ?? ALL_FEATURES;
+  const steps = stepsFor(feat);
+  const opened = editable ? firstOpenStep(attendance, brand, tracked.length) : "revisao";
+  // Etapa desligada para a agência: segue para a próxima que existe.
+  const fallback: StepId = opened === "estoque" && !feat.stock ? "depois" : opened === "avaria" && !feat.damage ? "ocorrencias" : opened;
+  const current: StepId = (steps.find((s) => s.id === step)?.id ?? fallback) as StepId;
+  const idx = steps.findIndex((s) => s.id === current);
   const status = attendanceDisplayStatus(attendance);
   const openStep = (id: StepId) => go(`visita/${visitId}/marca/${attendanceId}/${id}`, true);
   // Estoque não segura a saída: produto sem toque significa que não havia o que informar.
@@ -102,15 +111,15 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
       footer={
         current === "revisao" ? undefined : (
           <div className="flex gap-2">
-            <Button size="xl" variant="secondary" className="w-16 !px-0" aria-label="Etapa anterior" disabled={idx === 0} onClick={() => goStep(STEPS[idx - 1].id)}>
+            <Button size="xl" variant="secondary" className="w-16 !px-0" aria-label="Etapa anterior" disabled={idx === 0} onClick={() => goStep(steps[idx - 1].id)}>
               <ArrowLeft className="size-5" />
             </Button>
             <Button
               size="xl"
               className="flex-1"
-              onClick={() => goStep(STEPS[idx + 1].id)}
+              onClick={() => goStep(steps[idx + 1].id)}
             >
-              Próximo: {STEPS[idx + 1].label} <ArrowRight className="size-5" />
+              Próximo: {steps[idx + 1].label} <ArrowRight className="size-5" />
             </Button>
           </div>
         )
@@ -121,7 +130,7 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
       {/* Indicador de progresso por etapa */}
       <nav className="bg-surface border-b border-line sticky top-14 z-20" aria-label="Etapas do atendimento">
         <ol className="max-w-[560px] mx-auto flex overflow-x-auto px-2 py-2 gap-1">
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <li key={s.id}>
               <button
                 type="button"
@@ -324,6 +333,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
   const [cancelOpen, setCancelOpen] = useState(false);
   const [askReport, setAskReport] = useState(false);
   const report = cat.settings?.visitReport ?? null;
+  const feat = cat.settings?.features ?? ALL_FEATURES;
   const backToStore = () => {
     // De volta à loja já com o envio do PDF aberto (o promotor sempre manda no grupo).
     requestShare(attendance.id);
@@ -376,7 +386,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
         </div>
       </section>
 
-      <section className="bg-surface border border-line rounded-2xl p-4">
+      <section hidden={!feat.stock} className="bg-surface border border-line rounded-2xl p-4">
         <button type="button" onClick={() => goStep("estoque")} className="w-full text-left">
           <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Estoque</h3>
           <p className="text-[14px]">
@@ -396,7 +406,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
         </button>
       </section>
 
-      <section className="bg-surface border border-line rounded-2xl p-4">
+      <section hidden={!feat.stock} className="bg-surface border border-line rounded-2xl p-4">
         <button type="button" onClick={() => goStep("estoque")} className="w-full text-left">
           <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Validades ({validities.length})</h3>
           {validities.length ? (
@@ -414,7 +424,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
         </button>
       </section>
 
-      <section className="bg-surface border border-line rounded-2xl p-4">
+      <section hidden={!feat.stock} className="bg-surface border border-line rounded-2xl p-4">
         <button type="button" onClick={() => goStep("estoque")} className="w-full text-left">
           <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Rupturas ({ruptures.length})</h3>
           {ruptures.length ? (
@@ -431,7 +441,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
         </button>
       </section>
 
-      <section className="bg-surface border border-line rounded-2xl p-4">
+      <section hidden={!feat.damage} className="bg-surface border border-line rounded-2xl p-4">
         <button type="button" onClick={() => goStep("avaria")} className="w-full text-left">
           <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Avarias ({damages.length})</h3>
           {damages.length ? (

@@ -116,8 +116,12 @@ export default async function ReportsPage() {
             <Labeled label="Conjunto de dados">
               <select name="dataset" className={selectClass} defaultValue="attendances" required>
                 <option value="attendances">Atendimentos por marca</option>
-                <option value="stock">Estoque informado</option>
-                <option value="ruptures">Rupturas</option>
+                {scope.settings.modules.stock ? (
+                  <>
+                    <option value="stock">Estoque informado</option>
+                    <option value="ruptures">Rupturas</option>
+                  </>
+                ) : null}
               </select>
             </Labeled>
             {brandSelect()}

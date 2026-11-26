@@ -17,7 +17,7 @@ const TABS = [
 ];
 const SHARED = ["from", "to", "brand", "chain", "store", "promoter", "city"];
 
-export function ProductTabs() {
+export function ProductTabs({ hidden = [] }: { /** Páginas desligadas para a agência (recursos). */ hidden?: string[] }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const qs = new URLSearchParams();
@@ -28,7 +28,7 @@ export function ProductTabs() {
   const suffix = qs.size ? `?${qs}` : "";
   return (
     <nav aria-label="Estoque e ruptura" className="flex gap-1 border-b border-line mb-5 overflow-x-auto no-print">
-      {TABS.map((t) => {
+      {TABS.filter((t) => !hidden.includes(t.href)).map((t) => {
         const active = pathname.startsWith(t.href);
         return (
           <Link

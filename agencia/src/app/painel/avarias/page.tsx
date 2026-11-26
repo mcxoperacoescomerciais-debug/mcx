@@ -9,6 +9,7 @@ import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { formatIsoBr } from "@/lib/validity";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
+import { hiddenPaths } from "@/lib/settings";
 import { FilterBar } from "../_components/filter-bar";
 import { StoreGroups } from "../_components/store-groups";
 import { KpiCard, SectionCard, Td, Th } from "../_components/widgets";
@@ -23,7 +24,7 @@ export default async function DamagesPage({ searchParams }: PageProps<"/painel/a
 
   return (
     <>
-      <ProductTabs />
+      <ProductTabs hidden={hiddenPaths(scope.settings)} />
       <PageHeader
         title="Avarias"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos danificados ou impróprios registrados com foto`}

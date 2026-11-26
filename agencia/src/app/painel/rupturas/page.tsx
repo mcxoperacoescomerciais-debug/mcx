@@ -8,6 +8,7 @@ import { RUPTURE_SITUATION_LABEL } from "@/lib/domain";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
+import { hiddenPaths } from "@/lib/settings";
 import { FilterBar } from "../_components/filter-bar";
 import { KpiCard, RankBar, SectionCard, Table, Td, Th } from "../_components/widgets";
 import { DailyBars } from "../_components/daily-bars";
@@ -24,7 +25,7 @@ export default async function RupturesPage({ searchParams }: PageProps<"/painel/
 
   return (
     <>
-      <ProductTabs />
+      <ProductTabs hidden={hiddenPaths(scope.settings)} />
       <PageHeader
         title="Ruptura"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos marcados pelos promotores como “Ruptura total”`}

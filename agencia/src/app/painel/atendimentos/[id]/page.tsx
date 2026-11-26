@@ -57,6 +57,8 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const scope = await getScope();
+  // Recursos liberados para a agência (equipe MCX): seção de recurso desligado não aparece.
+  const mod = scope.settings.modules;
   const d = await getAttendanceDetail(scope, id);
   if (!d) notFound();
   const a = d.attendance;
@@ -155,6 +157,8 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
             <BeforeAfter before={before} after={after} />
           </SectionCard>
 
+          {mod.stock ? (
+            <>
           <SectionCard
             title="Relatório de estoque"
             subtitle={`${informed} de ${d.stockRows.length} produtos com informação · levantamento do promotor, não é saldo oficial da loja`}
@@ -363,6 +367,10 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
             )}
           </SectionCard>
 
+            </>
+          ) : null}
+          {mod.damage ? (
+            <>
           <SectionCard title={`Avarias (${d.damages.length})`}>
             {d.damages.length ? (
               <Table>
@@ -410,6 +418,8 @@ export default async function AttendancePage({ params }: PageProps<"/painel/aten
             ) : null}
           </SectionCard>
 
+            </>
+          ) : null}
           <SectionCard title={`Observações e ocorrências (${d.occurrences.length})`}>
             <div className="px-5 pb-5 space-y-4">
               {a.notes ? <p className="text-[13.5px]">Observação da execução: “{a.notes}”</p> : null}

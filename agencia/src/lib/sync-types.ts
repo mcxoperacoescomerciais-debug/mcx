@@ -289,6 +289,8 @@ export interface BootstrapPayload {
     allowExtraVisits: boolean;
     captureLocation: boolean;
     allowExceptions: boolean;
+    /** Recursos liberados para a agência; ausente (cópia antiga do app) = tudo ligado. */
+    features?: { stock: boolean; damage: boolean };
     /** Faixas de validade da agência: classificação instantânea no celular, sem internet. */
     validityBands: SeverityBands;
     /** Ajuda no WhatsApp (balão da tela inicial); null = sem número configurado. */

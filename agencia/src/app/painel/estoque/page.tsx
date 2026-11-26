@@ -8,6 +8,7 @@ import { STOCK_STATE_LABEL } from "@/lib/domain";
 import { fmtDate } from "@/lib/dates";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { ProductTabs } from "../_components/product-tabs";
+import { hiddenPaths } from "@/lib/settings";
 import { FilterBar } from "../_components/filter-bar";
 import { StoreGroups } from "../_components/store-groups";
 import { SectionCard, Td, Th } from "../_components/widgets";
@@ -22,7 +23,7 @@ export default async function StockPage({ searchParams }: PageProps<"/painel/est
 
   return (
     <>
-      <ProductTabs />
+      <ProductTabs hidden={hiddenPaths(scope.settings)} />
       <PageHeader
         title="Estoque"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · contagem de estoque de cada loja, feita pelos promotores`}

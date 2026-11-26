@@ -202,7 +202,11 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
               </div>
               {a && (a.status === "completed" || a.status === "cancelled") ? (
                 <p className="text-[12px] text-muted mt-2 tnum">
-                  {fmtTime(a.startedAt)}–{fmtTime(a.finishedAt)} · {Object.keys(a.validities ?? {}).length} validade(s) · {Object.keys(a.ruptures).length} ruptura(s) · {Object.keys(a.damages ?? {}).length} avaria(s)
+                  {[
+                    `${fmtTime(a.startedAt)}–${fmtTime(a.finishedAt)}`,
+                    ...(cat.settings?.features?.stock ?? true ? [`${Object.keys(a.validities ?? {}).length} validade(s)`, `${Object.keys(a.ruptures).length} ruptura(s)`] : []),
+                    ...(cat.settings?.features?.damage ?? true ? [`${Object.keys(a.damages ?? {}).length} avaria(s)`] : []),
+                  ].join(" · ")}
                 </p>
               ) : null}
             </button>
@@ -407,7 +411,7 @@ function CloseVisitSheet({ visitId, onClose, onNotAttended }: { visitId: string;
         <SummaryBox label="Pendentes" value={pending.length + inProgress.length} tone={pending.length + inProgress.length ? "bad" : undefined} />
       </div>
       <ul className="mt-4 space-y-2 text-[14px]">
-        <li className="flex justify-between">
+        <li hidden={!(cat.settings?.features?.stock ?? true)} className="flex justify-between">
           <span className="text-muted">Rupturas registradas</span>
           <span className="font-semibold tnum">{ruptures}</span>
         </li>

@@ -10,6 +10,7 @@ import { describeDays, formatIsoBr, SEVERITIES, SEVERITY_COLOR, SEVERITY_LABEL }
 import { EmptyState, PageHeader } from "@/components/ui";
 import { SeverityBadge } from "@/components/severity";
 import { ProductTabs } from "../_components/product-tabs";
+import { hiddenPaths } from "@/lib/settings";
 import { FilterBar } from "../_components/filter-bar";
 import { StoreGroups } from "../_components/store-groups";
 import { SectionCard, Td, Th } from "../_components/widgets";
@@ -33,7 +34,7 @@ export default async function ValiditiesPage({ searchParams }: PageProps<"/paine
 
   return (
     <>
-      <ProductTabs />
+      <ProductTabs hidden={hiddenPaths(scope.settings)} />
       <PageHeader
         title="Validades"
         subtitle={`${fmtDate(f.from)} a ${fmtDate(f.to)} · produtos com validade registrados pelos promotores (classificação na data da visita)`}

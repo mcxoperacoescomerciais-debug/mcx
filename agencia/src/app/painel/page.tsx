@@ -48,7 +48,10 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
   const sp = await searchParams;
   // Visão geral executiva, com gráficos: agência marcada assim, ou usuário que só
   // enxerga uma marca (ex.: o cliente Costa Foods) — já filtrada pela marca dele.
-  if (scope.settings.overviewStyle === "executive" || scope.brandIds?.length === 1) return <ExecutiveOverview scope={scope} sp={sp} />;
+  // Sem estoque/ruptura/validade liberados, a executiva não tem o que mostrar: vale a padrão.
+  const mod = scope.settings.modules;
+  if (mod.stock && (scope.settings.overviewStyle === "executive" || scope.brandIds?.length === 1)) return <ExecutiveOverview scope={scope} sp={sp} />;
+  const reports = REPORTS.filter((r) => r.href !== "/painel/estoque" || mod.stock);
   const f = parseDayRange(sp);
   const day = { ...f, brand: null, chain: null, store: null, promoter: null, city: null };
   // Validade crítica: num dia só, olha os últimos 30 dias (o que ainda está na gôndola); num período, o período.
@@ -113,6 +116,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
           href={`/painel/pendencias${withParams({ from: f.from, to: f.to })}`}
           icon={<ShieldAlert className="size-4" />}
         />
+        {mod.stock ? (
         <KpiCard
           label="Validade crítica"
           value={crit.products}
@@ -121,6 +125,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
           href={`/painel/validades${withParams({ from: vFrom, to: f.to, status: "urgent" })}`}
           icon={<CalendarClock className="size-4" />}
         />
+        ) : null}
       </div>
 
       <div className="grid xl:grid-cols-5 gap-6 mt-6">
@@ -160,7 +165,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
 
         <SectionCard className="xl:col-span-2" title="Relatórios" subtitle="Escolha o que deseja analisar" bodyClass="px-3 pb-3">
           <ul className="grid gap-1">
-            {REPORTS.map((r) => {
+            {reports.map((r) => {
               const Icon = r.icon;
               return (
                 <li key={r.href}>

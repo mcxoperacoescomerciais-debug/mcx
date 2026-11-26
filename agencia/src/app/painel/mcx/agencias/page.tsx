@@ -7,6 +7,7 @@ import { Badge, PageHeader, inputClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../_components/widgets";
 import { ActionForm } from "../../_components/action-form";
 import { createAgencyAction } from "../actions";
+import { ModuleChecks } from "./module-checks";
 
 export const metadata: Metadata = { title: "Agências" };
 
@@ -66,15 +67,7 @@ export default async function AgenciesPage() {
               <input name="adminPassword" type="password" required autoComplete="new-password" className={inputClass} />
             </Labeled>
             <p className="text-[12px] font-semibold uppercase tracking-wide text-muted pt-2">Módulos e visão geral</p>
-            <label className="flex items-center gap-2 text-[13.5px]">
-              <input type="checkbox" name="tastings" defaultChecked={true} /> Degustações
-            </label>
-            <label className="flex items-center gap-2 text-[13.5px]">
-              <input type="checkbox" name="finance" defaultChecked={true} /> Financeiro
-            </label>
-            <label className="flex items-center gap-2 text-[13.5px]">
-              <input type="checkbox" name="sistematica" defaultChecked={false} /> Sistemática e relatório mensal (formato Etros)
-            </label>
+            <ModuleChecks />
             <Labeled label="Visão geral" hint="Executiva: ruptura (área de vendas e estoque), datas críticas, avarias e lojas não atendidas com gráficos — para agência de uma marca só.">
               <select name="overviewStyle" defaultValue="standard" className={inputClass}>
                 <option value="standard">Padrão (operação)</option>
