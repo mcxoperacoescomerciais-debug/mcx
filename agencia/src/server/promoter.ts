@@ -202,7 +202,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
     user: { id: user.id, name: user.name, employment: user.employment, mustChangePassword: user.mustChangePassword, photosOnlyShare: user.photosOnlyShare },
     workMode,
     portfolio,
-    agency: { name: scope.agencyName, logoUrl: scope.agencyLogoUrl },
+    agency: { name: scope.agencyName, logoUrl: scope.agencyLogoUrl, groupPhotoMax: scope.settings.groupPhotoMax, groupPortraitOnly: scope.settings.groupPortraitOnly },
     settings: {
       allowIncompleteVisit: scope.settings.allowIncompleteVisit,
       allowExtraVisits: scope.settings.allowExtraVisits,

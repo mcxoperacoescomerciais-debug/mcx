@@ -99,6 +99,12 @@ function PhotoGrid({ label, photos, images }: { label: string; photos: Detail["p
       <Text minPresenceAhead={130} style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.muted, marginBottom: 3, textTransform: "uppercase" }}>
         {label} · {photos.length} foto(s) · toque para ampliar
       </Text>
+      {/* O PDF é montado na hora em que o link é aberto: foto que o celular ainda não enviou entra sozinha depois. */}
+      {photos.some((p) => !p.uploadedAt) ? (
+        <Text style={{ fontSize: 7.5, color: C.sync, marginBottom: 3 }}>
+          {photos.filter((p) => !p.uploadedAt).length} foto(s) ainda não chegaram do celular do promotor (sem internet). Abra este link de novo em alguns minutos: o relatório se completa sozinho.
+        </Text>
+      ) : null}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {photos.map((p) => {
           const img = images.get(p.id);
@@ -111,7 +117,7 @@ function PhotoGrid({ label, photos, images }: { label: string; photos: Detail["p
                 </Link>
               ) : (
                 <View style={{ height: 124, borderRadius: 3, backgroundColor: C.syncBg, justifyContent: "center", alignItems: "center" }}>
-                  <Text style={{ fontSize: 8, color: C.sync }}>{p.uploadedAt ? "Ver no painel" : "Aguardando sincronização"}</Text>
+                  <Text style={{ fontSize: 8, color: C.sync }}>{p.uploadedAt ? "Ver no painel" : "Foto a caminho: abra de novo depois"}</Text>
                 </View>
               )}
               <Text style={{ fontSize: 7, color: C.muted, marginTop: 2 }}>{fmtDateTime(p.takenAt)}</Text>

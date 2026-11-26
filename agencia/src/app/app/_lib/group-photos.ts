@@ -8,10 +8,17 @@ export const GROUP_MAX_FILES = 10;
 
 type Taken = { kind: string; takenAt: string };
 
-export function groupPhotos<T extends Taken>(photos: T[], max = GROUP_MAX_FILES): { sent: T[]; hasBefore: boolean; afterLeft: number } {
+export function groupPhotos<T extends Taken>(photos: T[], max = GROUP_MAX_FILES, skip?: (p: T) => boolean): { sent: T[]; hasBefore: boolean; afterLeft: number; skipped: number } {
   const after = photos.filter((p) => p.kind === "after").sort((a, b) => a.takenAt.localeCompare(b.takenAt));
-  const sent = after.slice(0, Math.max(0, max));
-  return { sent, hasBefore: photos.some((p) => p.kind === "before"), afterLeft: after.length - sent.length };
+  // "skip" tira do grupo as fotos que a agência não quer lá (ex.: tiradas na horizontal): ficam no relatório.
+  const allowed = skip ? after.filter((p) => !skip(p)) : after;
+  const sent = allowed.slice(0, Math.max(0, max));
+  return { sent, hasBefore: photos.some((p) => p.kind === "before"), afterLeft: after.length - sent.length, skipped: after.length - allowed.length };
+}
+
+/** Foto tirada na horizontal (mais larga que alta). Quadrada conta como em pé. */
+export function isLandscape(width: number, height: number): boolean {
+  return width > height;
 }
 
 /** Texto para o promotor, embaixo do botão de envio. */
@@ -23,3 +30,14 @@ export function groupSendHint(sentCount: number, afterLeft: number, hasBefore: b
 
 /** Linha padrão da mensagem do grupo quando o atendimento tem fotos do antes. */
 export const BEFORE_IN_REPORT_NOTE = "📷 As fotos do ANTES estão no relatório completo.";
+
+/** Limite escolhido pela agência (1 a 10); valor ausente ou inválido = o máximo. */
+export function groupLimit(v: number | null | undefined): number {
+  return typeof v === "number" && Number.isFinite(v) ? Math.min(GROUP_MAX_FILES, Math.max(1, Math.round(v))) : GROUP_MAX_FILES;
+}
+
+/** Aviso no fim da mensagem do grupo: o que não foi como foto está no relatório completo. */
+export function groupReportNote(hasBefore: boolean, afterLeft: number): string | null {
+  if (afterLeft > 0) return hasBefore ? "📷 As fotos do ANTES e as demais do DEPOIS estão no relatório completo." : "📷 As demais fotos do DEPOIS estão no relatório completo.";
+  return hasBefore ? BEFORE_IN_REPORT_NOTE : null;
+}

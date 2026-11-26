@@ -6,6 +6,7 @@
 import { fmtDateTime } from "@/lib/dates";
 import { PHOTO_KIND_LABEL, PHOTO_KINDS, type PhotoKind } from "@/lib/domain";
 import { getPhotoBlob, type LocalPhoto } from "./local-store";
+import { isLandscape } from "./group-photos";
 
 export interface StampInfo {
   store: string;
@@ -60,6 +61,27 @@ export async function attendancePhotoFiles(photos: LocalPhoto[], info: StampInfo
     files.push(new File([stamped], `${String(i + 1).padStart(2, "0")}_${safe(label)}_${safe(info.store)}.jpg`, { type: "image/jpeg" }));
   }
   return files;
+}
+
+/**
+ * Quais fotos foram tiradas na horizontal. Mede a miniatura (leve), depois o original e por
+ * último a cópia do servidor. Foto que não dá para medir conta como em pé (vai para o grupo).
+ */
+export async function landscapePhotoIds(photos: LocalPhoto[]): Promise<string[]> {
+  const ids: string[] = [];
+  for (const p of photos) {
+    try {
+      let blob = (await getPhotoBlob(p.id, true)) ?? (await getPhotoBlob(p.id));
+      if (!blob && p.uploaded) blob = await fetch(`/api/photos/${p.id}?size=thumb`).then((r) => (r.ok ? r.blob() : undefined));
+      if (!blob) continue;
+      const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
+      if (isLandscape(bmp.width, bmp.height)) ids.push(p.id);
+      bmp.close();
+    } catch {
+      // sem medida: segue como em pé
+    }
+  }
+  return ids;
 }
 
 /** Fotos do antes e do depois, separadas, com a faixa de identificação (envio no grupo da loja). */
