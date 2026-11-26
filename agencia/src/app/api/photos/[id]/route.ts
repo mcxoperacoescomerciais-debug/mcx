@@ -32,12 +32,14 @@ export async function GET(request: Request, ctx: RouteContext<"/api/photos/[id]"
   if (!row.photo.storageKey) return Response.json({ error: "Foto aguardando sincronização." }, { status: 404 });
 
   const key = wantThumb && row.photo.thumbKey ? row.photo.thumbKey : row.photo.storageKey;
-  const bytes = await storage().get(key);
-  if (!bytes) return Response.json({ error: "Arquivo indisponível" }, { status: 404 });
+  // Em fluxo quando o armazenamento permite: o arquivo não fica inteiro na memória do servidor.
+  const drv = storage();
+  const body: BodyInit | null = drv.stream ? await drv.stream(key) : await drv.get(key).then((b) => (b ? Buffer.from(b) : null));
+  if (!body) return Response.json({ error: "Arquivo indisponível" }, { status: 404 });
   if (download) await audit({ agencyId: scope.agencyId, userId: scope.userId }, "photo", id, "downloaded");
   // Miniatura e original têm o mesmo formato (o aparelho gera as duas em JPEG).
   const type = row.photo.contentType ?? "image/jpeg";
-  return new Response(Buffer.from(bytes), {
+  return new Response(body, {
     headers: {
       "Content-Type": type,
       "Cache-Control": "private, max-age=86400, immutable",

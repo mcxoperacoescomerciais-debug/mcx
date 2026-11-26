@@ -6,7 +6,8 @@ import "server-only";
 import { Document, Image, Link, Page, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import type { Scope } from "../auth";
 import { getAttendanceDetail } from "../details";
-import { storage } from "../storage";
+import { loadPdfImage } from "./pdf-image";
+import type { PdfImg } from "./shrink";
 import { C, Footer, H2, Header, InfoGrid, Pill, PdfTable, StatBoxes, base, type PdfAgency, type PdfTone } from "./kit";
 import {
   ATTENDANCE_STATUS_LABEL,
@@ -38,14 +39,9 @@ function SeverityTag({ severity }: { severity: Severity }) {
 const money = (v: string | null) => (v === null ? "—" : `R$ ${Number(v).toFixed(2).replace(".", ",")}`);
 
 type Detail = NonNullable<Awaited<ReturnType<typeof getAttendanceDetail>>>;
-type Img = { data: Buffer; format: "png" | "jpg" };
-
-async function loadImage(storageKey: string | null, contentType: string | null): Promise<Img | null> {
-  if (!storageKey) return null;
-  const bytes = await storage().get(storageKey);
-  if (!bytes) return null;
-  return { data: Buffer.from(bytes), format: contentType === "image/png" ? "png" : "jpg" };
-}
+type Img = PdfImg;
+// Foto reduzida para o PDF (pouca memória no servidor): ver ./shrink.
+const loadImage = loadPdfImage;
 
 export interface AttendanceBlockData {
   d: Detail;

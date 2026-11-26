@@ -7,12 +7,14 @@ import { isUuid } from "@/lib/filters";
 import { loadAttendanceBlock, renderAttendancesPdf } from "@/server/pdf/attendance-pdf";
 import { pdfAgency, pdfResponse, slug } from "@/server/pdf/kit";
 import { fmtDate } from "@/lib/dates";
+import { pdfSlot } from "@/server/pdf/queue";
 
 export async function GET(_request: Request, ctx: RouteContext<"/api/promoter/attendance/[id]/pdf">) {
   const scope = await getApiScope(["promoter"]);
   if (!scope) return unauthorized();
   const { id } = await ctx.params;
   if (!isUuid(id)) return new Response("Não encontrado", { status: 404 });
+  return pdfSlot(async () => {
   const block = await loadAttendanceBlock(scope, id);
   if (!block) return new Response("Atendimento não encontrado", { status: 404 });
   const d = block.d;
@@ -24,4 +26,5 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/promoter/at
     footer: `${scope.agencyName} · atendimento ${d.attendance.id.slice(0, 8)}`,
   });
   return pdfResponse(pdf, `Atendimento_${slug(d.brand.name)}_${slug(d.store.name)}_${d.visit.visitDate}.pdf`);
+  });
 }

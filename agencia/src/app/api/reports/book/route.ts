@@ -2,6 +2,7 @@ import { unauthorized } from "@/server/auth";
 import { reportContext, logExport } from "@/server/export-helpers";
 import { bookData, renderBookPdf } from "@/server/pdf/book-pdf";
 import { pdfAgency, pdfResponse, slug } from "@/server/pdf/kit";
+import { pdfSlot } from "@/server/pdf/queue";
 
 /** Book de Atendimento (PDF ou PowerPoint, ?format=pptx) com os filtros do Relatório fotográfico. */
 export async function GET(request: Request) {
@@ -9,6 +10,7 @@ export async function GET(request: Request) {
   if (!ctx) return unauthorized();
   const { scope, f } = ctx;
   const pptx = new URL(request.url).searchParams.get("format") === "pptx";
+  return pdfSlot(async () => {
   const data = await bookData(scope, f);
   await logExport(scope, "book", f, pptx ? "pptx" : "pdf");
   const name = `Book_de_Atendimento_${slug(data.brandName ?? scope.agencyName)}_${f.from}_a_${f.to}`;
@@ -24,4 +26,5 @@ export async function GET(request: Request) {
     });
   }
   return pdfResponse(await renderBookPdf(await pdfAgency(scope), data), `${name}.pdf`);
+  });
 }

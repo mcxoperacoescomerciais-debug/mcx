@@ -8,6 +8,7 @@ import { pdfAgency, pdfResponse, slug } from "@/server/pdf/kit";
 import { audit } from "@/server/audit";
 import { parseFilters } from "@/lib/filters";
 import { fmtDate } from "@/lib/dates";
+import { pdfSlot } from "@/server/pdf/queue";
 
 const MAX_ATTENDANCES = 40;
 
@@ -24,6 +25,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/stor
   const f = { ...parseFilters(Object.fromEntries(url.searchParams), 7), store: id };
   const visits = await listVisits(scope, f);
   const attIds = visits.flatMap((v) => v.attendances.map((a) => a.id));
+  return pdfSlot(async () => {
   const blocks = (await Promise.all(attIds.slice(0, MAX_ATTENDANCES).map((a) => loadAttendanceBlock(scope, a, 4, 8)))).filter((b) => b !== null);
   const brands = new Set(visits.flatMap((v) => v.attendances.map((a) => a.brandName)));
   const pdf = await renderAttendancesPdf({
@@ -42,4 +44,5 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/stor
   });
   await audit({ agencyId: scope.agencyId, userId: scope.userId }, "report", id, "store_pdf", { after: { from: f.from, to: f.to } });
   return pdfResponse(pdf, `Loja_${slug(store.name)}_${f.from}_a_${f.to}.pdf`);
+  });
 }

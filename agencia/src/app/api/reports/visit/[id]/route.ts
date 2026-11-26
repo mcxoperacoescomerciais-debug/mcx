@@ -6,6 +6,7 @@ import { pdfAgency, pdfResponse, slug } from "@/server/pdf/kit";
 import { audit } from "@/server/audit";
 import { fmtDate, fmtTime } from "@/lib/dates";
 import { VISIT_STATUS_LABEL } from "@/lib/domain";
+import { pdfSlot } from "@/server/pdf/queue";
 
 /** Visita completa: uma seção por marca, cada uma com seus próprios registros. */
 export async function GET(request: Request, ctx: RouteContext<"/api/reports/visit/[id]">) {
@@ -15,6 +16,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/visi
   if (!isUuid(id)) return new Response("Não encontrado", { status: 404 });
   const v = await getVisitDetail(scope, id);
   if (!v) return new Response("Visita não encontrada", { status: 404 });
+  return pdfSlot(async () => {
   const blocks = (await Promise.all(v.attendances.map((a) => loadAttendanceBlock(scope, a.a.id)))).filter((b) => b !== null);
   const pendingBrands = v.planned.filter((p) => !v.attendances.some((a) => a.a.brandId === p.id)).map((p) => p.name);
   const pdf = await renderAttendancesPdf({
@@ -33,4 +35,5 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/visi
   });
   await audit({ agencyId: scope.agencyId, userId: scope.userId }, "report", id, "visit_pdf");
   return pdfResponse(pdf, `Visita_${slug(v.store.name)}_${v.visit.visitDate}.pdf`, new URL(request.url).searchParams.get("inline") === "1");
+  });
 }

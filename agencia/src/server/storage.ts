@@ -21,6 +21,8 @@ import { r2ConfigFromEnv, r2Request, type R2Config } from "./r2";
 export interface StorageDriver {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
+  /** Leitura em fluxo (sem carregar o arquivo inteiro na memória); ausente no disco local. */
+  stream?(key: string): Promise<ReadableStream<Uint8Array> | null>;
   /** Apaga os arquivos (os que não existem são ignorados). Devolve quantos foram pedidos. */
   remove(keys: string[]): Promise<number>;
 }
@@ -42,6 +44,13 @@ function supabaseDriver(baseUrl: string, serviceKey: string, bucket: string): St
       if (res.status === 404 || res.status === 400) return null;
       if (!res.ok) throw new Error(`Falha ao ler arquivo (${res.status})`);
       return new Uint8Array(await res.arrayBuffer());
+    },
+    async stream(key) {
+      const res = await fetch(objectUrl(key).replace("/object/", "/object/authenticated/"), { headers });
+      if (res.ok) return res.body;
+      await res.body?.cancel().catch(() => undefined);
+      if (res.status === 404 || res.status === 400) return null;
+      throw new Error(`Falha ao ler arquivo (${res.status})`);
     },
     async remove(keys) {
       for (let i = 0; i < keys.length; i += 500) {
@@ -69,6 +78,13 @@ function r2Driver(cfg: R2Config): StorageDriver {
       if (!res.ok) throw new Error(`Falha ao ler arquivo R2 (${res.status})`);
       return new Uint8Array(await res.arrayBuffer());
     },
+    async stream(key) {
+      const res = await r2Request(cfg, "GET", key);
+      if (res.ok) return res.body;
+      await res.body?.cancel().catch(() => undefined);
+      if (res.status === 404) return null;
+      throw new Error(`Falha ao ler arquivo R2 (${res.status})`);
+    },
     async remove(keys) {
       // Um por um, 10 de cada vez (apagar o que não existe também responde ok).
       for (let i = 0; i < keys.length; i += 10) {
@@ -87,6 +103,13 @@ export function withFallback(primary: StorageDriver, old: StorageDriver): Storag
     put: (key, bytes, contentType) => primary.put(key, bytes, contentType),
     async get(key) {
       return (await primary.get(key)) ?? (await old.get(key).catch(() => null));
+    },
+    async stream(key) {
+      if (!primary.stream || !old.stream) {
+        const bytes = (await primary.get(key)) ?? (await old.get(key).catch(() => null));
+        return bytes ? new Response(Buffer.from(bytes)).body : null;
+      }
+      return (await primary.stream(key)) ?? (await old.stream(key).catch(() => null));
     },
     async remove(keys) {
       await old.remove(keys).catch((e: Error) => console.error("[storage] antigo:", e.message));

@@ -11,7 +11,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm"
 import { getDb, schema as s } from "../db";
 import type { Scope } from "../auth";
 import { brandFilter, promoterFilter } from "../scope";
-import { storage } from "../storage";
+import { loadPdfImage } from "./pdf-image";
 import { C, Footer, type PdfAgency } from "./kit";
 import type { PanelFilters } from "@/lib/filters";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
@@ -115,9 +115,10 @@ export async function bookData(scope: Scope, f: PanelFilters): Promise<BookData>
     const photos: BookPhoto[] = [];
     for (const p of pick) {
       if (budget <= 0) break;
-      const bytes = p.storageKey ? await storage().get(p.storageKey).catch(() => null) : null;
+      // Reduzida para o book (pouca memória no servidor): ver ./shrink.
+      const img = await loadPdfImage(p.storageKey, p.contentType).catch(() => null);
       budget--;
-      photos.push({ id: p.id, kind: p.kind as "before" | "after", placement: p.placement, takenAt: p.takenAt, img: bytes ? { data: Buffer.from(bytes), format: p.contentType === "image/png" ? "png" : "jpg" } : null });
+      photos.push({ id: p.id, kind: p.kind as "before" | "after", placement: p.placement, takenAt: p.takenAt, img });
     }
     if (!photos.length) continue;
     attendances.push({
