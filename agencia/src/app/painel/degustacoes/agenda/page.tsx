@@ -13,7 +13,7 @@ import { withParams } from "@/lib/filters";
 import { addDays, fmtDate, todayIso, weekdayOf } from "@/lib/dates";
 import { Badge, EmptyState, LinkButton, PageHeader, StatusBadge, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../_components/widgets";
-import { DegTabs } from "../_components/deg-tabs";
+import { DegTabs } from "../_components/deg-tabs-auto";
 import { statusLabelFor, type TastingStatus } from "@/lib/tasting";
 import { termsFor, type Terms } from "@/lib/actions";
 import { voidStatus } from "@/lib/tasting";

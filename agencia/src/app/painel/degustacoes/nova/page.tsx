@@ -4,7 +4,7 @@ import { getScope } from "@/server/auth";
 import { canManageTastings, tastingFormOptions } from "@/server/tastings";
 import { isIsoDate, todayIso } from "@/lib/dates";
 import { PageHeader } from "@/components/ui";
-import { DegTabs } from "../_components/deg-tabs";
+import { DegTabs } from "../_components/deg-tabs-auto";
 import { TastingForm } from "../_components/tasting-form";
 
 export const metadata: Metadata = { title: "Nova degustação" };

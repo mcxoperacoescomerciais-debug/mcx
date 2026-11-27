@@ -109,7 +109,7 @@ export function HomeScreen() {
           ) : (
           <>
           <p className="text-[14px] text-brand-200 mt-0.5">
-            <span className="first-letter:uppercase inline-block">{fmtLongDate(today)}</span> · {stops.length ? `${stops.length} ${stops.length === 1 ? "loja programada" : "lojas programadas"}` : "sem programação"}
+            <span className="first-letter:uppercase inline-block">{fmtLongDate(today)}</span> · {stops.length ? `${stops.length} ${terms.visit === "Ação" ? (stops.length === 1 ? "ação agendada" : "ações agendadas") : stops.length === 1 ? "loja programada" : "lojas programadas"}` : "sem programação"}
           </p>
 
           <div className="grid grid-cols-3 gap-2 mt-5">
@@ -129,7 +129,7 @@ export function HomeScreen() {
               </Button>
             ) : next ? (
               <Button size="xl" className="w-full !bg-white !text-brand-900" onClick={() => startScheduled(next.schedule!)}>
-                <PlayCircle className="size-6" /> Iniciar próxima loja
+                <PlayCircle className="size-6" /> {terms.visit === "Ação" ? "Iniciar próxima ação" : "Iniciar próxima loja"}
               </Button>
             ) : stops.length ? (
               <p className="text-center text-[14px] text-brand-100 bg-white/10 rounded-2xl py-3.5">Todas as lojas de hoje foram iniciadas.</p>
@@ -268,6 +268,7 @@ function Stat({ label, value, alert }: { label: string; value: string; alert?: b
 
 function StopCard({ stop, index, onStart }: { stop: { schedule: BootstrapSchedule | null; storeId: string; visit: ReturnType<typeof useLocal>["visits"][string] | undefined; planned: string[] }; index: number; onStart: () => void }) {
   const cat = useCatalog();
+  const terms = useTerms();
   const store = cat.storeById.get(stop.storeId);
   const slots = brandSlots(stop.visit, stop.planned);
   const done = slots.filter((x) => isDoneStatus(x.status)).length;
@@ -313,7 +314,7 @@ function StopCard({ stop, index, onStart }: { stop: { schedule: BootstrapSchedul
       <div className="border-t border-line">
         {!stop.visit ? (
           <button type="button" onClick={onStart} className="w-full h-14 flex items-center justify-center gap-2 font-semibold text-[15px] text-brand-800 active:bg-canvas">
-            <PlayCircle className="size-5" /> INICIAR VISITA
+            <PlayCircle className="size-5" /> {terms.visit === "Ação" ? "CHECK-IN · INICIAR AÇÃO" : "INICIAR VISITA"}
           </button>
         ) : (
           <button type="button" onClick={() => go(`visita/${stop.visit!.id}`)} className="w-full h-14 flex items-center justify-center gap-2 font-semibold text-[15px] text-brand-800 active:bg-canvas">

@@ -8,7 +8,7 @@ import { brl } from "@/lib/tasting";
 import { fmtDate } from "@/lib/dates";
 import { Badge, EmptyState, LinkButton, PageHeader, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { Table, Td, Th } from "../../_components/widgets";
-import { DegTabs } from "../_components/deg-tabs";
+import { DegTabs } from "../_components/deg-tabs-auto";
 
 export const metadata: Metadata = { title: "Degustadoras" };
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v.trim() : "");

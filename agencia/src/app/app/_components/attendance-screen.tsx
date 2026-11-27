@@ -415,9 +415,9 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
           </StatusBadge>
         </div>
         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 mt-3 text-[13.5px]">
-          <Info label="Loja" value={store?.name} />
+          <Info label={feat.actions ? "PDV" : "Loja"} value={store?.name} />
           <Info label="Marca" value={brand.name} />
-          <Info label="Promotor" value={local.bootstrap?.user.name} />
+          <Info label={feat.actions ? "Promotora" : "Promotor"} value={local.bootstrap?.user.name} />
           <Info label="Data" value={fmtDate(visit.visitDate)} />
           <Info label="Início" value={fmtTime(attendance.startedAt)} />
           <Info label={attendance.finishedAt ? "Finalização" : "Duração até agora"} value={attendance.finishedAt ? fmtTime(attendance.finishedAt) : fmtDuration(attendance.startedAt, new Date())} />

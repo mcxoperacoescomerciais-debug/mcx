@@ -31,7 +31,7 @@ export default async function VisitsPage({ searchParams }: PageProps<"/painel/vi
   return (
     <>
       <PageHeader
-        title="Visitas"
+        title={scope.settings.modules.actions ? "Ações realizadas" : "Visitas"}
         subtitle={<span className="first-letter:uppercase inline-block">{oneDay ? fmtLongDate(f.from) : `${fmtDate(f.from)} a ${fmtDate(f.to)}`} · {stops.length} de {board.stops.length} visita(s) · cada visita reúne os atendimentos das marcas na loja</span>}
       />
       <FilterBar

@@ -4,7 +4,7 @@ import { getScope } from "@/server/auth";
 import { canManageTastings } from "@/server/tastings";
 import { PageHeader } from "@/components/ui";
 import { SectionCard } from "../../../_components/widgets";
-import { DegTabs } from "../../_components/deg-tabs";
+import { DegTabs } from "../../_components/deg-tabs-auto";
 import { TasterForm } from "../../_components/taster-form";
 
 export const metadata: Metadata = { title: "Nova degustadora" };

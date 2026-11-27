@@ -8,7 +8,7 @@ import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { brl, CONTACT_STATUS_LABEL, TASTING_STATUS_LABEL, TASTING_STATUS_TONE } from "@/lib/tasting";
 import { Badge, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../../_components/widgets";
-import { DegTabs } from "../../_components/deg-tabs";
+import { DegTabs } from "../../_components/deg-tabs-auto";
 import { TasterForm } from "../../_components/taster-form";
 
 export const metadata: Metadata = { title: "Degustadora" };

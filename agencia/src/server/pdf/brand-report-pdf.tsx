@@ -149,11 +149,10 @@ export async function renderBrandReport(i: BrandReportInput) {
               {gallery.length ? null : <Text style={base.empty}>Nenhuma foto enviada no período.</Text>}
               {gallery.map((g) => (
                 <View key={g.store} style={{ marginBottom: 6 }}>
-                  <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, color: C.brand, marginTop: 8, marginBottom: 4 }} minPresenceAhead={150}>
-                    {g.store}
-                  </Text>
-                  {g.items.map(({ a, photos }) => (
+                  {g.items.map(({ a, photos }, idx) => (
+                    // O nome do PDV fica preso à primeira linha de fotos (nunca sozinho no fim da página).
                     <View key={a.key} wrap={false} style={{ marginBottom: 8 }}>
+                      {idx === 0 ? <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, color: C.brand, marginTop: 8, marginBottom: 4 }}>{g.store}</Text> : null}
                       <Text style={{ fontSize: 8, color: C.ink2, marginBottom: 3 }}>
                         {fmtDate(a.date)} · {a.promoterName ?? "—"}
                         {a.outcome ? ` · ${n(a.outcome.approached ?? 0)} abordagens · ${n(a.outcome.samples ?? 0)} amostras · ${n(a.outcome.unitsSold ?? 0)} vendas` : ""}

@@ -187,11 +187,11 @@ export function attendanceMissing(i: AttendanceCheckInput): MissingItem[] {
 
   if (i.beforePhotos < i.brand.minBeforePhotos && !excused.has("before_photo")) {
     const falta = i.brand.minBeforePhotos - i.beforePhotos;
-    out.push({ kind: "before_photo", message: `Falta ${plural(falta, "foto", "fotos")} do ANTES.`, excusable: i.allowExceptions });
+    out.push({ kind: "before_photo", message: `Falta ${plural(falta, "foto", "fotos")} ${i.action ? "da MONTAGEM do ponto" : "do ANTES"}.`, excusable: i.allowExceptions });
   }
   if (i.afterPhotos < i.brand.minAfterPhotos && !excused.has("after_photo")) {
     const falta = i.brand.minAfterPhotos - i.afterPhotos;
-    out.push({ kind: "after_photo", message: `Falta ${plural(falta, "foto", "fotos")} do DEPOIS.`, excusable: i.allowExceptions });
+    out.push({ kind: "after_photo", message: `Falta ${plural(falta, "foto", "fotos")} ${i.action ? "da AÇÃO acontecendo" : "do DEPOIS"}.`, excusable: i.allowExceptions });
   }
   // Estoque não é mais obrigatório: produto sem apontamento significa que não havia o que informar.
   if (i.checklist) {

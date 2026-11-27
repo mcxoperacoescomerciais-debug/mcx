@@ -12,7 +12,7 @@ import { withParams } from "@/lib/filters";
 import { LinkButton, PageHeader } from "@/components/ui";
 import { KpiCard, SectionCard } from "../_components/widgets";
 import { ActionForm } from "../_components/action-form";
-import { DegTabs } from "./_components/deg-tabs";
+import { DegTabs } from "./_components/deg-tabs-auto";
 import { deleteSamplesAction, seedSamplesAction } from "./actions";
 
 export const metadata: Metadata = { title: "Degustações" };
@@ -36,7 +36,7 @@ export default async function TastingsDashboard({ searchParams }: PageProps<"/pa
     <>
       <DegTabs />
       <PageHeader
-        title="Degustações"
+        title={scope.settings.modules.actions ? "Painel da agenda de ações" : "Degustações"}
         subtitle={`Painel de ${monthLabel(month)} · operação e resultado financeiro das ações`}
         actions={
           <>

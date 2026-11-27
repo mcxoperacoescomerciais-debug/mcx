@@ -24,7 +24,7 @@ import {
 import { Badge, LinkButton, PageHeader, StatusBadge, inputClass, selectClass } from "@/components/ui";
 import { SectionCard } from "../../_components/widgets";
 import { ActionForm, Disclosure } from "../../_components/action-form";
-import { DegTabs } from "../_components/deg-tabs";
+import { DegTabs } from "../_components/deg-tabs-auto";
 import { MaterialsChecklist } from "../_components/materials-checklist";
 import { contactAction, fileAction, financeAction, selectTasterAction, statusAction } from "../actions";
 import { voidStatus } from "@/lib/tasting";

@@ -7,7 +7,7 @@ import { isUuid } from "@/lib/filters";
 import { DEFAULT_FUEL_PRICE, blankCity, normalizeCity, type CalcCity } from "@/lib/tasting-calc";
 import { fmtDate } from "@/lib/dates";
 import { PageHeader } from "@/components/ui";
-import { DegTabs } from "../_components/deg-tabs";
+import { DegTabs } from "../_components/deg-tabs-auto";
 import { Calculator, type QuoteData } from "./calculator";
 
 export const metadata: Metadata = { title: "Calculadora de degustação" };

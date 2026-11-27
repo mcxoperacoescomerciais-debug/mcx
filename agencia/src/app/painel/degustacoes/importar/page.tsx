@@ -6,7 +6,7 @@ import { listBatches } from "@/server/tasting-import";
 import { fmtDateTime } from "@/lib/dates";
 import { PageHeader } from "@/components/ui";
 import { SectionCard } from "../../_components/widgets";
-import { DegTabs } from "../_components/deg-tabs";
+import { DegTabs } from "../_components/deg-tabs-auto";
 import { ScheduleImport } from "./schedule-import";
 
 export const metadata: Metadata = { title: "Importar cronograma" };
