@@ -3,6 +3,7 @@
  */
 import { attendanceMissing, type MissingItem } from "@/lib/rules";
 import type { AttendanceDisplayStatus } from "@/lib/domain";
+import { outcomeComplete } from "@/lib/actions";
 import type { BootstrapBrand, BootstrapProduct } from "@/lib/sync-types";
 import { attendanceDisplayStatus, isVisitFullySynced, type LocalAttendance, type LocalVisit } from "./local-store";
 
@@ -56,7 +57,7 @@ export const STOP_STATUS_TONE = {
   blocked: "danger",
 } as const;
 
-export function missingFor(a: LocalAttendance, brand: BootstrapBrand, tracked: BootstrapProduct[], allowExceptions: boolean): MissingItem[] {
+export function missingFor(a: LocalAttendance, brand: BootstrapBrand, tracked: BootstrapProduct[], allowExceptions: boolean, actions = false): MissingItem[] {
   return attendanceMissing({
     brand,
     beforePhotos: a.photos.filter((p) => p.kind === "before").length,
@@ -70,5 +71,6 @@ export function missingFor(a: LocalAttendance, brand: BootstrapBrand, tracked: B
     allowExceptions,
     checklist: { items: brand.activities, done: a.activitiesDone },
     questions: { items: brand.questions ?? [], answers: a.answers ?? [] },
+    action: actions ? { closingPhotos: a.photos.filter((p) => p.kind === "closing").length, outcomeComplete: outcomeComplete(a.actionResult) } : undefined,
   });
 }

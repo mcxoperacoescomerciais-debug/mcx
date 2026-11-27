@@ -31,6 +31,8 @@ import { DamageStep } from "./damage-step";
 import { daysBetween } from "@/lib/dates";
 import { classify, DEFAULT_BANDS, SEVERITY_LABEL } from "@/lib/validity";
 import { OccurrenceStep } from "./occurrence-step";
+import { ActionResultStep } from "./action-result-step";
+import { ACCEPTANCE_LABEL, EMPTY_OUTCOME, conversion, outcomeComplete, pct, type ActionOutcome } from "@/lib/actions";
 import { SharePdf } from "./share-pdf";
 import { visitReportText, whatsappLink } from "../_lib/visit-report";
 import { GROUP_MAX_FILES } from "../_lib/group-photos";
@@ -42,6 +44,9 @@ const STEPS = [
   { id: "estoque", label: "Estoque, ruptura e validade" },
   { id: "depois", label: "Depois" },
   { id: "avaria", label: "Avaria" },
+  // Modo ações: foto do encerramento e resultado da ação.
+  { id: "encerramento", label: "Encerramento" },
+  { id: "resultado", label: "Resultado" },
   { id: "ocorrencias", label: "Ocorrências" },
   // Checklist final: o promotor confere tudo antes da revisão.
   { id: "execucao", label: "Execução" },
@@ -50,10 +55,16 @@ const STEPS = [
 type StepId = (typeof STEPS)[number]["id"];
 /** Etapas sem mínimo obrigatório: não ganham o "check" verde só por estarem vazias. */
 const OPTIONAL_STEPS = new Set<StepId>(["avaria", "ocorrencias"]);
-type Features = { stock: boolean; damage: boolean };
-const ALL_FEATURES: Features = { stock: true, damage: true };
+type Features = { stock: boolean; damage: boolean; actions?: boolean };
+const ALL_FEATURES: Features = { stock: true, damage: true, actions: false };
+/** Nomes das etapas no modo ações. */
+const ACTION_STEP_LABEL: Partial<Record<StepId, string>> = { antes: "Montagem", depois: "Ação", execucao: "Checklist" };
 /** Etapas da agência: sem os recursos que a equipe MCX desligou para ela. */
-const stepsFor = (f: Features) => STEPS.filter((s) => (s.id !== "estoque" || f.stock) && (s.id !== "avaria" || f.damage));
+const stepsFor = (f: Features) =>
+  STEPS.filter((s) => (s.id !== "estoque" || f.stock) && (s.id !== "avaria" || f.damage) && ((s.id !== "encerramento" && s.id !== "resultado") || f.actions)).map((s) => ({
+    id: s.id,
+    label: (f.actions && ACTION_STEP_LABEL[s.id]) || s.label,
+  }));
 
 export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: string; attendanceId: string; step?: string }) {
   const visit = useVisit(visitId);
@@ -102,6 +113,8 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
     depois: attendance.photos.filter((p) => p.kind === "after").length >= brand.minAfterPhotos || attendance.exceptionItems.includes("after_photo"),
     estoque: true,
     avaria: Object.values(attendance.damages ?? {}).every((d) => attendance.photos.some((p) => p.damageId === d.id)),
+    encerramento: attendance.photos.some((p) => p.kind === "closing"),
+    resultado: outcomeComplete(attendance.actionResult),
     ocorrencias: true,
     revisao: status === "completed" || status === "awaiting_sync",
   };
@@ -180,8 +193,9 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             min={brand.minBeforePhotos}
             allowGallery={brand.allowGallery}
             editable={editable}
-            title="Foto do antes"
+            title={feat.actions ? "Foto da montagem do ponto" : "Foto do antes"}
             cta="ABRIR CÂMERA E FOTOGRAFAR"
+            noPlacement={feat.actions}
           />
         ) : current === "execucao" ? (
           <ExecutionStep visitId={visitId} attendance={attendance} activities={brand.activities} questions={brand.questions ?? []} editable={editable} />
@@ -194,8 +208,9 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             min={brand.minAfterPhotos}
             allowGallery={brand.allowGallery}
             editable={editable}
-            title="Foto do depois"
-            cta="REGISTRAR RESULTADO DA EXECUÇÃO"
+            title={feat.actions ? "Foto da ação acontecendo" : "Foto do depois"}
+            cta={feat.actions ? "FOTOGRAFAR A AÇÃO" : "REGISTRAR RESULTADO DA EXECUÇÃO"}
+            noPlacement={feat.actions}
           />
         ) : current === "estoque" ? (
           <StockStep
@@ -206,6 +221,21 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
             products={tracked}
             editable={editable}
           />
+        ) : current === "encerramento" ? (
+          <PhotoCapture
+            visitId={visitId}
+            attendanceId={attendanceId}
+            kind="closing"
+            photos={attendance.photos.filter((p) => p.kind === "closing")}
+            min={1}
+            allowGallery={brand.allowGallery}
+            editable={editable}
+            title="Foto do encerramento"
+            cta="FOTOGRAFAR O PONTO DESMONTADO"
+            noPlacement
+          />
+        ) : current === "resultado" ? (
+          <ActionResultStep visitId={visitId} attendance={attendance} editable={editable} />
         ) : current === "avaria" ? (
           <DamageStep visitId={visitId} visitDate={visit.visitDate} attendance={attendance} brand={brand} products={tracked} editable={editable} />
         ) : current === "ocorrencias" ? (
@@ -215,6 +245,30 @@ export function AttendanceScreen({ visitId, attendanceId, step }: { visitId: str
         )}
       </div>
     </Screen>
+  );
+}
+
+/** Revisão (modo ações): os números do resultado. */
+function ActionResultSummary({ result, onOpen }: { result: ActionOutcome | null; onOpen: () => void }) {
+  const r = result ?? EMPTY_OUTCOME;
+  const conv = r.approached && r.unitsSold !== null ? conversion(r.unitsSold, r.approached) : null;
+  return (
+    <section className="bg-surface border border-line rounded-2xl p-4">
+      <button type="button" onClick={onOpen} className="w-full text-left">
+        <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Resultado da ação</h3>
+        {outcomeComplete(r) ? (
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[13.5px]">
+            <Info label="Abordagens" value={String(r.approached)} />
+            <Info label="Amostras" value={String(r.samples)} />
+            <Info label="Vendas" value={`${r.unitsSold} un.`} />
+            <Info label="Aceitação" value={`${r.acceptance} · ${ACCEPTANCE_LABEL[r.acceptance ?? 0] ?? ""}`} />
+            <Info label="Conversão" value={pct(conv)} />
+          </dl>
+        ) : (
+          <p className="text-[14px] text-bad font-semibold">Resultado ainda não informado.</p>
+        )}
+      </button>
+    </section>
   );
 }
 
@@ -326,7 +380,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
   const brand = cat.brandById.get(attendance.brandId)!;
   const store = cat.storeById.get(visit.storeId);
   const tracked = cat.trackedProducts(visit.storeId, attendance.brandId);
-  const missing = missingFor(attendance, brand, tracked, allowExceptions);
+  const missing = missingFor(attendance, brand, tracked, allowExceptions, Boolean(cat.settings?.features?.actions));
   const editable = attendance.status === "in_progress" || attendance.status === "correction_requested";
   const status = attendanceDisplayStatus(attendance);
   const [exceptionOpen, setExceptionOpen] = useState(false);
@@ -345,7 +399,7 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
   const after = attendance.photos.filter((p) => p.kind === "after");
   const ruptures = Object.values(attendance.ruptures);
   const excusable = missing.filter((m) => m.excusable);
-  const stepFor: Partial<Record<string, StepId>> = { checklist: "execucao", before_photo: "antes", after_photo: "depois", stock: "estoque", damage_photo: "avaria" };
+  const stepFor: Partial<Record<string, StepId>> = { checklist: "execucao", before_photo: "antes", after_photo: "depois", stock: "estoque", damage_photo: "avaria", closing_photo: "encerramento", action_result: "resultado" };
   const bands = cat.settings?.validityBands ?? DEFAULT_BANDS;
   const validities = Object.values(attendance.validities ?? {}).map((v) => ({ v, sev: classify(daysBetween(visit.visitDate, v.expiryDate), bands) }));
   const urgent = validities.filter((x) => x.sev === "expired" || x.sev === "critical").length;
@@ -373,11 +427,11 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
       <section className="bg-surface border border-line rounded-2xl p-4">
         <h3 className="text-[13px] font-semibold text-ink-2 mb-2">Fotos</h3>
         <div className="grid grid-cols-2 gap-2">
-          {(["antes", "depois"] as const).map((k) => {
-            const list = k === "antes" ? before : after;
+          {(feat.actions ? (["antes", "depois", "encerramento"] as const) : (["antes", "depois"] as const)).map((k) => {
+            const list = k === "antes" ? before : k === "depois" ? after : attendance.photos.filter((p) => p.kind === "closing");
             return (
               <button key={k} type="button" onClick={() => goStep(k)} className="text-left">
-                <p className="text-[12px] font-semibold uppercase text-muted mb-1">{k}</p>
+                <p className="text-[12px] font-semibold uppercase text-muted mb-1">{feat.actions ? { antes: "Montagem", depois: "Ação", encerramento: "Encerramento" }[k] : k}</p>
                 {list[0] ? <PhotoThumb photo={list[0]} className="w-full aspect-[4/3] rounded-xl" /> : <div className="w-full aspect-[4/3] rounded-xl bg-bad-bg text-bad grid place-items-center text-[12px] font-semibold">Sem foto</div>}
                 <p className="text-[12px] text-muted mt-1">{list.length} foto(s)</p>
               </button>
@@ -385,6 +439,8 @@ function ReviewStep({ visitId, attendance, goStep, trackedCount, allowExceptions
           })}
         </div>
       </section>
+
+      {feat.actions ? <ActionResultSummary result={attendance.actionResult ?? null} onOpen={() => goStep("resultado")} /> : null}
 
       <section hidden={!feat.stock} className="bg-surface border border-line rounded-2xl p-4">
         <button type="button" onClick={() => goStep("estoque")} className="w-full text-left">

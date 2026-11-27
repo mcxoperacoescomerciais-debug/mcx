@@ -8,12 +8,15 @@ import { getScope } from "@/server/auth";
 import { getDb, schema as s } from "@/server/db";
 import { canManageTastings, listTastings, monthRange, type TastingRow } from "@/server/tastings";
 import { shiftMonth } from "@/server/finance";
-import { brl, CONTACT_STATUS_LABEL, MATERIALS_STATE_LABEL, monthLabel, TASTING_FLAG_LABEL, TASTING_FLAGS, TASTING_STATUS_DOT, TASTING_STATUS_LABEL, TASTING_STATUS_TONE, TASTING_STATUSES, pct } from "@/lib/tasting";
+import { brl, CONTACT_STATUS_LABEL, MATERIALS_STATE_LABEL, monthLabel, TASTING_FLAG_LABEL, TASTING_FLAGS, TASTING_STATUS_DOT, TASTING_STATUS_TONE, TASTING_STATUSES, pct } from "@/lib/tasting";
 import { withParams } from "@/lib/filters";
 import { addDays, fmtDate, todayIso, weekdayOf } from "@/lib/dates";
 import { Badge, EmptyState, LinkButton, PageHeader, StatusBadge, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../_components/widgets";
 import { DegTabs } from "../_components/deg-tabs";
+import { statusLabelFor, type TastingStatus } from "@/lib/tasting";
+import { termsFor, type Terms } from "@/lib/actions";
+import { voidStatus } from "@/lib/tasting";
 
 export const metadata: Metadata = { title: "Agenda de degustações" };
 
@@ -22,6 +25,10 @@ const one = (v: string | string[] | undefined) => (typeof v === "string" && v ? 
 
 export default async function TastingAgenda({ searchParams }: PageProps<"/painel/degustacoes/agenda">) {
   const scope = await getScope();
+  // Modo ações: Agenda de ações, Promotora, Realizada…
+  const isActions = scope.settings.modules.actions;
+  const L = statusLabelFor(isActions);
+  const T = termsFor(isActions);
   if (scope.role === "promoter") notFound();
   const sp = await searchParams;
   const { from, to, month } = monthRange(one(sp.mes));
@@ -51,9 +58,9 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
 
   return (
     <>
-      <DegTabs />
+      <DegTabs actions={isActions} />
       <PageHeader
-        title="Agenda de degustações"
+        title={isActions ? "Agenda de ações" : "Agenda de degustações"}
         subtitle={`${monthLabel(month)} · ${rows.length} ação(ões) com estes filtros`}
         actions={
           <>
@@ -99,8 +106,8 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
         </select>
         <input name="city" defaultValue={f.city ?? ""} placeholder="Cidade" className={inputClass} aria-label="Cidade" />
         <input name="store" defaultValue={f.store ?? ""} placeholder="Loja ou rede" className={inputClass} aria-label="Loja" />
-        <select name="taster" defaultValue={f.taster ?? ""} className={selectClass} aria-label="Degustadora">
-          <option value="">Todas as degustadoras</option>
+        <select name="taster" defaultValue={f.taster ?? ""} className={selectClass} aria-label={T.taster}>
+          <option value="">Todas as {T.tasters.toLowerCase()}</option>
           {tasters.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}
@@ -111,7 +118,7 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
           <option value="">Todas as situações</option>
           {TASTING_STATUSES.map((st) => (
             <option key={st} value={st}>
-              {TASTING_STATUS_LABEL[st]}
+              {L[st]}
             </option>
           ))}
         </select>
@@ -134,7 +141,7 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3 text-[12px] text-ink-2">
         {TASTING_STATUSES.map((st) => (
           <span key={st} className="inline-flex items-center gap-1.5">
-            <span className={clsx("size-2.5 rounded-full", TASTING_STATUS_DOT[st])} /> {TASTING_STATUS_LABEL[st]}
+            <span className={clsx("size-2.5 rounded-full", TASTING_STATUS_DOT[st])} /> {L[st]}
           </span>
         ))}
       </div>
@@ -195,7 +202,7 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
                   <tr>
                     <Th>Data</Th>
                     <Th>Marca · loja</Th>
-                    <Th>Degustadora</Th>
+                    <Th>{T.taster}</Th>
                     <Th>Situação</Th>
                     <Th align="right">Receita</Th>
                     <Th align="right">Contribuição</Th>
@@ -219,16 +226,16 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
                           {r.storeName} · {r.city}
                         </span>
                       </Td>
-                      <Td>{r.tasterName ?? <span className="text-bad font-medium">Sem degustadora</span>}</Td>
+                      <Td>{r.tasterName ?? <span className="text-bad font-medium">Sem {T.taster.toLowerCase()}</span>}</Td>
                       <Td>
                         <StatusBadge tone={TASTING_STATUS_TONE[r.status]} size="sm">
-                          {TASTING_STATUS_LABEL[r.status]}
+                          {L[r.status]}
                         </StatusBadge>
-                        {r.docStatus === "pending" && r.status !== "cancelled" ? <span className="block text-[11px] text-warn font-semibold mt-0.5">documentação pendente</span> : null}
+                        {r.docStatus === "pending" && !voidStatus(r.status) ? <span className="block text-[11px] text-warn font-semibold mt-0.5">documentação pendente</span> : null}
                         {r.pendingFinance ? <span className="block text-[11px] text-warn font-semibold">faturamento/pagamento pendente</span> : null}
                       </Td>
-                      <Td align="right" className="tnum">{brl(r.status === "completed" ? r.actual.revenue : r.status === "cancelled" ? r.revenueCounted : r.planned.revenue)}</Td>
-                      <Td align="right" className="tnum font-semibold">{r.status === "cancelled" ? brl(r.revenueCounted) : brl(r.status === "completed" ? r.actual.contribution : r.planned.contribution)}</Td>
+                      <Td align="right" className="tnum">{brl(r.status === "completed" ? r.actual.revenue : voidStatus(r.status) ? r.revenueCounted : r.planned.revenue)}</Td>
+                      <Td align="right" className="tnum font-semibold">{voidStatus(r.status) ? brl(r.revenueCounted) : brl(r.status === "completed" ? r.actual.contribution : r.planned.contribution)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -236,16 +243,16 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
             </div>
           ) : (
             <div className="bg-surface border border-line rounded-[var(--radius-card)]">
-              <EmptyState title="Nenhuma degustação com estes filtros" />
+              <EmptyState title={isActions ? "Nenhuma ação com estes filtros" : "Nenhuma degustação com estes filtros"} />
             </div>
           )}
         </div>
 
         {selected || day ? (
           <div className="space-y-5">
-            {selected ? <Summary r={selected} /> : null}
+            {selected ? <Summary r={selected} L={L} T={T} /> : null}
             {day ? (
-              <SectionCard title={`Degustações de ${fmtDate(day)}`} subtitle={`${dayRows.length} ação(ões)`} bodyClass="pb-2">
+              <SectionCard title={`${T.tastings} de ${fmtDate(day)}`} subtitle={`${dayRows.length} ação(ões)`} bodyClass="pb-2">
                 {dayRows.length ? (
                   <ul className="divide-y divide-line border-t border-line">
                     {dayRows.map((r) => (
@@ -257,7 +264,7 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
                               {r.startTime ?? "—"} · {r.brandName}
                             </span>
                             <span className="block text-[12px] text-muted truncate">
-                              {r.storeName} · {r.city} · {r.tasterName ?? "sem degustadora"}
+                              {r.storeName} · {r.city} · {r.tasterName ?? `sem ${T.taster.toLowerCase()}`}
                             </span>
                           </span>
                         </Link>
@@ -277,7 +284,7 @@ export default async function TastingAgenda({ searchParams }: PageProps<"/painel
 }
 
 /** Resumo ao clicar numa degustação da agenda. */
-function Summary({ r }: { r: TastingRow }) {
+function Summary({ r, L, T }: { r: TastingRow; L: Record<TastingStatus, string>; T: Terms }) {
   const m = r.status === "completed" ? r.actual : r.planned;
   return (
     <SectionCard
@@ -290,7 +297,7 @@ function Summary({ r }: { r: TastingRow }) {
       subtitle={`${fmtDate(r.date)} · ${[r.startTime, r.endTime].filter(Boolean).join(" às ") || "sem horário"}`}
       action={
         <StatusBadge tone={TASTING_STATUS_TONE[r.status]} size="sm">
-          {TASTING_STATUS_LABEL[r.status]}
+          {L[r.status]}
         </StatusBadge>
       }
       bodyClass="px-5 pb-5"
@@ -299,15 +306,15 @@ function Summary({ r }: { r: TastingRow }) {
         <Item label="Loja" value={r.storeName} />
         <Item label="Cidade" value={r.city} />
         <Item label="Produto" value={r.product ?? "—"} />
-        <Item label="Degustadora" value={r.tasterName ?? "Sem degustadora"} />
+        <Item label={T.taster} value={r.tasterName ?? `Sem ${T.taster.toLowerCase()}`} />
         <Item label="Confirmação" value={r.tasterId ? CONTACT_STATUS_LABEL[r.contactStatus] : "—"} />
         <Item label="Materiais" value={MATERIALS_STATE_LABEL[r.materials]} />
-        <Item label={r.status === "completed" ? "Receita realizada" : "Receita prevista"} value={brl(r.status === "cancelled" ? r.revenueCounted : m.revenue)} />
+        <Item label={r.status === "completed" ? "Receita realizada" : "Receita prevista"} value={brl(voidStatus(r.status) ? r.revenueCounted : m.revenue)} />
         <Item label={r.status === "completed" ? "Custo realizado" : "Custo previsto"} value={brl(m.directCost)} />
-        <Item label="Resultado" value={`${brl(r.status === "cancelled" ? r.revenueCounted : m.contribution)}${m.margin !== null && r.status !== "cancelled" ? ` (${pct(m.margin)})` : ""}`} />
+        <Item label="Resultado" value={`${brl(voidStatus(r.status) ? r.revenueCounted : m.contribution)}${m.margin !== null && !voidStatus(r.status) ? ` (${pct(m.margin)})` : ""}`} />
       </dl>
       <LinkButton href={`/painel/degustacoes/${r.id}`} className="w-full mt-4">
-        Abrir degustação
+        Abrir {T.tasting.toLowerCase()}
       </LinkButton>
     </SectionCard>
   );

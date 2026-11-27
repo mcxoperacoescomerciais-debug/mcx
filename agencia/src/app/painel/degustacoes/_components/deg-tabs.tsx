@@ -13,11 +13,12 @@ const TABS = [
   { href: "/painel/degustacoes/importar", label: "Importar cronograma" },
 ];
 
-export function DegTabs() {
+export function DegTabs({ actions = false }: { /** Modo ações: Promotoras no lugar de Degustadoras. */ actions?: boolean }) {
   const pathname = usePathname();
+  const tabs = actions ? TABS.map((t) => (t.href === "/painel/degustacoes/degustadoras" ? { ...t, label: "Promotoras" } : t.href === "/painel/degustacoes" ? { ...t, label: "Painel da agenda" } : t)) : TABS;
   return (
     <nav aria-label="Degustações" className="flex gap-1 border-b border-line mb-5 overflow-x-auto no-print">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const active = t.exact ? pathname === t.href : pathname.startsWith(t.href);
         return (
           <Link

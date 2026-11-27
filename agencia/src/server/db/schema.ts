@@ -33,6 +33,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Severity } from "../../lib/validity";
+import type { ActionOutcome } from "../../lib/actions";
 import type { ScopeAnswer, ScopeSection } from "../../lib/scope-forms";
 import type { AnalysisStatus, ImprovementAnalysis, ImprovementStatus } from "../../lib/improvements";
 import type { BillingStatus, ContactStatus, DocStatus, PaymentStatus, ReceiptStatus, TastingFileKind, TastingStatus } from "../../lib/tasting";
@@ -549,6 +550,8 @@ export const attendances = pgTable(
     cancelReason: text("cancel_reason"),
     /** Código aleatório do link público do relatório (/r/<código>), criado no celular ao finalizar. */
     reportLinkId: uuid("report_link_id"),
+    /** Modo ações: abordagens, amostras, vendas e aceitação informadas pela promotora. */
+    actionResult: jsonb("action_result").$type<ActionOutcome>(),
     reviewStatus: text("review_status").$type<ReviewStatus>().notNull().default("none"),
     reviewNote: text("review_note"),
     reviewedBy: uuid("reviewed_by"),
@@ -604,7 +607,7 @@ export const photos = pgTable(
   (t) => [
     index("photos_attendance_idx").on(t.attendanceId, t.kind),
     index("photos_agency_created_idx").on(t.agencyId, t.createdAt),
-    check("photos_kind_ck", sql`${t.kind} in ('before','after','rupture','occurrence','validity','damage')`),
+    check("photos_kind_ck", sql`${t.kind} in ('before','after','rupture','occurrence','validity','damage','closing')`),
     check("photos_upload_ck", sql`${t.uploadedAt} is null or ${t.storageKey} is not null`),
   ],
 );

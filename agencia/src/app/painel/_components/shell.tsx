@@ -8,6 +8,8 @@ import { Suspense, useCallback, useEffect, useState, useTransition, type ReactNo
 import { clearPanelCache, PanelOffline } from "./offline";
 import {
   BarChart3,
+  FileBarChart2,
+  CalendarRange,
   Briefcase,
   ExternalLink,
   ClipboardCheck,
@@ -77,6 +79,33 @@ const MAIN: NavItem[] = [
   { href: "/painel/degustacoes", label: "Degustações", icon: UtensilsCrossed },
   { href: "/painel/financeiro", label: "Financeiro", icon: Wallet, roles: ["admin"] },
 ];
+
+/**
+ * Modo ações (agências de degustação e ativação): mesmo menu, com os nomes do negócio
+ * (ação, promotora, PDV, agenda de ações), sem Carteira e metas, e com o relatório para a marca.
+ */
+const ACTION_LABELS: Record<string, string> = {
+  "/painel": "Painel de ações",
+  "/painel/visitas": "Ações realizadas",
+  "/painel/fotos": "Fotos das ações",
+  "/painel/promotores": "Promotoras",
+  "/painel/roteiros": "Agenda fixa (roteiros)",
+  "/painel/cadastros/lojas": "Redes e PDVs",
+  "/painel/cadastros/rota": "Agenda por promotora",
+};
+function actionMenu(items: NavItem[]): NavItem[] {
+  const out: NavItem[] = [];
+  for (const i of items) {
+    if (i.href === "/painel/metas") continue;
+    if (i.href === "/painel/degustacoes") {
+      out.push({ ...i, href: "/painel/degustacoes/agenda", label: "Agenda de ações", icon: CalendarRange, also: ["/painel/degustacoes"] });
+      out.push({ href: "/painel/acoes/relatorio", label: "Relatório para a marca", icon: FileBarChart2 });
+      continue;
+    }
+    out.push(ACTION_LABELS[i.href] ? { ...i, label: ACTION_LABELS[i.href], also: i.href === "/painel" ? ["/painel/acoes"] : i.also } : i);
+  }
+  return out;
+}
 
 const SETTINGS: NavItem[] = [
   { href: "/painel/roteiros", label: "Roteiros", icon: Route, fullScope: true },
@@ -173,7 +202,7 @@ function NavItemLink({ item, active, onNavigate, compact }: { item: NavItem; act
   );
 }
 
-function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, hidden, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; perms: string[] | null; owner: boolean; mcxBadges: Record<string, number>; hidden: string[]; onNavigate?: () => void }) {
+function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, hidden, actions = false, onNavigate }: { role: Role; fullScope: boolean; mcx: boolean; perms: string[] | null; owner: boolean; mcxBadges: Record<string, number>; hidden: string[]; actions?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const allowed = (i: NavItem) => {
     if (hidden.includes(i.href)) return false;
@@ -215,13 +244,13 @@ function NavLinks({ role, fullScope, mcx, perms, owner, mcxBadges, hidden, onNav
       </nav>
     );
   }
-  const settings = SETTINGS.filter(allowed);
+  const settings = (actions ? actionMenu(SETTINGS) : SETTINGS).filter(allowed);
   const settingsActive = settings.some((i) => isActive(pathname, i));
   return (
     <nav className="space-y-4">
       <ul className="space-y-0.5">
         {/* Estoque/ruptura/validade desligados e Avarias ligado: o item do menu vira "Avarias". */}
-        {MAIN.map((i) => (i.href === "/painel/estoque" && hidden.includes(i.href) && !hidden.includes("/painel/avarias") && !hidden.includes("estoque") ? { ...i, href: "/painel/avarias", label: "Avarias", also: [] } : i))
+        {(actions ? actionMenu(MAIN) : MAIN).map((i) => (i.href === "/painel/estoque" && hidden.includes(i.href) && !hidden.includes("/painel/avarias") && !hidden.includes("estoque") ? { ...i, href: "/painel/avarias", label: "Avarias", also: [] } : i))
           .filter(allowed)
           .map((item) => (
           <NavItemLink key={item.href} item={item} active={isActive(pathname, item)} onNavigate={onNavigate} />
@@ -313,12 +342,18 @@ export function PanelShell({
   fullScope,
   allowed,
   hidden = [],
+  actions = false,
+  demo = false,
   owner,
   scopeNote,
   logout,
   children,
 }: {
   hidden?: string[];
+  /** Modo ações: nomes do menu do negócio de degustação e ativação. */
+  actions?: boolean;
+  /** Agência de demonstração: faixa avisando que os dados são fictícios. */
+  demo?: boolean;
   user: { name: string; role: Role };
   agency: { id: string; name: string; logoUrl: string | null } | null;
   platform: PlatformProps | null;
@@ -343,6 +378,7 @@ export function PanelShell({
           mcx={mcx}
           perms={allowed}
           hidden={hidden}
+          actions={actions && !mcx}
           owner={owner}
           mcxBadges={{ "/painel/mcx/melhorias": platform?.improvementsToReview ?? 0 }}
           onNavigate={onNavigate}
@@ -390,6 +426,9 @@ export function PanelShell({
       ) : null}
 
       <main data-agencia={mcx || !agency ? "mcx" : agency.id} className="px-4 sm:px-6 lg:px-8 pt-6 lg:py-8 max-w-[1480px] pb-[calc(24px+env(safe-area-inset-bottom,0px))]">
+        {demo && !mcx ? (
+          <p className="mb-4 rounded-lg bg-info-bg text-info px-3 py-2 text-[12.5px] font-semibold no-print">Ambiente de demonstração · marcas, PDVs, promotoras e resultados são fictícios (exemplo).</p>
+        ) : null}
         <Suspense fallback={null}>
           <PanelOffline agencyId={mcx || !agency ? "mcx" : agency.id} />
         </Suspense>

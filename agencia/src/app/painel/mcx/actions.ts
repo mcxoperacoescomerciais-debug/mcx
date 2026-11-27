@@ -119,6 +119,15 @@ export async function clearAgencyDataAction(_: FormState, fd: FormData): Promise
   return { ok: true, message: r.message };
 }
 
+/** Demonstração do modo ações: apaga os dados (mantém os administradores) e carrega a agência fictícia. */
+export async function actionsDemoAction(_: FormState, fd: FormData): Promise<FormState> {
+  const { seedActionsDemo } = await import("@/server/actions-demo");
+  const r = await seedActionsDemo(await requirePlatform(), str(fd, "id"), str(fd, "confirm"));
+  if (!r.ok) return r;
+  revalidatePath("/painel", "layout");
+  return { ok: true, message: r.message };
+}
+
 /** Início da operação: apaga visitas, atendimentos, fotos e programação antes da data (testes e treinamento). */
 export async function clearFieldHistoryAction(_: FormState, fd: FormData): Promise<FormState> {
   const { clearFieldHistory } = await import("@/server/field-reset");

@@ -5,10 +5,11 @@ import { AGENCY_MODULES, hiddenPanels, hiddenPaths, isHiddenPath, mergeSettings,
 
 test("agência que já existe continua com tudo o que tinha: recursos novos vêm ligados", () => {
   const st = mergeSettings({ modules: { tastings: true, finance: false, sistematica: true } });
-  assert.deepEqual(st.modules, { stock: true, damage: true, tastings: true, finance: false, sistematica: true });
-  assert.deepEqual(mergeSettings({}).modules, { stock: true, damage: true, tastings: true, finance: true, sistematica: false });
+  assert.deepEqual(st.modules, { actions: false, stock: true, damage: true, tastings: true, finance: false, sistematica: true });
+  assert.deepEqual(mergeSettings({}).modules, { actions: false, stock: true, damage: true, tastings: true, finance: true, sistematica: false });
   assert.deepEqual(hiddenPaths(st), []);
-  assert.deepEqual(hiddenPanels(st), ["financeiro"]);
+  // Sem o modo ações, o painel de ações também fica escondido.
+  assert.deepEqual(hiddenPanels(st), ["financeiro", "acoes"]);
 });
 
 test("registro único: todo recurso tem chave, nome e padrão; valor inválido é ignorado", () => {
@@ -23,7 +24,7 @@ test("formulário da equipe MCX: caixa marcada liga, desmarcada desliga", () => 
     ["tastings", "on"],
     ["finance", "on"],
   ]);
-  assert.deepEqual(modulesFromForm(fd), { stock: false, damage: false, tastings: true, finance: true, sistematica: false });
+  assert.deepEqual(modulesFromForm(fd), { actions: false, stock: false, damage: false, tastings: true, finance: true, sistematica: false });
 });
 
 test("agência de degustação: sem estoque/ruptura/validade e sem avarias, o painel e as páginas somem", () => {

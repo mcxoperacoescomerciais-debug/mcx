@@ -6,10 +6,11 @@ import { shrinkForPdf, type PdfImg } from "./shrink";
 
 const run = limiter(3);
 
-export function loadPdfImage(storageKey: string | null, contentType: string | null): Promise<PdfImg | null> {
+/** side: maior lado da foto no PDF (padrão 1100 px; galeria em miniatura usa menos). */
+export function loadPdfImage(storageKey: string | null, contentType: string | null, side?: number): Promise<PdfImg | null> {
   if (!storageKey) return Promise.resolve(null);
   return run(async () => {
     const bytes = await storage().get(storageKey);
-    return bytes ? shrinkForPdf(bytes, contentType) : null;
+    return bytes ? shrinkForPdf(bytes, contentType, side) : null;
   });
 }

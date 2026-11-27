@@ -3,9 +3,15 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { localStore, type LocalState, type LocalVisit } from "./local-store";
 import type { BootstrapBrand, BootstrapProduct, BootstrapSchedule, BootstrapStore } from "@/lib/sync-types";
+import { termsFor } from "@/lib/actions";
 
 export function useLocal(): LocalState {
   return useSyncExternalStore(localStore.subscribe, localStore.getSnapshot, localStore.getServerSnapshot);
+}
+
+/** Vocabulário da agência: promotoria (padrão) ou ações (Ação, Promotora, PDV, Agenda de ações). */
+export function useTerms() {
+  return termsFor(useCatalog().settings?.features?.actions);
 }
 
 export function useCatalog() {

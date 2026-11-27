@@ -7,7 +7,7 @@ import { Button, McxFooter, Progress, StatusBadge, TradeWordmark } from "@/compo
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtLongDate, fmtTime } from "@/lib/dates";
 import { pendingCount } from "../_lib/local-store";
-import { go, useCatalog, useLocal } from "../_lib/hooks";
+import { go, useCatalog, useLocal, useTerms } from "../_lib/hooks";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
 import { BottomTabs, Notice, RefreshButton, Screen, SectionTitle, SyncPill } from "./primitives";
 import { useStartVisit } from "./visit-start";
@@ -23,6 +23,7 @@ function greeting(): string {
 export function HomeScreen() {
   const local = useLocal();
   const cat = useCatalog();
+  const terms = useTerms();
   const { startScheduled, startPortfolio, sheets } = useStartVisit();
   const portfolio = usePortfolio();
   // Tela da carteira: quem trabalha por carteira, ou quem só tem atribuições sem dia fixo hoje.
@@ -112,7 +113,7 @@ export function HomeScreen() {
           </p>
 
           <div className="grid grid-cols-3 gap-2 mt-5">
-            <Stat label="Lojas concluídas" value={`${counts.storesDone}/${stops.length}`} />
+            <Stat label={`${terms.visits} concluídas`} value={`${counts.storesDone}/${stops.length}`} />
             <Stat label="Marcas atendidas" value={`${counts.brandsDone}/${counts.brandsPlanned}`} />
             <Stat label="Pendências" value={String(pendencies)} alert={pendencies > 0} />
           </div>
@@ -134,7 +135,7 @@ export function HomeScreen() {
               <p className="text-center text-[14px] text-brand-100 bg-white/10 rounded-2xl py-3.5">Todas as lojas de hoje foram iniciadas.</p>
             ) : (
               <Button size="xl" className="w-full !bg-white !text-brand-900" onClick={() => go("lojas")}>
-                <Store className="size-6" /> Ver minhas lojas
+                <Store className="size-6" /> Ver {terms.visit === "Ação" ? "meus PDVs" : "minhas lojas"}
               </Button>
             )}
           </div>
@@ -208,12 +209,12 @@ export function HomeScreen() {
         </>
       ) : (
       <>
-      <SectionTitle>Roteiro de hoje</SectionTitle>
+      <SectionTitle>{terms.visit === "Ação" ? "Agenda de ações de hoje" : "Roteiro de hoje"}</SectionTitle>
       <div className="px-4 space-y-3">
         {stops.length === 0 ? (
           <div className="bg-surface border border-line rounded-2xl p-6 text-center">
             <CalendarClock className="size-8 mx-auto text-muted" />
-            <p className="font-semibold mt-2">Nenhuma loja programada para hoje</p>
+            <p className="font-semibold mt-2">{terms.visit === "Ação" ? "Nenhuma ação agendada para hoje" : "Nenhuma loja programada para hoje"}</p>
             <p className="text-[14px] text-muted mt-1">Se o gestor acabou de programar, toque em Atualizar no topo. Visita fora do roteiro: abra pela aba Lojas.</p>
           </div>
         ) : (

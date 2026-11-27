@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, CalendarDays, CheckCircle2, CloudOff, History, Loader2, RefreshCw, RotateCw, Store, UserRound, X } from "lucide-react";
 import clsx from "clsx";
 import { pendingCount, refreshAll, syncNow } from "../_lib/local-store";
-import { go, useLocal } from "../_lib/hooks";
+import { go, useLocal, useTerms } from "../_lib/hooks";
 import { fmtAgo } from "@/lib/dates";
 
 // ───────────────────────────── Estrutura de tela ─────────────────────────────
@@ -123,10 +123,11 @@ export function RefreshButton({ label = true }: { label?: boolean }) {
 
 export function BottomTabs({ active }: { active: "hoje" | "lojas" | "historico" | "perfil" }) {
   const local = useLocal();
+  const terms = useTerms();
   const corrections = Object.values(local.visits).reduce((n, v) => n + Object.values(v.attendances).filter((a) => a.status === "correction_requested").length, 0);
   const tabs = [
     { id: "hoje", label: "Hoje", icon: CalendarDays, href: "", badge: corrections },
-    { id: "lojas", label: "Lojas", icon: Store, href: "lojas", badge: 0 },
+    { id: "lojas", label: terms.stores, icon: Store, href: "lojas", badge: 0 },
     { id: "historico", label: "Histórico", icon: History, href: "historico", badge: 0 },
     { id: "perfil", label: "Perfil", icon: UserRound, href: "perfil", badge: 0 },
   ] as const;

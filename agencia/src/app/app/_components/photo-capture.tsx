@@ -62,6 +62,8 @@ interface CaptureProps {
   visitId: string;
   attendanceId: string;
   kind: PhotoKind;
+  /** Modo ações: a foto não pergunta o local de exposição. */
+  noPlacement?: boolean;
   photos: LocalPhoto[];
   min: number;
   allowGallery: boolean;
@@ -73,14 +75,14 @@ interface CaptureProps {
 }
 
 /** Captura com câmera traseira (prioridade) e galeria (se a marca permitir). */
-export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGallery, editable, title, cta, link, compact }: CaptureProps) {
+export function PhotoCapture({ visitId, attendanceId, kind, photos, min, allowGallery, editable, title, cta, link, compact, noPlacement }: CaptureProps) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [replacing, setReplacing] = useState<string | null>(null);
   const [viewing, setViewing] = useState<LocalPhoto | null>(null);
   // Antes/depois: antes de fotografar, o promotor diz onde o produto está exposto.
-  const asksPlacement = kind === "before" || kind === "after";
+  const asksPlacement = !noPlacement && (kind === "before" || kind === "after");
   const [choosing, setChoosing] = useState<"camera" | "gallery" | null>(null);
   const placementRef = useRef<PhotoPlacement | null>(null);
   // Android: câmera dentro do app (a do celular derruba o navegador quando falta memória).

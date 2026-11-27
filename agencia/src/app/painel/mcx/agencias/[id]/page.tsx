@@ -11,7 +11,7 @@ import { addDays, fmtAgo, fmtDate, todayIso } from "@/lib/dates";
 import { Badge, PageHeader, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { SectionCard, Table, Td, Th } from "../../../_components/widgets";
 import { ActionForm } from "../../../_components/action-form";
-import { agencyLogoAction, agencyModulesAction, clearAgencyDataAction, clearFieldHistoryAction, deleteAgencyAction, enterAgencyAction, updateAgencyAction } from "../../actions";
+import { actionsDemoAction, agencyLogoAction, agencyModulesAction, clearAgencyDataAction, clearFieldHistoryAction, deleteAgencyAction, enterAgencyAction, updateAgencyAction } from "../../actions";
 import { mergeSettings } from "@/lib/settings";
 import { agencyDataCounts } from "@/server/agency-delete";
 import { fieldHistoryCounts } from "@/server/field-reset";
@@ -127,6 +127,19 @@ export default async function AgencyPage({ params, searchParams }: PageProps<"/p
                 <option value="executive">Executiva (marca): ruptura, datas críticas, avarias e lojas não atendidas com gráficos</option>
               </select>
             </label>
+          </ActionForm>
+        </SectionCard>
+
+        <SectionCard
+          title="Demonstração do modo ações (degustação e ativação)"
+          subtitle="Para apresentar o sistema a uma agência de ações: carrega uma agência fictícia no Triângulo Mineiro (3 marcas, 18 PDVs, 9 promotoras e cerca de 75 dias de ações com resultado, fotos ilustrativas, ocorrências e financeiro) e liga o modo ações."
+          bodyClass="px-5 pb-5"
+        >
+          <p className="text-[13px] text-ink-2 mb-3">
+            <strong>Apaga os dados atuais desta agência</strong> (cadastros, agenda, visitas, fotos). Ficam os administradores, o nome, a logo e as configurações. As promotoras de exemplo não têm senha: defina em Usuários para entrar no app com uma delas. Para confirmar, digite o nome da agência (<strong>{agency.name}</strong>):
+          </p>
+          <ActionForm action={actionsDemoAction} hidden={{ id: agency.id }} submitLabel="Carregar a demonstração de ações" variant="secondary">
+            <input name="confirm" required autoComplete="off" placeholder={agency.name} className={inputClass} aria-label="Nome da agência para confirmar a demonstração" />
           </ActionForm>
         </SectionCard>
 

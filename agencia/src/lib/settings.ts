@@ -75,6 +75,8 @@ export interface AgencySettings {
   groupPhotoMax: number;
   /** Só fotos em pé vão para o grupo: as tiradas na horizontal quebram o álbum do WhatsApp e ficam no relatório completo. */
   groupPortraitOnly: boolean;
+  /** Agência de demonstração (dados fictícios): aviso no painel e no rodapé dos relatórios. */
+  demo: boolean;
   /** Feriados (AAAA-MM-DD): no relatório mensal, visita prevista não feita em feriado conta como válida. */
   holidays: string[];
   /** Valor pago por visita válida (relatório mensal e sistemática); null = não informado. */
@@ -98,6 +100,7 @@ export interface AgencySettings {
  * `on`: como vem para agência nova e para agência que ainda não tem a chave gravada.
  */
 export const AGENCY_MODULES = [
+  { key: "actions", group: "Ações (degustação e ativação)", label: "Modo ações", hint: "Ação no lugar de visita, promotora, PDV e agenda de ações; no app: fotos de montagem, ação e encerramento, resultado (abordagens, amostras, vendas, aceitação) e ocorrências de ação; painel de ações, relatório para a marca e financeiro por ação.", on: false },
   { key: "stock", group: "Promotoria", label: "Estoque, ruptura e validade", hint: "Etapa de produtos no app do promotor e os relatórios de estoque, ruptura e validade.", on: true },
   { key: "damage", group: "Promotoria", label: "Avarias", hint: "Etapa de avarias no app do promotor e o relatório de avarias.", on: true },
   { key: "tastings", group: "Degustações e financeiro", label: "Degustações", hint: "Agenda, degustadoras, calculadora de preço e painel.", on: true },
@@ -120,7 +123,7 @@ export function modulesFromForm(fd: { get(name: string): unknown }): AgencyModul
 /** Painéis (lib/permissions) escondidos pelos módulos desligados. */
 export function hiddenPanels(st: Pick<AgencySettings, "modules">): string[] {
   const m = st.modules;
-  return [...(m.tastings ? [] : ["degustacoes"]), ...(m.finance ? [] : ["financeiro"]), ...(m.sistematica ? [] : ["sistematica"]), ...(m.stock || m.damage ? [] : ["estoque"])];
+  return [...(m.tastings ? [] : ["degustacoes"]), ...(m.finance ? [] : ["financeiro"]), ...(m.sistematica ? [] : ["sistematica"]), ...(m.stock || m.damage ? [] : ["estoque"]), ...(m.actions ? [] : ["acoes"])];
 }
 
 /** Páginas escondidas pelos recursos desligados (o painel "estoque" reúne quatro relatórios). */
@@ -181,6 +184,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   galleryPolicy: "brand",
   groupPhotoMax: 10,
   groupPortraitOnly: false,
+  demo: false,
   checkinRadiusM: 300,
   modules: resolveModules(),
   overviewStyle: "standard",
@@ -211,6 +215,7 @@ export function mergeSettings(raw: unknown): AgencySettings {
     checkinRadiusM: num(r.checkinRadiusM, DEFAULT_SETTINGS.checkinRadiusM, 50, 5000),
     groupPhotoMax: num(r.groupPhotoMax, DEFAULT_SETTINGS.groupPhotoMax, 1, 10),
     groupPortraitOnly: bool(r.groupPortraitOnly, DEFAULT_SETTINGS.groupPortraitOnly),
+    demo: bool(r.demo, false),
     galleryPolicy: r.galleryPolicy === "none" || r.galleryPolicy === "authorized" ? r.galleryPolicy : DEFAULT_SETTINGS.galleryPolicy,
     requireApproval: bool(r.requireApproval, DEFAULT_SETTINGS.requireApproval),
     allowIncompleteVisit: bool(r.allowIncompleteVisit, DEFAULT_SETTINGS.allowIncompleteVisit),

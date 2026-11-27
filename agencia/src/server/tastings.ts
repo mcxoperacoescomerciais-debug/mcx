@@ -32,6 +32,7 @@ import {
   type TastingStatus,
 } from "@/lib/tasting";
 import { filterIn } from "@/server/filter-sql";
+import { voidStatus } from "@/lib/tasting";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -248,7 +249,7 @@ export async function selectTaster(scope: Scope, id: string, tasterId: string): 
   if (!canManageTastings(scope)) return fail("Sem permissão.");
   const t = await loadTasting(scope, id);
   if (!t) return fail("Degustação não encontrada.");
-  if (t.status === "completed" || t.status === "cancelled") return fail("Degustação já encerrada.");
+  if (t.status === "completed" || voidStatus(t.status)) return fail("Degustação já encerrada.");
   const db = await getDb();
   const [taster] = await db.select().from(s.tasters).where(and(eq(s.tasters.id, tasterId), eq(s.tasters.agencyId, scope.agencyId), eq(s.tasters.status, "active")));
   if (!taster) return fail("Degustadora não encontrada ou inativa.");
@@ -273,7 +274,7 @@ export async function setContactStatus(scope: Scope, id: string, status: Contact
   const t = await loadTasting(scope, id);
   if (!t) return fail("Degustação não encontrada.");
   if (!t.tasterId) return fail("Selecione a degustadora primeiro.");
-  if (t.status === "completed" || t.status === "cancelled") return fail("Degustação já encerrada.");
+  if (t.status === "completed" || voidStatus(t.status)) return fail("Degustação já encerrada.");
   const lost = status === "unavailable" || status === "no_answer" || status === "replacement";
   const next: TastingStatus = status === "confirmed" ? "confirmed" : lost ? "awaiting_taster" : "awaiting_confirmation";
   const db = await getDb();
@@ -294,14 +295,14 @@ export async function setTastingStatus(scope: Scope, id: string, status: Tasting
   if (!(TASTING_STATUSES as readonly string[]).includes(status)) return fail("Situação inválida.");
   const t = await loadTasting(scope, id);
   if (!t) return fail("Degustação não encontrada.");
-  if (status === "cancelled" && (opts.reason ?? "").trim().length < 3) return fail("Informe o motivo do cancelamento.");
+  if (voidStatus(status) && (opts.reason ?? "").trim().length < 3) return fail(status === "not_done" ? "Informe o motivo de a ação não ter sido realizada." : "Informe o motivo do cancelamento.");
   if ((status === "in_progress" || status === "completed") && !t.tasterId) return fail("Sem degustadora confirmada.");
   if (opts.cancellationFee !== undefined && opts.cancellationFee !== null && (opts.cancellationFee < 0 || !Number.isFinite(opts.cancellationFee))) return fail("Multa inválida.");
   const db = await getDb();
   const patch = {
     status,
     completedAt: status === "completed" ? (t.completedAt ?? new Date()) : t.completedAt,
-    cancelReason: status === "cancelled" ? opts.reason!.trim() : null,
+    cancelReason: voidStatus(status) ? opts.reason!.trim() : null,
     cancellationFee: status === "cancelled" ? (opts.cancellationFee ?? null) : t.cancellationFee,
     updatedAt: new Date(),
     updatedBy: scope.userId,
@@ -442,8 +443,8 @@ export async function listTastings(scope: Scope, f: TastingFilters): Promise<Tas
   const mats = ids.length ? await db.select({ tastingId: s.tastingMaterials.tastingId, checked: s.tastingMaterials.checked }).from(s.tastingMaterials).where(inArray(s.tastingMaterials.tastingId, ids)) : [];
   const out = rows.map(({ t, brandName, tasterName }) => toRow(t, brandName, tasterName, mats.filter((m) => m.tastingId === t.id)));
   const flag = f.flag as TastingFlag | null | undefined;
-  if (flag === "pending_materials") return out.filter((r) => r.status !== "cancelled" && r.status !== "completed" && (r.materials === "pending" || r.materials === "partial"));
-  return flag === "pending_docs" ? out.filter((r) => r.docStatus === "pending" && r.status !== "cancelled") : flag === "pending_finance" ? out.filter((r) => r.pendingFinance) : out;
+  if (flag === "pending_materials") return out.filter((r) => !voidStatus(r.status) && r.status !== "completed" && (r.materials === "pending" || r.materials === "partial"));
+  return flag === "pending_docs" ? out.filter((r) => r.docStatus === "pending" && !voidStatus(r.status)) : flag === "pending_finance" ? out.filter((r) => r.pendingFinance) : out;
 }
 
 type TastingRecord = typeof s.tastings.$inferSelect;
@@ -603,7 +604,7 @@ export async function readTastingFile(scope: Scope, id: string) {
 
 export async function tastingDashboard(scope: Scope, from: string, to: string) {
   const rows = await listTastings(scope, { from, to });
-  const live = rows.filter((r) => r.status !== "cancelled");
+  const live = rows.filter((r) => !voidStatus(r.status));
   const confirmedSet = rows.filter((r) => r.status === "confirmed" || r.status === "in_progress" || r.status === "completed");
   const done = rows.filter((r) => r.status === "completed");
   const sum = (list: TastingRow[], f: (r: TastingRow) => number) => Math.round(list.reduce((t, r) => t + f(r), 0) * 100) / 100;
@@ -615,7 +616,7 @@ export async function tastingDashboard(scope: Scope, from: string, to: string) {
       awaitingConfirmation: rows.filter((r) => r.status === "awaiting_confirmation").length,
       noTaster: rows.filter((r) => r.status === "awaiting_taster").length,
       completed: done.length,
-      cancelled: rows.filter((r) => r.status === "cancelled").length,
+      cancelled: rows.filter((r) => voidStatus(r.status)).length,
       materialsPending: live.filter((r) => r.status !== "completed" && (r.materials === "pending" || r.materials === "partial")).length,
       docsPending: live.filter((r) => r.docStatus === "pending").length,
     },
@@ -625,7 +626,7 @@ export async function tastingDashboard(scope: Scope, from: string, to: string) {
       tasterCostPlanned: sum(live, (r) => r.planned.tasterCost),
       otherCostPlanned: sum(live, (r) => r.planned.otherCosts),
       contributionPlanned: sum(live, (r) => r.planned.contribution),
-      cancellationFees: sum(rows.filter((r) => r.status === "cancelled"), (r) => r.revenueCounted),
+      cancellationFees: sum(rows.filter((r) => voidStatus(r.status)), (r) => r.revenueCounted),
       billed: sum(rows, (r) => (r.billingStatus === "billed" ? (r.billedAmount ?? r.actual.revenue) : 0)),
       received: sum(rows, (r) => (r.receiptStatus === "received" ? (r.receivedAmount ?? 0) : 0)),
       toReceive: sum(rows, (r) => (r.billingStatus === "billed" && r.receiptStatus !== "received" ? (r.billedAmount ?? r.actual.revenue) : 0)),

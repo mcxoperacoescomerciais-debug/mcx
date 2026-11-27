@@ -159,9 +159,11 @@ export interface AttendanceCheckInput {
   checklist?: { items: string[]; done: string[] };
   /** Perguntas de situação da marca: todas respondidas; "problema" exige descrição. */
   questions?: { items: string[]; answers: QuestionAnswer[] };
+  /** Modo ações: foto do encerramento e resultado (abordagens, amostras, vendas, aceitação). */
+  action?: { closingPhotos: number; outcomeComplete: boolean };
 }
 
-export type MissingKind = ExceptionItem | "damage_photo" | "exception_reason" | "checklist" | "questions";
+export type MissingKind = ExceptionItem | "damage_photo" | "exception_reason" | "checklist" | "questions" | "closing_photo" | "action_result";
 
 export interface MissingItem {
   kind: MissingKind;
@@ -199,6 +201,10 @@ export function attendanceMissing(i: AttendanceCheckInput): MissingItem[] {
   if (i.questions) {
     const pending = pendingQuestions(i.questions.items, i.questions.answers);
     if (pending.length) out.push({ kind: "questions", message: `Execução: responda ${pending.map((q) => `“${q}”`).join(", ")} (com problema, descreva o que houve).`, excusable: false });
+  }
+  if (i.action) {
+    if (i.action.closingPhotos < 1) out.push({ kind: "closing_photo", message: "Falta a foto do ENCERRAMENTO.", excusable: false });
+    if (!i.action.outcomeComplete) out.push({ kind: "action_result", message: "Resultado da ação: informe abordagens, amostras, vendas e aceitação.", excusable: false });
   }
   // Ruptura no modo SUINCO não exige foto; avaria sempre exige.
   const damageNoPhoto = i.damages.filter((d) => d.photos === 0).length;

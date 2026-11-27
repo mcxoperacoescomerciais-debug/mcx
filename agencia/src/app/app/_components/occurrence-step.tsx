@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { MessageSquareWarning, Plus, Trash2 } from "lucide-react";
 import { Button, StatusBadge } from "@/components/ui";
-import { OCCURRENCE_CATEGORIES, OCCURRENCE_CATEGORY_LABEL, type OccurrenceCategory } from "@/lib/domain";
+import { ACTION_OCCURRENCE_CATEGORIES, OCCURRENCE_CATEGORIES, OCCURRENCE_CATEGORY_LABEL, type OccurrenceCategory } from "@/lib/domain";
 import type { BootstrapBrand } from "@/lib/sync-types";
 import { deleteOccurrence, saveOccurrence, uuid, type LocalAttendance } from "../_lib/local-store";
-import { haptic } from "../_lib/hooks";
+import { haptic, useCatalog } from "../_lib/hooks";
 import { Chip, Sheet, TextArea, toast } from "./primitives";
 import { PhotoCapture } from "./photo-capture";
 
@@ -20,7 +20,7 @@ export function OccurrenceStep({ visitId, attendance, brand, editable }: { visit
         <h2 className="text-[13px] font-bold uppercase tracking-wide text-ink-2">Observações e ocorrências</h2>
         <span className="text-[12px] text-muted">Opcional</span>
       </div>
-      <p className="text-[13px] text-muted mb-3">Use para o que não é estoque nem ruptura: falta de espaço, material ausente, exposição com problema… Se não houve nada, siga em frente.</p>
+      <p className="text-[13px] text-muted mb-3">{useCatalog().settings?.features?.actions ? "Registre o que atrapalhou a ação (produto em falta, gerente não autorizou, sem energia ou espaço, atraso) e observações para o relatório da marca. Se não houve nada, siga em frente." : "Use para o que não é estoque nem ruptura: falta de espaço, material ausente, exposição com problema… Se não houve nada, siga em frente."}</p>
       <div className="space-y-2">
         {list.map((o) => {
           const photos = attendance.photos.filter((p) => p.occurrenceId === o.id).length;
@@ -55,6 +55,8 @@ export function OccurrenceStep({ visitId, attendance, brand, editable }: { visit
 }
 
 function OccurrenceSheet({ visitId, attendance, brand, occurrenceId, onClose }: { visitId: string; attendance: LocalAttendance; brand: BootstrapBrand; occurrenceId: string | null; onClose: () => void }) {
+  // Modo ações: ocorrências de ação (produto em falta, gerente não autorizou, sem energia/espaço, atraso).
+  const actions = Boolean(useCatalog().settings?.features?.actions);
   const current = occurrenceId ? attendance.occurrences[occurrenceId] : undefined;
   const [id] = useState(occurrenceId ?? uuid());
   const [category, setCategory] = useState<OccurrenceCategory | null>(current?.category ?? null);
@@ -84,7 +86,7 @@ function OccurrenceSheet({ visitId, attendance, brand, occurrenceId, onClose }: 
     >
       <p className="text-[13px] font-semibold text-ink-2 mb-2">Categoria</p>
       <div className="grid grid-cols-1 gap-2">
-        {OCCURRENCE_CATEGORIES.map((c) => (
+        {(actions ? ACTION_OCCURRENCE_CATEGORIES : OCCURRENCE_CATEGORIES.filter((c) => !(ACTION_OCCURRENCE_CATEGORIES as readonly string[]).includes(c) || c === "other")).map((c) => (
           <Chip key={c} selected={category === c} onClick={() => setCategory(c)}>
             {OCCURRENCE_CATEGORY_LABEL[c]}
           </Chip>

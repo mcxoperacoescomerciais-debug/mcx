@@ -27,6 +27,7 @@ import { ActionForm, Disclosure } from "../../_components/action-form";
 import { DegTabs } from "../_components/deg-tabs";
 import { MaterialsChecklist } from "../_components/materials-checklist";
 import { contactAction, fileAction, financeAction, selectTasterAction, statusAction } from "../actions";
+import { voidStatus } from "@/lib/tasting";
 
 export const metadata: Metadata = { title: "Degustação" };
 
@@ -53,7 +54,7 @@ export default async function TastingDetail({ params }: PageProps<"/painel/degus
   if (!d) notFound();
   const t = d.tasting;
   const canEdit = canManageTastings(scope);
-  const open = t.status !== "completed" && t.status !== "cancelled";
+  const open = t.status !== "completed" && !voidStatus(t.status);
   const options = canEdit && open ? await tasterOptions(scope, t.city, t.date) : [];
   const time = [t.startTime, t.endTime].filter(Boolean).join(" às ") || "a confirmar";
   const materials = d.materials.map((m) => m.item).join(", ");
@@ -309,7 +310,7 @@ export default async function TastingDetail({ params }: PageProps<"/painel/degus
           </SectionCard>
 
           <SectionCard title="Materiais" subtitle={`Checklist de ${d.brand.name}`} bodyClass="px-5 pb-5">
-            <MaterialsChecklist tastingId={t.id} items={d.materials.map((m) => ({ item: m.item, checked: m.checked }))} editable={canEdit && t.status !== "cancelled"} />
+            <MaterialsChecklist tastingId={t.id} items={d.materials.map((m) => ({ item: m.item, checked: m.checked }))} editable={canEdit && !voidStatus(t.status)} />
           </SectionCard>
 
           {canEdit ? (
@@ -318,6 +319,11 @@ export default async function TastingDetail({ params }: PageProps<"/painel/degus
                 <>
                   {t.status === "confirmed" ? <ActionForm action={statusAction} hidden={{ id: t.id, status: "in_progress" }} submitLabel="Marcar em andamento" variant="secondary" /> : null}
                   {t.status === "confirmed" || t.status === "in_progress" ? <ActionForm action={statusAction} hidden={{ id: t.id, status: "completed" }} submitLabel="Registrar conclusão" variant="success" /> : null}
+                  <Disclosure label="Registrar como não realizada" tone="danger">
+                    <ActionForm action={statusAction} hidden={{ id: t.id, status: "not_done" }} submitLabel="Registrar não realizada" variant="danger">
+                      <input name="reason" required placeholder="Motivo (ex.: gerente não autorizou, sem energia no ponto)" className={inputClass} />
+                    </ActionForm>
+                  </Disclosure>
                   <Disclosure label="Cancelar degustação" tone="danger">
                     <ActionForm action={statusAction} hidden={{ id: t.id, status: "cancelled" }} submitLabel="Cancelar" variant="danger">
                       <input name="reason" required placeholder="Motivo do cancelamento" className={inputClass} />
@@ -328,7 +334,7 @@ export default async function TastingDetail({ params }: PageProps<"/painel/degus
                     </ActionForm>
                   </Disclosure>
                 </>
-              ) : t.status === "cancelled" ? (
+              ) : voidStatus(t.status) ? (
                 <ActionForm action={statusAction} hidden={{ id: t.id, status: "awaiting_taster" }} submitLabel="Reabrir degustação" variant="secondary" />
               ) : (
                 <p className="text-[13px] text-ok font-semibold">Concluída em {t.completedAt ? fmtDateTime(t.completedAt) : "—"}.</p>

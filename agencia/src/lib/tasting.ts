@@ -4,7 +4,7 @@
  * no financeiro e nos testes.
  */
 
-export const TASTING_STATUSES = ["awaiting_taster", "awaiting_confirmation", "confirmed", "in_progress", "completed", "cancelled"] as const;
+export const TASTING_STATUSES = ["awaiting_taster", "awaiting_confirmation", "confirmed", "in_progress", "completed", "cancelled", "not_done"] as const;
 export type TastingStatus = (typeof TASTING_STATUSES)[number];
 export const TASTING_STATUS_LABEL: Record<TastingStatus, string> = {
   awaiting_taster: "Aguardando degustadora",
@@ -13,7 +13,21 @@ export const TASTING_STATUS_LABEL: Record<TastingStatus, string> = {
   in_progress: "Em andamento",
   completed: "Concluída",
   cancelled: "Cancelada",
+  not_done: "Não realizada",
 };
+/** Encerrada sem execução (cancelada ou não realizada): não conta receita prevista, só a multa registrada. */
+export const voidStatus = (s: TastingStatus) => s === "cancelled" || s === "not_done";
+/** Situações no modo ações (agências de degustação e ativação). */
+export const ACTION_STATUS_LABEL: Record<TastingStatus, string> = {
+  awaiting_taster: "Agendada · sem promotora",
+  awaiting_confirmation: "Agendada",
+  confirmed: "Confirmada",
+  in_progress: "Em andamento",
+  completed: "Realizada",
+  cancelled: "Cancelada",
+  not_done: "Não realizada",
+};
+export const statusLabelFor = (actions: boolean) => (actions ? ACTION_STATUS_LABEL : TASTING_STATUS_LABEL);
 export const TASTING_STATUS_TONE = {
   awaiting_taster: "danger",
   awaiting_confirmation: "warning",
@@ -21,6 +35,7 @@ export const TASTING_STATUS_TONE = {
   in_progress: "info",
   completed: "success",
   cancelled: "muted",
+  not_done: "danger",
 } as const;
 /** Cor do ponto na agenda. */
 export const TASTING_STATUS_DOT: Record<TastingStatus, string> = {
@@ -30,6 +45,7 @@ export const TASTING_STATUS_DOT: Record<TastingStatus, string> = {
   in_progress: "bg-brand-600",
   completed: "bg-ok",
   cancelled: "bg-muted",
+  not_done: "bg-bad",
 };
 
 /** Filtros extras da agenda (além da situação). */
@@ -193,7 +209,7 @@ export function actualMoney(planned: TastingMoney, actual: Partial<Record<keyof 
 
 /** Cancelada não soma receita prevista — só a multa/cobrança registrada explicitamente. */
 export function countedRevenue(status: TastingStatus, revenue: number | null, cancellationFee: number | null): number {
-  if (status === "cancelled") return n(cancellationFee);
+  if (voidStatus(status)) return n(cancellationFee);
   return n(revenue);
 }
 

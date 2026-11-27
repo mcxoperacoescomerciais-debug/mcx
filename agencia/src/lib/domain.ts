@@ -98,7 +98,7 @@ export const EXCEPTION_REASON_LABEL: Record<ExceptionReason, string> = {
 
 // ───────────────────────────── Fotos ─────────────────────────────
 
-export const PHOTO_KINDS = ["before", "after", "rupture", "occurrence", "validity", "damage"] as const;
+export const PHOTO_KINDS = ["before", "after", "rupture", "occurrence", "validity", "damage", "closing"] as const;
 export type PhotoKind = (typeof PHOTO_KINDS)[number];
 export const PHOTO_KIND_LABEL: Record<PhotoKind, string> = {
   before: "Antes",
@@ -107,6 +107,8 @@ export const PHOTO_KIND_LABEL: Record<PhotoKind, string> = {
   occurrence: "Ocorrência",
   validity: "Validade",
   damage: "Avaria",
+  // Modo ações: foto do encerramento do ponto (montagem = antes, ação acontecendo = depois).
+  closing: "Encerramento",
 };
 
 /** Onde o produto está exposto na foto do antes/depois (o promotor escolhe ao fotografar). */
@@ -258,8 +260,15 @@ export const OCCURRENCE_CATEGORIES = [
   "store_closed",
   "route_divergence",
   "display_problem",
+  // Modo ações (degustação e ativação).
+  "product_missing",
+  "manager_denied",
+  "no_power_space",
+  "late",
   "other",
 ] as const;
+/** Ocorrências que a promotora escolhe numa ação (modo ações). */
+export const ACTION_OCCURRENCE_CATEGORIES = ["product_missing", "manager_denied", "no_power_space", "late", "other"] as const;
 export type OccurrenceCategory = (typeof OCCURRENCE_CATEGORIES)[number];
 export const OCCURRENCE_CATEGORY_LABEL: Record<OccurrenceCategory, string> = {
   no_space: "Produto sem espaço adequado",
@@ -269,6 +278,10 @@ export const OCCURRENCE_CATEGORY_LABEL: Record<OccurrenceCategory, string> = {
   store_closed: "Loja fechada ou setor inacessível",
   route_divergence: "Divergência no roteiro",
   display_problem: "Problema com a exposição",
+  product_missing: "Produto em falta na loja",
+  manager_denied: "Gerente não autorizou a ação",
+  no_power_space: "Sem ponto de energia ou espaço",
+  late: "Atraso",
   other: "Outra ocorrência",
 };
 

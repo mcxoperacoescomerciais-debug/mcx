@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { CalendarCheck2, MapPin, Search, Store } from "lucide-react";
 import clsx from "clsx";
 import { matchesQuery } from "@/lib/rules";
-import { go, useCatalog, useLocal } from "../_lib/hooks";
+import { go, useCatalog, useLocal, useTerms } from "../_lib/hooks";
 import { BottomTabs, Chip, RefreshButton, Screen, TopBar } from "./primitives";
 import { useStartVisit } from "./visit-start";
 import { usePortfolio } from "../_lib/portfolio-progress";
@@ -14,6 +14,7 @@ import { currentStoreVisit, sameDayStoreVisits } from "../_lib/complement";
 /** Só lojas autorizadas ao promotor (o servidor manda apenas essas). */
 export function StoresScreen() {
   const cat = useCatalog();
+  const terms = useTerms();
   const local = useLocal();
   const { startScheduled, startExtra, startPortfolio, sheets } = useStartVisit();
   const portfolio = usePortfolio();
@@ -31,7 +32,7 @@ export function StoresScreen() {
 
   return (
     <Screen>
-      <TopBar title="Minhas lojas" subtitle={`${cat.stores.length} lojas autorizadas`} right={<RefreshButton label={false} />} />
+      <TopBar title={terms.visit === "Ação" ? "Meus PDVs" : "Minhas lojas"} subtitle={`${cat.stores.length} ${terms.stores.toLowerCase()} autorizad${terms.visit === "Ação" ? "o" : "a"}s`} right={<RefreshButton label={false} />} />
       <div className="sticky top-14 z-20 bg-canvas px-4 pt-3 pb-2 space-y-2">
         <label className="relative block">
           <Search className="size-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />

@@ -30,6 +30,7 @@ import { Badge, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { FilterBar } from "./_components/filter-bar";
 import { KpiCard, SectionCard } from "./_components/widgets";
 import { OperationAlerts } from "./_components/operation-alerts";
+import { ActionsDashboard } from "./acoes/dashboard";
 
 export const metadata: Metadata = { title: "Visão geral" };
 
@@ -48,6 +49,8 @@ export default async function OverviewPage({ searchParams }: PageProps<"/painel"
   const sp = await searchParams;
   // Visão geral executiva, com gráficos: agência marcada assim, ou usuário que só
   // enxerga uma marca (ex.: o cliente Costa Foods) — já filtrada pela marca dele.
+  // Modo ações (degustação e ativação): a visão geral é o painel de ações.
+  if (scope.settings.modules.actions) return <ActionsDashboard scope={scope} sp={sp} />;
   // Sem estoque/ruptura/validade liberados, a executiva não tem o que mostrar: vale a padrão.
   const mod = scope.settings.modules;
   if (mod.stock && (scope.settings.overviewStyle === "executive" || scope.brandIds?.length === 1)) return <ExecutiveOverview scope={scope} sp={sp} />;

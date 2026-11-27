@@ -55,6 +55,8 @@ export default async function PanelLayout({ children }: LayoutProps<"/painel">) 
       fullScope={scope ? scope.brandIds === null : true}
       allowed={allowed ? [...allowed] : null}
       hidden={[...hidden, ...hiddenPages]}
+      actions={Boolean(scope?.settings.modules.actions)}
+      demo={Boolean(scope?.settings.demo)}
       owner={user.platformRole === "owner"}
       scopeNote={user.platform ? "Equipe MCX" : scopeNote}
       logout={logoutAction}

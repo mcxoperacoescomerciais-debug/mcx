@@ -208,7 +208,7 @@ export async function buildBootstrap(scope: Scope): Promise<BootstrapPayload> {
       allowExtraVisits: scope.settings.allowExtraVisits,
       captureLocation: scope.settings.captureLocation,
       allowExceptions: scope.settings.allowExceptions,
-      features: { stock: scope.settings.modules.stock, damage: scope.settings.modules.damage },
+      features: { stock: scope.settings.modules.stock, damage: scope.settings.modules.damage, actions: scope.settings.modules.actions },
       validityBands: scope.settings.validityBands,
       support: supportContact(scope.settings),
       visitReport: scope.settings.visitReport.enabled ? { phone: "", brandIds: scope.settings.visitReport.brandIds } : null,
@@ -384,6 +384,7 @@ export async function loadServerVisits(db: DB, rows: (typeof s.visits.$inferSele
           exceptionNote: a.exceptionNote,
           cancelReason: a.cancelReason,
           reportLinkId: a.reportLinkId,
+          actionResult: a.actionResult ?? null,
           photos: ph
             .filter((p) => p.attendanceId === a.id)
             .map((p) => ({
@@ -828,6 +829,8 @@ async function applyAttendance(
     exceptionReason: a.exceptionItems.length ? a.exceptionReason : null,
     exceptionNote: a.exceptionItems.length ? a.exceptionNote : null,
     cancelReason: targetStatus === "cancelled" ? a.cancelReason : null,
+    // Modo ações: o resultado só é gravado quando a agência usa ações (cópia antiga do app não manda).
+    ...(scope.settings.modules.actions && a.actionResult !== undefined ? { actionResult: a.actionResult } : {}),
     updatedAt: now,
     updatedBy: promoterId,
   };

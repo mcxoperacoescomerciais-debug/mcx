@@ -43,7 +43,7 @@ async function rows<T>(tx: Tx, query: ReturnType<typeof sql>): Promise<T[]> {
 }
 
 /** Mapa "linha desta agência" montado a partir das chaves estrangeiras do banco. */
-async function ownership(tx: Tx, id: string) {
+async function ownership(tx: Tx, id: string, override: Record<string, string> = {}) {
   const lit = `'${id}'::uuid`;
   const fks = await rows<{ child: string; col: string; parent: string; pcol: string; nullable: string }>(
     tx,
@@ -63,6 +63,7 @@ async function ownership(tx: Tx, id: string) {
   // "Linha desta agência": tem agency_id = a agência, ou (tabela sem agency_id) aponta para uma linha dela.
   const owned = (table: string, depth = 0): string | null => {
     if (table === "agencies") return `id = ${lit}`;
+    if (override[table]) return `agency_id = ${lit} and (${override[table]})`;
     if (withAgency.has(table)) return `agency_id = ${lit}`;
     if (depth > 3) return null;
     const parts = graph
@@ -78,8 +79,8 @@ async function ownership(tx: Tx, id: string) {
 }
 
 /** Apaga tudo o que é da agência (menos `keep` e a própria agência); devolve linhas apagadas e arquivos. */
-async function wipe(tx: TxWithSavepoint, id: string, keep: Set<string>) {
-  const { graph, tables, owned } = await ownership(tx, id);
+async function wipe(tx: TxWithSavepoint, id: string, keep: Set<string>, override: Record<string, string> = {}) {
+  const { graph, tables, owned } = await ownership(tx, id, override);
 
   // Arquivos guardados (fotos e anexos) antes de apagar as linhas que os indicam.
   const files: string[] = [];
@@ -187,6 +188,17 @@ export async function clearAgencyData(user: SessionUser, id: string, confirmName
     files: removed,
   };
 }
+
+/**
+ * Demonstração do modo ações: limpa os dados como "Limpar dados", mas MANTÉM os
+ * administradores da agência (o login que a pessoa já criou continua valendo).
+ * Usado só pelo gerador de dados fictícios, dentro da mesma transação da carga.
+ */
+export async function wipeKeepingAdmins(tx: unknown, id: string): Promise<{ deleted: number; files: string[] }> {
+  return wipe(tx as TxWithSavepoint, id, KEEP_ON_CLEAR, { users: "role <> 'admin'" });
+}
+
+export { removeFiles as removeStoredFiles };
 
 /** Quantos registros desta agência cada tabela tem (o que "Limpar dados" apagaria). */
 export async function agencyDataCounts(id: string): Promise<{ table: string; n: number }[]> {

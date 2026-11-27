@@ -17,6 +17,7 @@ import { canManageTastings, listTastings, monthRange, type TastingRow } from "./
 import { addDays, isIsoDate, todayIso } from "@/lib/dates";
 import type { TargetPeriod } from "@/lib/portfolio";
 import { promoterCost, type PromoterCost } from "@/lib/promoter-cost";
+import { voidStatus } from "@/lib/tasting";
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -176,7 +177,7 @@ export function tastingFinance(rows: TastingRow[]): TastingFinance {
   let revenue = 0, taxes = 0, tasterCost = 0, otherCosts = 0, billed = 0, received = 0, toReceive = 0, paid = 0, toPay = 0;
   for (const r of rows) {
     const m = r.status === "completed" ? r.actual : r.planned;
-    if (r.status === "cancelled") {
+    if (voidStatus(r.status)) {
       revenue += r.revenueCounted;
     } else {
       revenue += m.revenue;
@@ -216,9 +217,9 @@ export async function financeOverview(scope: Scope, month: string) {
   const [tastingRows, promo, payroll, fixed] = await Promise.all([listTastings(scope, { from, to }), promotoriaRevenue(scope, m), payrollCost(scope), monthExpenses(scope, m)]);
   const tastings = tastingFinance(tastingRows);
   // Degustações: previsto = tudo o que está programado (canceladas só com multa); realizado = concluídas + multas.
-  const live = tastingRows.filter((r) => r.status !== "cancelled");
+  const live = tastingRows.filter((r) => !voidStatus(r.status));
   const done = tastingRows.filter((r) => r.status === "completed");
-  const fees = r2(tastingRows.filter((r) => r.status === "cancelled").reduce((t, r) => t + r.revenueCounted, 0));
+  const fees = r2(tastingRows.filter((r) => voidStatus(r.status)).reduce((t, r) => t + r.revenueCounted, 0));
   const sum = (list: TastingRow[], f: (r: TastingRow) => number) => r2(list.reduce((t, r) => t + f(r), 0));
   const col = (tastingRevenue: number, taxes: number, tasterCost: number, tastingOther: number, promotoria: number) => {
     const revenue = r2(promotoria + tastingRevenue);
@@ -300,8 +301,8 @@ export async function createInvoice(scope: Scope, i: { brandId: string; tastingI
   if (list.length !== i.tastingIds.length) return fail("Degustação não encontrada.");
   if (list.some((t) => t.brandId !== i.brandId)) return fail("Uma fatura junta degustações de uma única marca.");
   if (list.some((t) => t.billingStatus === "billed" || t.invoiceId)) return fail("Uma das degustações já foi faturada (não pode entrar em duas cobranças).");
-  if (list.some((t) => t.status !== "completed" && t.status !== "cancelled")) return fail("Fature só degustações concluídas (ou canceladas com multa).");
-  const valueOf = (t: (typeof list)[number]) => (t.status === "cancelled" ? (t.cancellationFee ?? 0) : (t.revenueActual ?? t.revenue ?? 0));
+  if (list.some((t) => t.status !== "completed" && !voidStatus(t.status))) return fail("Fature só degustações concluídas (ou canceladas com multa).");
+  const valueOf = (t: (typeof list)[number]) => (voidStatus(t.status) ? (t.cancellationFee ?? 0) : (t.revenueActual ?? t.revenue ?? 0));
   const amount = r2(list.reduce((sum, t) => sum + valueOf(t), 0));
   if (amount <= 0) return fail("As degustações escolhidas não têm valor a cobrar.");
   const id = crypto.randomUUID();

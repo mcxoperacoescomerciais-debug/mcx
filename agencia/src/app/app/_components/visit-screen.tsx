@@ -7,7 +7,7 @@ import { Button, StatusBadge } from "@/components/ui";
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUS_TONE } from "@/lib/domain";
 import { fmtDuration, fmtTime } from "@/lib/dates";
 import { addPlannedBrand, cancelAttendance, chooseStoreMix, clearShareRequest, discardVisit, finishVisit, finishVisitIfDone, peekShareRequest, pendingPhotos, retryBlockedVisit, setVisitNotes, startAttendance } from "../_lib/local-store";
-import { go, haptic, useCatalog, useLocal, useVisit } from "../_lib/hooks";
+import { go, haptic, useCatalog, useLocal, useTerms, useVisit } from "../_lib/hooks";
 import { brandsInOtherVisits, remainingStoreBrands, sameDayStoreVisits } from "../_lib/complement";
 import { useStartVisit } from "./visit-start";
 import { brandSlots, isDoneStatus, stopStatus, STOP_STATUS_LABEL, STOP_STATUS_TONE } from "../_lib/derive";
@@ -17,6 +17,7 @@ import { SharePdf } from "./share-pdf";
 export function VisitScreen({ visitId, closing = false }: { visitId: string; closing?: boolean }) {
   const visit = useVisit(visitId);
   const cat = useCatalog();
+  const terms = useTerms();
   const local = useLocal();
   const { startComplement, sheets } = useStartVisit();
   const [closeOpen, setCloseOpen] = useState(closing);
@@ -78,7 +79,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
       footer={
         open ? (
           <Button size="xl" className="w-full" onClick={() => setCloseOpen(true)}>
-            <Flag className="size-5" /> FINALIZAR VISITA
+            <Flag className="size-5" /> {terms.visit === "Ação" ? "CHECK-OUT · FINALIZAR AÇÃO" : "FINALIZAR VISITA"}
           </Button>
         ) : undefined
       }
@@ -161,7 +162,7 @@ export function VisitScreen({ visitId, closing = false }: { visitId: string; clo
         </section>
       ))}
 
-      <SectionTitle>Marcas desta loja</SectionTitle>
+      <SectionTitle>{terms.visit === "Ação" ? "Marcas deste PDV" : "Marcas desta loja"}</SectionTitle>
       <div className="px-4 space-y-2.5">
         {complementable.length ? (
           <Notice tone="info" icon={<Flag className="size-5" />}>

@@ -133,6 +133,16 @@ export const attendanceInput = z.object({
   deletedDamageIds: z.array(id).max(200).default([]),
   occurrences: z.array(occurrenceInput).max(50),
   deletedOccurrenceIds: z.array(id).max(100),
+  /** Modo ações: resultado informado pela promotora (ausente em cópia antiga do app). */
+  actionResult: z
+    .object({
+      approached: z.number().int().min(0).max(100_000).nullable(),
+      samples: z.number().int().min(0).max(100_000).nullable(),
+      unitsSold: z.number().int().min(0).max(100_000).nullable(),
+      acceptance: z.number().int().min(1).max(5).nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const visitInput = z.object({
@@ -290,7 +300,7 @@ export interface BootstrapPayload {
     captureLocation: boolean;
     allowExceptions: boolean;
     /** Recursos liberados para a agência; ausente (cópia antiga do app) = tudo ligado. */
-    features?: { stock: boolean; damage: boolean };
+    features?: { stock: boolean; damage: boolean; actions?: boolean };
     /** Faixas de validade da agência: classificação instantânea no celular, sem internet. */
     validityBands: SeverityBands;
     /** Ajuda no WhatsApp (balão da tela inicial); null = sem número configurado. */

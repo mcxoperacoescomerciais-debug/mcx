@@ -146,6 +146,7 @@ export async function saveSettingsAction(_: FormState, fd: FormData): Promise<Fo
         groupPortraitOnly: fd.has("groupPhotoMax") ? bool(fd, "groupPortraitOnly") : scope.settings.groupPortraitOnly,
         // Definidos pela equipe MCX na tela da agência: a tela de Configurações não muda.
         modules: scope.settings.modules,
+        demo: scope.settings.demo,
         overviewStyle: scope.settings.overviewStyle,
         // Editados na tela Sistemática.
         holidays: scope.settings.holidays,

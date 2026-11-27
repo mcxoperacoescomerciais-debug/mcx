@@ -6,12 +6,14 @@ import { withParams } from "@/lib/filters";
 import { shiftMonth } from "@/server/finance";
 import { PageHeader } from "@/components/ui";
 import { FinTabs } from "./fin-tabs";
+import { getScope } from "@/server/auth";
 
 /** Cabeçalho do Financeiro: título da aba, mês e as abas (DRE geral, promotoria, degustações, estratégia). */
-export function FinHeader({ title, subtitle, month, path, noMonth }: { title: string; subtitle: string; month: string; path: string; noMonth?: boolean }) {
+export async function FinHeader({ title, subtitle, month, path, noMonth }: { title: string; subtitle: string; month: string; path: string; noMonth?: boolean }) {
+  const scope = await getScope();
   return (
     <>
-      <FinTabs month={month} />
+      <FinTabs month={month} actions={scope.settings.modules.actions} />
       <PageHeader
         title={title}
         subtitle={noMonth ? subtitle : `${monthLabel(month)} · ${subtitle}`}

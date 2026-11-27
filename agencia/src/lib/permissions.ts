@@ -25,6 +25,7 @@ export const PANELS: Panel[] = [
   { key: "fotos", label: "Relatório fotográfico e Book", group: "Operação", paths: ["/painel/fotos"] },
   { key: "estoque", label: "Estoque, ruptura, validade e avaria", group: "Operação", paths: ["/painel/estoque", "/painel/rupturas", "/painel/validades", "/painel/avarias"] },
   { key: "promotores", label: "Promotores", group: "Operação", paths: ["/painel/promotores"] },
+  { key: "acoes", label: "Ações: painel e relatório para a marca", group: "Operação", paths: ["/painel/acoes"] },
   { key: "pendencias", label: "Central de pendências", group: "Operação", paths: ["/painel/pendencias"] },
   { key: "metas", label: "Carteira e metas", group: "Planejamento", paths: ["/painel/metas"] },
   { key: "roteiros", label: "Roteiros", group: "Planejamento", paths: ["/painel/roteiros"] },
